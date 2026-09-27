@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ employee.full_name }} — BDH HRIS{% endblock %}
 {% block content %}
+<p><a href="{% url 'employees:employee_list' %}">&larr; Employees</a></p>
 <h1>{{ employee.full_name }} ({{ employee.employee_id }})</h1>
 
 {% if self_locked %}
@@ -21,6 +22,23 @@
 
 {% if can_edit %}
   <p><a href="{% url 'employees:employee_edit' employee.pk %}">Edit this record</a></p>
+{% endif %}
+
+<h2>Education history</h2>
+{% if education_history %}
+<table>
+  <tr><th>Level</th><th>School</th><th>Degree/Course</th><th>Units earned</th></tr>
+  {% for ed in education_history %}
+  <tr>
+    <td>{{ ed.education_level }}</td>
+    <td>{{ ed.school }}</td>
+    <td>{{ ed.degree_course|default:"—" }}</td>
+    <td>{{ ed.units_earned|default:"—" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>No education records yet.</p>
 {% endif %}
 
 <h2>Edit history</h2>

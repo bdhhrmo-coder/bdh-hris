@@ -3,8 +3,20 @@ from django.test import Client, TestCase
 from django.urls import reverse
 
 from accounts.models import RoleAssignment
+from orgstructure.models import Section
 
-from .models import Employee, EmployeeEditHistory
+from .models import EducationHistory, Employee, EmployeeEditHistory
+
+# The Employee edit screen also carries an inline Education History formset.
+# Django's formsets require their management-form fields even when there's
+# nothing to submit for them, so every employee_edit POST in these tests
+# merges this in.
+EDU_FORMSET_EMPTY = {
+    "education_history-TOTAL_FORMS": "0",
+    "education_history-INITIAL_FORMS": "0",
+    "education_history-MIN_NUM_FORMS": "0",
+    "education_history-MAX_NUM_FORMS": "1000",
+}
 
 
 def make_employee(username, employee_id, role=None, **extra):
@@ -34,7 +46,7 @@ class EmployeeScreenPermissionTests(TestCase):
         self.client.login(username="hradmin_a", password="testpass123")
         target = self.rank_and_file
         old_id = target.employee_id
-        response = self.client.post(
+        self.client.post(
             reverse("employees:employee_edit", args=[target.pk]),
             {
                 "employee_id": "HACKED-999",
@@ -43,6 +55,7 @@ class EmployeeScreenPermissionTests(TestCase):
                 "first_name": target.first_name,
                 "employment_status": target.employment_status,
                 "reason": "Testing lockdown of restricted fields",
+                **EDU_FORMSET_EMPTY,
             },
         )
         target.refresh_from_db()
@@ -53,7 +66,7 @@ class EmployeeScreenPermissionTests(TestCase):
     def test_system_administrator_can_change_employee_id_and_active(self):
         self.client.login(username="sysadmin1", password="testpass123")
         target = self.rank_and_file
-        response = self.client.post(
+        self.client.post(
             reverse("employees:employee_edit", args=[target.pk]),
             {
                 "employee_id": "EMP-004-NEW",
@@ -62,6 +75,7 @@ class EmployeeScreenPermissionTests(TestCase):
                 "first_name": target.first_name,
                 "employment_status": target.employment_status,
                 "reason": "Correcting employee ID per IT ticket #123",
+                **EDU_FORMSET_EMPTY,
             },
         )
         target.refresh_from_db()
@@ -81,6 +95,7 @@ class EmployeeScreenPermissionTests(TestCase):
                 "first_name": target.first_name,
                 "employment_status": target.employment_status,
                 "reason": "Only touching account status",
+                **EDU_FORMSET_EMPTY,
             },
         )
         target.refresh_from_db()
@@ -98,6 +113,7 @@ class EmployeeScreenPermissionTests(TestCase):
                 "first_name": self.hr_admin_a.first_name,
                 "employment_status": self.hr_admin_a.employment_status,
                 "reason": "Trying to edit myself",
+                **EDU_FORMSET_EMPTY,
             },
         )
         self.hr_admin_a.refresh_from_db()
@@ -107,7 +123,7 @@ class EmployeeScreenPermissionTests(TestCase):
 
     def test_another_hr_administrator_can_edit_it(self):
         self.client.login(username="hradmin_b", password="testpass123")
-        response = self.client.post(
+        self.client.post(
             reverse("employees:employee_edit", args=[self.hr_admin_a.pk]),
             {
                 "employee_id": self.hr_admin_a.employee_id,
@@ -115,6 +131,7 @@ class EmployeeScreenPermissionTests(TestCase):
                 "first_name": self.hr_admin_a.first_name,
                 "employment_status": self.hr_admin_a.employment_status,
                 "reason": "Correcting surname per updated PDS",
+                **EDU_FORMSET_EMPTY,
             },
         )
         self.hr_admin_a.refresh_from_db()
@@ -137,6 +154,7 @@ class EmployeeScreenPermissionTests(TestCase):
                 "first_name": target.first_name,
                 "employment_status": target.employment_status,
                 "reason": "",
+                **EDU_FORMSET_EMPTY,
             },
         )
         target.refresh_from_db()
@@ -156,6 +174,7 @@ class EmployeeScreenPermissionTests(TestCase):
                 "position": "Staff Nurse II",
                 "employment_status": target.employment_status,
                 "reason": "Promotion effective this quarter",
+                **EDU_FORMSET_EMPTY,
             },
         )
         entry = EmployeeEditHistory.objects.get(employee=target, field_name="position")
@@ -176,6 +195,7 @@ class EmployeeScreenPermissionTests(TestCase):
                 "position": "Same Position",
                 "employment_status": target.employment_status,
                 "reason": "first save to set a baseline",
+                **EDU_FORMSET_EMPTY,
             },
         )
         self.assertEqual(EmployeeEditHistory.objects.filter(employee=target).count(), 1)
@@ -189,6 +209,115 @@ class EmployeeScreenPermissionTests(TestCase):
                 "position": "Same Position",
                 "employment_status": target.employment_status,
                 "reason": "",
+                **EDU_FORMSET_EMPTY,
             },
         )
         self.assertEqual(EmployeeEditHistory.objects.filter(employee=target).count(), 1)
+
+
+class Phase2Tests(TestCase):
+    """Employee list/create access control, self-view-only scoping, and
+    education history editing (added when Phase 2 was completed)."""
+
+    def setUp(self):
+        self.client = Client()
+        self.hr_admin = make_employee("hradmin", "EMP-101", role=RoleAssignment.HR_ADMINISTRATOR)
+        self.sysadmin = make_employee("sysadmin", "EMP-102", role=RoleAssignment.SYSTEM_ADMINISTRATOR)
+        self.nurse = make_employee("nurse2", "EMP-103", role=RoleAssignment.EMPLOYEE)
+        self.other_nurse = make_employee("nurse3", "EMP-104", role=RoleAssignment.EMPLOYEE)
+
+    def test_org_structure_seeded(self):
+        self.assertTrue(Section.objects.filter(name="Nursing Service Section").exists())
+        nursing = Section.objects.get(name="Nursing Service Section")
+        self.assertEqual(nursing.units.count(), 6)
+        self.assertTrue(Section.objects.filter(name="Dietary Section").exists())
+
+    def test_employee_list_requires_hr_or_sysadmin(self):
+        self.client.login(username="nurse2", password="testpass123")
+        response = self.client.get(reverse("employees:employee_list"))
+        self.assertEqual(response.status_code, 403)
+
+        self.client.login(username="hradmin", password="testpass123")
+        response = self.client.get(reverse("employees:employee_list"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_ordinary_employee_can_view_own_record_only(self):
+        self.client.login(username="nurse2", password="testpass123")
+        own = self.client.get(reverse("employees:employee_detail", args=[self.nurse.pk]))
+        self.assertEqual(own.status_code, 200)
+
+        someone_elses = self.client.get(reverse("employees:employee_detail", args=[self.other_nurse.pk]))
+        self.assertEqual(someone_elses.status_code, 403)
+
+    def test_hr_admin_and_sysadmin_can_view_anyone(self):
+        self.client.login(username="hradmin", password="testpass123")
+        response = self.client.get(reverse("employees:employee_detail", args=[self.nurse.pk]))
+        self.assertEqual(response.status_code, 200)
+
+        self.client.login(username="sysadmin", password="testpass123")
+        response = self.client.get(reverse("employees:employee_detail", args=[self.nurse.pk]))
+        self.assertEqual(response.status_code, 200)
+
+    def test_only_sysadmin_can_create_employee(self):
+        self.client.login(username="hradmin", password="testpass123")
+        response = self.client.post(
+            reverse("employees:employee_create"),
+            {"employee_id": "EMP-999", "surname": "New", "first_name": "Hire", "is_active": "on"},
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(Employee.objects.filter(employee_id="EMP-999").exists())
+
+        self.client.login(username="sysadmin", password="testpass123")
+        response = self.client.post(
+            reverse("employees:employee_create"),
+            {"employee_id": "EMP-999", "surname": "New", "first_name": "Hire", "is_active": "on"},
+        )
+        self.assertTrue(Employee.objects.filter(employee_id="EMP-999").exists())
+
+    def test_hr_admin_can_add_education_history(self):
+        self.client.login(username="hradmin", password="testpass123")
+        self.client.post(
+            reverse("employees:employee_edit", args=[self.nurse.pk]),
+            {
+                "employee_id": self.nurse.employee_id,
+                "surname": self.nurse.surname,
+                "first_name": self.nurse.first_name,
+                "employment_status": self.nurse.employment_status,
+                "reason": "Adding education record from submitted PDS",
+                "education_history-TOTAL_FORMS": "1",
+                "education_history-INITIAL_FORMS": "0",
+                "education_history-MIN_NUM_FORMS": "0",
+                "education_history-MAX_NUM_FORMS": "1000",
+                "education_history-0-education_level": "College",
+                "education_history-0-school": "Palawan State University",
+                "education_history-0-degree_course": "BS Nursing",
+                "education_history-0-units_earned": "",
+            },
+        )
+        self.assertTrue(
+            EducationHistory.objects.filter(employee=self.nurse, school="Palawan State University").exists()
+        )
+
+    def test_sysadmin_cannot_add_education_history(self):
+        self.client.login(username="sysadmin", password="testpass123")
+        self.client.post(
+            reverse("employees:employee_edit", args=[self.nurse.pk]),
+            {
+                "employee_id": self.nurse.employee_id,
+                "surname": self.nurse.surname,
+                "first_name": self.nurse.first_name,
+                "employment_status": self.nurse.employment_status,
+                "reason": "Trying to sneak in an education record",
+                "education_history-TOTAL_FORMS": "1",
+                "education_history-INITIAL_FORMS": "0",
+                "education_history-MIN_NUM_FORMS": "0",
+                "education_history-MAX_NUM_FORMS": "1000",
+                "education_history-0-education_level": "College",
+                "education_history-0-school": "Should Not Save University",
+                "education_history-0-degree_course": "",
+                "education_history-0-units_earned": "",
+            },
+        )
+        self.assertFalse(
+            EducationHistory.objects.filter(employee=self.nurse, school="Should Not Save University").exists()
+        )

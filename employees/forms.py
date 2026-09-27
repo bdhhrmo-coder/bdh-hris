@@ -6,6 +6,20 @@ from .models import Employee
 from .permissions import SYSTEM_ADMIN_ONLY_FIELDS, is_self_record_locked
 
 
+class EmployeeCreateForm(forms.ModelForm):
+    """
+    Minimal "new hire shell" record: System Administrator only, since it has
+    to assign the unique employee_id (a System-Administrator-only field —
+    same rule as the edit screen). An HR Administrator fills in the rest of
+    the master data (PDS fields, position, etc.) afterward through the
+    ordinary Employee edit screen.
+    """
+
+    class Meta:
+        model = Employee
+        fields = ["employee_id", "surname", "first_name", "middle_name", "name_extension", "is_active"]
+
+
 class EmployeeForm(forms.ModelForm):
     """
     Employee master-data form with role-based field locking.

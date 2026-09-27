@@ -25,6 +25,24 @@
     {% if form.reason.errors %}<div class="msg error">{{ form.reason.errors }}</div>{% endif %}
   </fieldset>
   {% endif %}
+
+  <fieldset>
+    <legend>Education history</legend>
+    {{ education_formset.management_form }}
+    {% for ed_form in education_formset %}
+      <div style="border-bottom:1px solid #eee; padding-bottom:0.5rem; margin-bottom:0.5rem;">
+        {{ ed_form.id }}
+        {{ ed_form.education_level.label_tag }} {{ ed_form.education_level }}
+        {{ ed_form.school.label_tag }} {{ ed_form.school }}
+        {{ ed_form.degree_course.label_tag }} {{ ed_form.degree_course }}
+        {{ ed_form.units_earned.label_tag }} {{ ed_form.units_earned }}
+        {% if ed_form.instance.pk %}
+          <label>{{ ed_form.DELETE }} Remove this entry</label>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </fieldset>
+
   <button type="submit">Save</button>
   <a href="{% url 'employees:employee_detail' employee.pk %}">Cancel</a>
 </form>
