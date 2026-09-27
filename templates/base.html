@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}BDH HRIS{% endblock %}</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 2rem auto; color: #222; }
+    fieldset { border: 1px solid #ccc; margin-bottom: 1rem; padding: 1rem; }
+    label { display: block; margin-top: 0.5rem; font-weight: bold; }
+    input, select, textarea { width: 100%; padding: 0.3rem; margin-top: 0.2rem; box-sizing: border-box; }
+    input:disabled, select:disabled, textarea:disabled { background: #eee; color: #555; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+    th, td { border: 1px solid #ccc; padding: 0.4rem; text-align: left; font-size: 0.9em; }
+    .msg { padding: 0.6rem 1rem; margin-bottom: 1rem; border-radius: 4px; }
+    .msg.success { background: #e6f4ea; color: #1e4620; }
+    .msg.info { background: #e8f0fe; color: #1a3e72; }
+    .msg.error { background: #fdecea; color: #611a15; }
+    .locked-note { background: #fff8e1; border: 1px solid #f0d878; padding: 0.75rem; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  {% if messages %}
+    {% for message in messages %}
+      <div class="msg {{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+  {% block content %}{% endblock %}
+</body>
+</html>

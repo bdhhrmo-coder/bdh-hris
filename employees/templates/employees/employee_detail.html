@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ employee.full_name }} — BDH HRIS{% endblock %}
+{% block content %}
+<h1>{{ employee.full_name }} ({{ employee.employee_id }})</h1>
+
+{% if self_locked %}
+  <div class="locked-note">
+    This is your own employee record. It is read-only to you — another HR Administrator
+    must make any changes.
+  </div>
+{% endif %}
+
+<table>
+  <tr><th>Position</th><td>{{ employee.position }}</td></tr>
+  <tr><th>Employment status</th><td>{{ employee.get_employment_status_display }}</td></tr>
+  <tr><th>Sections</th><td>{% for s in employee.sections.all %}{{ s }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td></tr>
+  <tr><th>Email</th><td>{{ employee.email|default:"—" }}</td></tr>
+  <tr><th>Mobile</th><td>{{ employee.telephone_mobile|default:"—" }}</td></tr>
+  <tr><th>Active</th><td>{{ employee.is_active }}</td></tr>
+</table>
+
+{% if can_edit %}
+  <p><a href="{% url 'employees:employee_edit' employee.pk %}">Edit this record</a></p>
+{% endif %}
+
+<h2>Edit history</h2>
+{% if history %}
+<table>
+  <tr><th>When</th><th>Field</th><th>Old value</th><th>New value</th><th>Reason</th><th>Changed by</th></tr>
+  {% for h in history %}
+  <tr>
+    <td>{{ h.edited_at|date:"Y-m-d H:i" }}</td>
+    <td>{{ h.field_label }}</td>
+    <td>{{ h.old_value|default:"—" }}</td>
+    <td>{{ h.new_value|default:"—" }}</td>
+    <td>{{ h.reason }}</td>
+    <td>{{ h.changed_by }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>No edits recorded yet.</p>
+{% endif %}
+{% endblock %}

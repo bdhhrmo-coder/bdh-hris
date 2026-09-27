@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ employee.full_name }} — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Edit {{ employee.full_name }}</h1>
+<form method="post">
+  {% csrf_token %}
+  <fieldset>
+    <legend>System Administrator only</legend>
+    {{ form.employee_id.label_tag }} {{ form.employee_id }}
+    {{ form.is_active.label_tag }} {{ form.is_active }}
+  </fieldset>
+  <fieldset>
+    <legend>HR Administrator</legend>
+    {% for field in form %}
+      {% if field.name != "employee_id" and field.name != "is_active" and field.name != "reason" %}
+        {{ field.label_tag }} {{ field }}
+        {% if field.errors %}<div class="msg error">{{ field.errors }}</div>{% endif %}
+      {% endif %}
+    {% endfor %}
+  </fieldset>
+  {% if not form.fields.reason.widget.is_hidden %}
+  <fieldset>
+    <legend>Reason for this change</legend>
+    {{ form.reason }}
+    {% if form.reason.errors %}<div class="msg error">{{ form.reason.errors }}</div>{% endif %}
+  </fieldset>
+  {% endif %}
+  <button type="submit">Save</button>
+  <a href="{% url 'employees:employee_detail' employee.pk %}">Cancel</a>
+</form>
+{% endblock %}
