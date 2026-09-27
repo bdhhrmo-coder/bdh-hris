@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}New request — BDH HRIS{% endblock %}
+{% block content %}
+<h1>File a request</h1>
+<p>Official Business, Official Time, Travel, or Authorized OT/rest day/holiday work. Routing depends on the type you pick.</p>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Submit</button>
+</form>
+{% endblock %}

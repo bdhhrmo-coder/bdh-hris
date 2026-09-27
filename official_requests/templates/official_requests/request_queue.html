@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Requests queue — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Requests awaiting my action</h1>
+<table>
+  <tr><th>Employee</th><th>Type</th><th>Dates</th><th>Purpose</th><th>Status</th><th>Action</th></tr>
+  {% for r in requests %}
+  <tr>
+    <td>{{ r.employee.full_name }}</td>
+    <td>{{ r.get_request_type_display }}</td>
+    <td>{{ r.start_date }} to {{ r.end_date }}</td>
+    <td>{{ r.purpose|truncatechars:60 }}</td>
+    <td>{{ r.get_status_display }}</td>
+    <td>
+      <form method="post" action="{% url 'official_requests:request_action' r.pk %}" style="display:inline;">
+        {% csrf_token %}
+        {% if r.next_action %}
+          <button type="submit" name="action" value="{{ r.next_action }}">{{ r.next_action|capfirst }}</button>
+        {% endif %}
+        <button type="submit" name="action" value="reject">Reject</button>
+        {% if r.next_action != "approve" %}
+          <button type="submit" name="action" value="return">Return</button>
+        {% endif %}
+      </form>
+    </td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="6">Nothing awaiting your action.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "cto",
     "exchange",
     "attendance",
+    "official_requests",
 ]
 
 MIDDLEWARE = [
