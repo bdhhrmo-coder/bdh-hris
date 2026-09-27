@@ -10,6 +10,7 @@ from employees.permissions import get_acting_employee
 
 from .balances import compute_available_balance
 from .csc_form6 import render_pdf as render_csc_form6_pdf
+from .cosp_leave_form import render_pdf as render_cosp_leave_form_pdf
 from .forms import LeaveApplicationForm
 from .models import LeaveApplication, LeaveApplicationAction, LeaveCreditTransaction, LeaveType
 from .permissions import (
@@ -212,6 +213,29 @@ def print_csc_form6(request, pk):
 
     pdf_bytes = render_csc_form6_pdf(application)
     filename = f"CSC-Form-6_{application.employee.surname}_{application.pk}.pdf"
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="{filename}"'
+    return response
+
+
+@login_required
+def print_cosp_leave_form(request, pk):
+    """
+    Renders the custom BDH COSP Leave form for this application as a PDF.
+    Only COSP Leave itself prints here — Wellness/Emergency Leave availed
+    by a COSP employee still prints on CSC Form 6.
+    """
+    acting_employee = get_acting_employee(request.user)
+    application = get_object_or_404(LeaveApplication, pk=pk)
+
+    if not can_view_application(acting_employee, application):
+        raise PermissionDenied("You are not authorized to view this application.")
+
+    if not application.leave_type.requires_full_routing:
+        raise PermissionDenied("This leave type prints on CSC Form 6, not the COSP leave form.")
+
+    pdf_bytes = render_cosp_leave_form_pdf(application)
+    filename = f"COSP-Leave-Form_{application.employee.surname}_{application.pk}.pdf"
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = f'inline; filename="{filename}"'
     return response

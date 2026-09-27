@@ -10,4 +10,5 @@ urlpatterns = [
     path("queue/", views.leave_queue, name="leave_queue"),
     path("<int:pk>/action/", views.leave_action, name="leave_action"),
     path("<int:pk>/print/csc-form-6/", views.print_csc_form6, name="print_csc_form6"),
+    path("<int:pk>/print/cosp-leave-form/", views.print_cosp_leave_form, name="print_cosp_leave_form"),
 ]
