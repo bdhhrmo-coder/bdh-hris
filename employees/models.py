@@ -84,6 +84,21 @@ class Employee(models.Model):
     date_hired = models.DateField(null=True, blank=True)
     original_appointment_date = models.DateField(null=True, blank=True)
 
+    SHIFT_8_HOUR = 8
+    SHIFT_12_HOUR = 12
+    SHIFT_HOURS_CHOICES = [
+        (SHIFT_8_HOUR, "8-hour shift"),
+        (SHIFT_12_HOUR, "12-hour shift"),
+    ]
+    shift_hours = models.PositiveSmallIntegerField(
+        choices=SHIFT_HOURS_CHOICES,
+        default=SHIFT_8_HOUR,
+        help_text="Defines this employee's CTO 'day' length (a CTO day = one shift) and "
+        "the half-day/full-day blocks their CTO can be used in. Added for the CTO engine "
+        "(Phase 5) — confirmed 2026-09-27 that 8-hour and 12-hour shift staff need "
+        "separate conversions.",
+    )
+
     sections = models.ManyToManyField(
         "orgstructure.Section",
         blank=True,

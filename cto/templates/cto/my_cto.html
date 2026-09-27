@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}My CTO — BDH HRIS{% endblock %}
+{% block content %}
+<h1>My CTO</h1>
+<p>Available CTO balance: <strong>{{ balance }} day(s)</strong></p>
+<p><a href="{% url 'cto:cto_apply' %}">+ New CTO application</a></p>
+
+<table>
+  <tr><th>Dates</th><th>Days</th><th>Reason</th><th>Status</th><th>Submitted</th></tr>
+  {% for a in applications %}
+  <tr>
+    <td>{{ a.start_date }} to {{ a.end_date }}</td>
+    <td>{{ a.number_of_days }}</td>
+    <td>{{ a.reason }}</td>
+    <td>{{ a.get_status_display }}</td>
+    <td>{{ a.submitted_at|date:"Y-m-d" }}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="5">No CTO applications yet.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}
