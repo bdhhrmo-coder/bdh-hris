@@ -5,6 +5,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import DutyExchangeRequestForm
 from .models import DutyExchangeRequest, DutyExchangeRequestAction
+from .notifications import notify_status_change
 from .permissions import (
     get_acting_employee,
     is_administrative_officer,
@@ -32,6 +33,7 @@ def exchange_apply(request):
                 request=exchange_request, action="file", resulting_status=exchange_request.status,
                 acted_by=request.user,
             )
+            notify_status_change(exchange_request)
             messages.success(
                 request, f"Exchange request filed. Awaiting {exchange_request.employee_b}'s consent."
             )
@@ -81,6 +83,7 @@ def exchange_consent(request, pk):
             request=exchange_request, action="consent", resulting_status=exchange_request.status,
             acted_by=request.user,
         )
+        notify_status_change(exchange_request)
         messages.success(request, "Consent recorded. Request submitted for Supervisor endorsement.")
     elif decision == "decline":
         exchange_request.status = DutyExchangeRequest.CONSENT_DECLINED
@@ -89,6 +92,7 @@ def exchange_consent(request, pk):
             request=exchange_request, action="decline", resulting_status=exchange_request.status,
             acted_by=request.user,
         )
+        notify_status_change(exchange_request)
         messages.info(request, "Consent declined. The request will not proceed.")
     else:
         raise PermissionDenied("Invalid decision.")
@@ -126,6 +130,7 @@ def exchange_action(request, pk):
             request=exchange_request, action=action_name, resulting_status=new_status,
             notes=notes, acted_by=request.user,
         )
+        notify_status_change(exchange_request)
 
     allowed = False
 

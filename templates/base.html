@@ -19,6 +19,9 @@
   </style>
 </head>
 <body>
+  {% if user.is_authenticated %}
+    <p><a href="{% url 'notifications:notification_list' %}">Notifications{% if unread_notification_count %} ({{ unread_notification_count }}){% endif %}</a></p>
+  {% endif %}
   {% if messages %}
     {% for message in messages %}
       <div class="msg {{ message.tags }}">{{ message }}</div>

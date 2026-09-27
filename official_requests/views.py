@@ -5,6 +5,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import OfficialRequestForm
 from .models import OfficialRequest, OfficialRequestAction
+from .notifications import notify_status_change
 from .permissions import actor_may_advance, get_acting_employee, visible_requests_for
 from .routing import action_name_for, next_status
 
@@ -26,6 +27,7 @@ def request_apply(request):
                 request=official_request, action="submit", resulting_status=official_request.status,
                 acted_by=request.user,
             )
+            notify_status_change(official_request)
             messages.success(request, f"{official_request.get_request_type_display()} request submitted.")
             return redirect("official_requests:my_requests")
     else:
@@ -78,6 +80,7 @@ def request_action(request, pk):
                 request=official_request, action=action, resulting_status=target_status,
                 notes=notes, acted_by=request.user,
             )
+            notify_status_change(official_request)
         elif action in ("reject", "return"):
             new_status = OfficialRequest.REJECTED if action == "reject" else OfficialRequest.RETURNED
             allowed = True
@@ -87,6 +90,7 @@ def request_action(request, pk):
                 request=official_request, action=action, resulting_status=new_status,
                 notes=notes, acted_by=request.user,
             )
+            notify_status_change(official_request)
 
     if allowed:
         messages.success(request, "Action recorded.")

@@ -54,6 +54,44 @@ def is_supervisor_of(acting_employee, target_employee):
     return False
 
 
+def employees_with_role(role_code):
+    """
+    All employees holding an active RoleAssignment of this role code.
+
+    Used for notification fan-out (Phase 10, CLAUDE.md §11): the HR/AO/COH
+    routing steps aren't assigned to a named individual per request — any
+    holder of that role may act — so "who should be notified" for those
+    steps is every current holder of the role, the same set implicitly
+    used by is_hr/is_administrative_officer/is_chief_of_hospital above.
+    """
+    from employees.models import Employee
+
+    employee_ids = RoleAssignment.objects.filter(role=role_code, is_active=True).values_list(
+        "employee_id", flat=True
+    )
+    return Employee.objects.filter(pk__in=employee_ids).distinct()
+
+
+def hr_employees():
+    """Every active HR Processor or HR Administrator — mirrors is_hr's
+    either/or check, but returns the people instead of testing one."""
+    return employees_with_role(RoleAssignment.HR_PROCESSOR) | employees_with_role(RoleAssignment.HR_ADMINISTRATOR)
+
+
+def supervisors_of(target_employee):
+    """
+    Every employee who is an active Supervisor (or OIC-as-Supervisor) of
+    target_employee's sections/units — mirrors is_supervisor_of's logic,
+    but returns every matching supervisor instead of testing one candidate,
+    for notification fan-out.
+    """
+    return [
+        candidate
+        for candidate in employees_with_role(RoleAssignment.SUPERVISOR)
+        if is_supervisor_of(candidate, target_employee)
+    ]
+
+
 def can_submit_for(acting_employee, target_employee):
     """An employee may only submit a leave application for themselves."""
     return acting_employee is not None and acting_employee.pk == target_employee.pk

@@ -13,6 +13,7 @@ from .csc_form6 import render_pdf as render_csc_form6_pdf
 from .cosp_leave_form import render_pdf as render_cosp_leave_form_pdf
 from .forms import LeaveApplicationForm
 from .models import LeaveApplication, LeaveApplicationAction, LeaveCreditTransaction, LeaveType
+from .notifications import notify_status_change
 from .permissions import (
     can_view_application,
     is_administrative_officer,
@@ -41,6 +42,7 @@ def leave_apply(request):
                 resulting_status=application.status,
                 acted_by=request.user,
             )
+            notify_status_change(application)
             messages.success(request, "Leave application submitted.")
             return redirect("leave:my_applications")
     else:
@@ -130,6 +132,7 @@ def leave_action(request, pk):
             application=application, action=action_name, resulting_status=new_status,
             notes=notes, acted_by=request.user,
         )
+        notify_status_change(application)
 
     allowed = False
     error = None

@@ -41,7 +41,7 @@ anchor-date question was):
 """
 
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.db.models import Sum
 
@@ -57,12 +57,21 @@ def compute_credit(hours_worked, is_restday_or_holiday, multiplier_rate, shift_h
     CTOCreditEntry. multiplier_rate is a CTOMultiplierRate instance (the
     one active on the work date — callers look that up so the choice of
     "which rate applies" stays visible and testable on its own).
+
+    Both results are quantized to 2 decimal places (matching
+    CTOCreditEntry.credited_hours/credited_days) — a plain Decimal
+    multiply/divide of two 2-decimal-place values (e.g. 8.00 hours * 1.00
+    multiplier) otherwise produces more decimal places than the model
+    field allows (8.0000), which fails full_clean() on every ordinary
+    credit entry. Rounding here, at the single point both numbers are
+    computed, keeps the same quantize/ROUND_HALF_UP convention already
+    used in attendance/deductions.py rather than each caller re-rounding.
     """
     multiplier = (
         multiplier_rate.restday_holiday_multiplier if is_restday_or_holiday else multiplier_rate.weekday_multiplier
     )
-    credited_hours = hours_worked * multiplier
-    credited_days = credited_hours / Decimal(shift_hours)
+    credited_hours = (hours_worked * multiplier).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    credited_days = (credited_hours / Decimal(shift_hours)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     return multiplier, credited_hours, credited_days
 
 

@@ -14,6 +14,7 @@ from .balances import (
 )
 from .forms import CTOCreditEntryForm, CTOUsageApplicationForm
 from .models import CTOCreditEntry, CTOCreditTransaction, CTOUsageApplication, CTOUsageApplicationAction
+from .notifications import notify_credit_entry, notify_status_change
 from .permissions import (
     can_view_cto_application,
     get_acting_employee,
@@ -60,6 +61,7 @@ def credit_entry_create(request):
                     credit_entry=entry,
                     created_by=request.user,
                 )
+                notify_credit_entry(entry)
                 messages.success(request, f"Credited {entry.credited_days} CTO day(s) to {entry.employee}.")
                 return redirect("cto:credit_entry_create")
     else:
@@ -111,6 +113,7 @@ def cto_apply(request):
                     application=application, action="submit",
                     resulting_status=application.status, acted_by=request.user,
                 )
+                notify_status_change(application)
                 messages.success(request, "CTO application submitted.")
                 return redirect("cto:my_cto")
     else:
@@ -169,6 +172,7 @@ def cto_action(request, pk):
             application=application, action=action_name, resulting_status=new_status,
             notes=notes, acted_by=request.user,
         )
+        notify_status_change(application)
 
     allowed = False
     error = None

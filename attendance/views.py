@@ -7,6 +7,7 @@ from .deductions import sync_undertime_deduction
 from .forms import BiometricImportForm, FormalCorrectionForm, MinorCorrectionForm
 from .importer import import_biometric_file
 from .models import AttendanceCorrectionRequest, AttendanceCorrectionRequestAction, AttendanceRecord, BiometricColumnMapping
+from .notifications import notify_status_change
 from .permissions import (
     get_acting_employee,
     is_administrative_officer,
@@ -72,6 +73,7 @@ def formal_correction_apply(request):
             AttendanceCorrectionRequestAction.objects.create(
                 request=correction, action="submit", resulting_status=correction.status, acted_by=request.user,
             )
+            notify_status_change(correction)
             messages.success(request, "Attendance correction request submitted.")
             return redirect("attendance:my_attendance")
     else:
@@ -116,7 +118,10 @@ def minor_correction_create(request):
             )
             if is_hr_administrator(acting_employee):
                 # HR Administrator filing it themselves IS the authorization
-                # (§3) — no point routing it back to the same role.
+                # (§3) — no point routing it back to the same role. Only
+                # notify once, for the final APPROVED status — the
+                # momentary SUBMITTED status in between never needs anyone
+                # notified about it.
                 _finalize_correction(correction, request.user)
                 correction.status = AttendanceCorrectionRequest.APPROVED
                 correction.save(update_fields=["status", "updated_at"])
@@ -124,8 +129,10 @@ def minor_correction_create(request):
                     request=correction, action="approve", resulting_status=correction.status, acted_by=request.user,
                     notes="Self-authorized by HR Administrator.",
                 )
+                notify_status_change(correction)
                 messages.success(request, "Correction recorded and authorized.")
             else:
+                notify_status_change(correction)
                 messages.success(request, "Correction filed. Awaiting HR Administrator authorization.")
             return redirect("attendance:correction_queue")
     else:
@@ -162,6 +169,7 @@ def correction_action(request, pk):
         AttendanceCorrectionRequestAction.objects.create(
             request=correction, action=action_name, resulting_status=new_status, notes=notes, acted_by=request.user,
         )
+        notify_status_change(correction)
 
     allowed = False
 

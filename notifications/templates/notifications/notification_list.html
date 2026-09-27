@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Notifications — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Notifications</h1>
+<table>
+  <tr><th>When</th><th>Message</th><th></th></tr>
+  {% for n in notifications %}
+  <tr{% if n.pk in unread_ids %} style="font-weight: bold;"{% endif %}>
+    <td>{{ n.created_at|date:"Y-m-d H:i" }}</td>
+    <td>{{ n.message }}</td>
+    <td>{% if n.url %}<a href="{{ n.url }}">Open</a>{% endif %}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="3">No notifications yet.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}
