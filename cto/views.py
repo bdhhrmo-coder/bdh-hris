@@ -74,7 +74,11 @@ def my_cto(request):
         raise PermissionDenied("No employee record is linked to your account.")
     balance = compute_available_cto_balance(acting_employee)
     applications = acting_employee.cto_usage_applications.all()
-    return render(request, "cto/my_cto.html", {"balance": balance, "applications": applications})
+    credit_entries = acting_employee.cto_credit_entries.all()
+    return render(
+        request, "cto/my_cto.html",
+        {"balance": balance, "applications": applications, "credit_entries": credit_entries},
+    )
 
 
 @login_required

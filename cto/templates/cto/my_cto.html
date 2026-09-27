@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load documents_tags %}
 {% block title %}My CTO — BDH HRIS{% endblock %}
 {% block content %}
 <h1>My CTO</h1>
@@ -17,6 +18,23 @@
   </tr>
   {% empty %}
   <tr><td colspan="5">No CTO applications yet.</td></tr>
+  {% endfor %}
+</table>
+
+<h2>My CTO credit entries</h2>
+<p>Upload your Allowed to Work form, DTR/logbook copy, and OT Accomplishment Report here (or, for Medical Transport, your Trip Ticket and Certificate of Appearance/logbook).</p>
+<table>
+  <tr><th>Work date</th><th>Duty type</th><th>Hours</th><th>Credited days</th><th>Documents</th></tr>
+  {% for e in credit_entries %}
+  <tr>
+    <td>{{ e.work_date }}</td>
+    <td>{{ e.get_duty_type_display }}</td>
+    <td>{{ e.hours_worked }}</td>
+    <td>{{ e.credited_days }}</td>
+    <td><a href="{% documents_url e %}">Documents</a></td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="5">No CTO credit entries recorded yet.</td></tr>
   {% endfor %}
 </table>
 {% endblock %}

@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from documents.admin import UploadedDocumentInline
+
 from .models import OfficialRequest, OfficialRequestAction
 
 
@@ -20,4 +22,4 @@ class OfficialRequestAdmin(admin.ModelAdmin):
     list_display = ("employee", "request_type", "start_date", "end_date", "status", "submitted_at")
     list_filter = ("request_type", "status")
     search_fields = ("employee__surname", "employee__employee_id")
-    inlines = [OfficialRequestActionInline]
+    inlines = [OfficialRequestActionInline, UploadedDocumentInline]

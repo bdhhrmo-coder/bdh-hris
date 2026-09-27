@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load documents_tags %}
 {% block title %}My attendance — BDH HRIS{% endblock %}
 {% block content %}
 <h1>My attendance</h1>
@@ -23,7 +24,7 @@
 
 <h2>My correction requests</h2>
 <table>
-  <tr><th>Date</th><th>Type</th><th>Requested</th><th>Status</th><th>Filed</th></tr>
+  <tr><th>Date</th><th>Type</th><th>Requested</th><th>Status</th><th>Filed</th><th>Documents</th></tr>
   {% for c in corrections %}
   <tr>
     <td>{{ c.date }}</td>
@@ -31,9 +32,10 @@
     <td>{% if c.requested_is_absent %}Mark Absent{% else %}{{ c.requested_time_in }} – {{ c.requested_time_out }}{% endif %}</td>
     <td>{{ c.get_status_display }}</td>
     <td>{{ c.submitted_at|date:"Y-m-d" }}</td>
+    <td><a href="{% documents_url c %}">Documents</a></td>
   </tr>
   {% empty %}
-  <tr><td colspan="5">No correction requests yet.</td></tr>
+  <tr><td colspan="6">No correction requests yet.</td></tr>
   {% endfor %}
 </table>
 {% endblock %}

@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from documents.admin import UploadedDocumentInline
+
 from .models import (
     AttendanceCorrectionRequest,
     AttendanceCorrectionRequestAction,
@@ -51,4 +53,4 @@ class AttendanceCorrectionRequestAdmin(admin.ModelAdmin):
     list_display = ("employee", "date", "correction_type", "status", "submitted_at")
     list_filter = ("correction_type", "status")
     search_fields = ("employee__surname", "employee__employee_id")
-    inlines = [AttendanceCorrectionRequestActionInline]
+    inlines = [AttendanceCorrectionRequestActionInline, UploadedDocumentInline]

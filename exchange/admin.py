@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from documents.admin import UploadedDocumentInline
+
 from .models import DutyExchangeRequest, DutyExchangeRequestAction
 
 
@@ -24,4 +26,4 @@ class DutyExchangeRequestAdmin(admin.ModelAdmin):
     search_fields = (
         "employee_a__surname", "employee_a__employee_id", "employee_b__surname", "employee_b__employee_id",
     )
-    inlines = [DutyExchangeRequestActionInline]
+    inlines = [DutyExchangeRequestActionInline, UploadedDocumentInline]

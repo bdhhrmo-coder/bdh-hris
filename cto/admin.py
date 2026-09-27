@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from documents.admin import UploadedDocumentInline
+
 from .models import (
     CTOCreditEntry,
     CTOCreditTransaction,
@@ -17,12 +19,13 @@ class CTOMultiplierRateAdmin(admin.ModelAdmin):
 @admin.register(CTOCreditEntry)
 class CTOCreditEntryAdmin(admin.ModelAdmin):
     list_display = (
-        "employee", "work_date", "hours_worked", "is_restday_or_holiday",
+        "employee", "work_date", "duty_type", "hours_worked", "is_restday_or_holiday",
         "multiplier_applied", "credited_hours", "credited_days", "recorded_by",
     )
-    list_filter = ("is_restday_or_holiday",)
+    list_filter = ("duty_type", "is_restday_or_holiday")
     search_fields = ("employee__surname", "employee__employee_id")
     readonly_fields = ("multiplier_applied", "credited_hours", "credited_days", "shift_hours_used", "recorded_by")
+    inlines = [UploadedDocumentInline]
 
 
 @admin.register(CTOCreditTransaction)
@@ -56,4 +59,4 @@ class CTOUsageApplicationAdmin(admin.ModelAdmin):
     list_display = ("employee", "start_date", "end_date", "number_of_days", "status")
     list_filter = ("status",)
     search_fields = ("employee__surname", "employee__employee_id")
-    inlines = [CTOUsageApplicationActionInline]
+    inlines = [CTOUsageApplicationActionInline, UploadedDocumentInline]

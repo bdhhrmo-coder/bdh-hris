@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Upload document — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Upload a document</h1>
+<p>{{ obj }}</p>
+<p>PDF, JPG, or PNG only — max 10 MB, up to 5 documents per transaction.</p>
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Upload</button>
+</form>
+{% endblock %}

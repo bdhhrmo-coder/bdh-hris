@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Documents — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Documents</h1>
+<p>{{ obj }}</p>
+
+<h2>Requirements</h2>
+<table>
+  <tr><th>Document</th><th>Mandatory?</th><th>Status</th></tr>
+  {% for row in requirement_status %}
+  <tr>
+    <td>{{ row.label }}</td>
+    <td>{{ row.is_mandatory|yesno:"Yes,No" }}</td>
+    <td>{{ row.satisfied|yesno:"Submitted,Missing" }}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="3">No configured document requirements for this transaction type.</td></tr>
+  {% endfor %}
+</table>
+
+{% if can_upload %}
+<p><a href="{% url 'documents:document_upload' app_label model_name obj.pk %}">+ Upload a document</a></p>
+{% endif %}
+
+<h2>Uploaded documents</h2>
+{% if hidden_confidential_count %}
+<div class="locked-note">{{ hidden_confidential_count }} confidential document(s) attached are not shown to you.</div>
+{% endif %}
+<table>
+  <tr><th>File</th><th>Satisfies</th><th>Confidential?</th><th>Uploaded by</th><th>Uploaded</th><th></th></tr>
+  {% for d in documents %}
+  <tr>
+    <td><a href="{% url 'documents:document_download' d.pk %}" target="_blank">{{ d.original_filename }}</a></td>
+    <td>{{ d.requirement.label|default:"—" }}</td>
+    <td>{{ d.is_confidential|yesno:"Yes,No" }}</td>
+    <td>{{ d.uploaded_by }}</td>
+    <td>{{ d.uploaded_at|date:"Y-m-d H:i" }}</td>
+    <td>{% if can_upload %}<a href="{% url 'documents:document_replace' d.pk %}">Replace</a>{% endif %}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="6">No documents uploaded yet.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

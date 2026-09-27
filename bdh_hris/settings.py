@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     "exchange",
     "attendance",
     "official_requests",
+    "documents",
 ]
 
 MIDDLEWARE = [
@@ -143,6 +144,13 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = "static/"
+
+# CLAUDE.md §10: uploaded documents (medical certificates, government IDs,
+# etc.) are confidential HR records — they must NEVER be served as plain
+# static files. There is deliberately no MEDIA_URL/serve-media route in
+# bdh_hris/urls.py: the only way to read a file is documents.views.
+# document_download, which checks can_view_document() before opening it.
+MEDIA_ROOT = os.environ.get("BDH_HRIS_MEDIA_ROOT", str(BASE_DIR / "secure_media"))
 
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "/admin/"

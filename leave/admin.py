@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from documents.admin import UploadedDocumentInline
+
 from .models import LeaveApplication, LeaveApplicationAction, LeaveCreditTransaction, LeaveType
 
 
@@ -29,7 +31,7 @@ class LeaveApplicationAdmin(admin.ModelAdmin):
     list_display = ("employee", "leave_type", "start_date", "end_date", "number_of_days", "status")
     list_filter = ("status", "leave_type")
     search_fields = ("employee__surname", "employee__employee_id")
-    inlines = [LeaveApplicationActionInline]
+    inlines = [LeaveApplicationActionInline, UploadedDocumentInline]
 
 
 @admin.register(LeaveCreditTransaction)

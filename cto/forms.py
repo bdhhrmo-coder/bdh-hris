@@ -15,7 +15,7 @@ class CTOCreditEntryForm(forms.ModelForm):
 
     class Meta:
         model = CTOCreditEntry
-        fields = ["employee", "work_date", "hours_worked", "is_restday_or_holiday", "notes"]
+        fields = ["employee", "work_date", "duty_type", "hours_worked", "is_restday_or_holiday", "notes"]
         widgets = {"work_date": forms.DateInput(attrs={"type": "date"})}
 
     def clean(self):

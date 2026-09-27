@@ -63,12 +63,29 @@ class CTOCreditEntry(models.Model):
     through Supervisor/AO/COH; HR is trusted to have verified the
     attachments described in §7 against the employee's DTR/logbook before
     entering this.
+
+    duty_type (added for Phase 9's document-requirements system, confirmed
+    2026-09-27): the standard §7 attachment set (Allowed to Work form,
+    DTR/logbook copy, OT Accomplishment Report) assumes regular OT/rest-
+    day/holiday duty. Medical Transport ("Decking" schedule) duty follows a
+    different, fully separate document set instead (Trip Ticket, plus
+    either a Certificate of Appearance or a logbook copy) — regardless of
+    which section the employee belongs to. See documents/requirements.py
+    for how the two sets are configured.
     """
+
+    DUTY_REGULAR = "REGULAR"
+    DUTY_MEDICAL_TRANSPORT = "MEDICAL_TRANSPORT"
+    DUTY_TYPE_CHOICES = [
+        (DUTY_REGULAR, "Regular OT/rest day/holiday duty"),
+        (DUTY_MEDICAL_TRANSPORT, "Medical Transport (Decking schedule)"),
+    ]
 
     employee = models.ForeignKey(
         "employees.Employee", on_delete=models.CASCADE, related_name="cto_credit_entries"
     )
     work_date = models.DateField(help_text="The date the OT/rest-day/holiday work was performed.")
+    duty_type = models.CharField(max_length=20, choices=DUTY_TYPE_CHOICES, default=DUTY_REGULAR)
     hours_worked = models.DecimalField(max_digits=5, decimal_places=2)
     is_restday_or_holiday = models.BooleanField(
         default=False, help_text="Determines which multiplier applies (weekday vs rest day/holiday)."

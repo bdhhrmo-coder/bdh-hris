@@ -4,4 +4,5 @@ db.sqlite3
 .env
 staticfiles/
 media/
+secure_media/
 .DS_Store
