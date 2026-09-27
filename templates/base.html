@@ -22,6 +22,7 @@
   {% if user.is_authenticated %}
     <p>
       {% if can_view_dashboard %}<a href="{% url 'dashboard:dashboard_home' %}">Dashboard</a> | {% endif %}
+      {% if can_view_audit_log %}<a href="{% url 'auditlog:audit_log' %}">Audit Log</a> | {% endif %}
       <a href="{% url 'notifications:notification_list' %}">Notifications{% if unread_notification_count %} ({{ unread_notification_count }}){% endif %}</a>
     </p>
   {% endif %}

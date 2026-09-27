@@ -53,6 +53,7 @@ class EmployeeForm(forms.ModelForm):
         fields = [
             "employee_id",
             "is_active",
+            "separation_date",
             "surname",
             "first_name",
             "middle_name",
@@ -85,6 +86,7 @@ class EmployeeForm(forms.ModelForm):
             "date_of_appointment": forms.DateInput(attrs={"type": "date"}),
             "date_hired": forms.DateInput(attrs={"type": "date"}),
             "original_appointment_date": forms.DateInput(attrs={"type": "date"}),
+            "separation_date": forms.DateInput(attrs={"type": "date"}),
             "residential_address": forms.Textarea(attrs={"rows": 2}),
             "permanent_address": forms.Textarea(attrs={"rows": 2}),
         }

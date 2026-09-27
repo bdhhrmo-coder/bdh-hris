@@ -112,6 +112,14 @@ class Employee(models.Model):
     is_active = models.BooleanField(
         default=True, help_text="System Administrator only. Controls login/account status."
     )
+    separation_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="System Administrator only. Date of resignation, retirement, termination, or "
+        "death — anchors the personnel-record retention clock (CLAUDE.md §13 / auditlog app). "
+        "Not set automatically when is_active is unticked, since the two can differ (e.g. a "
+        "suspension) — the System Administrator enters the actual separation date on record.",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

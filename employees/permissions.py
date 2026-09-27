@@ -72,7 +72,7 @@ def is_self_record_locked(acting_employee, target_employee):
     )
 
 
-SYSTEM_ADMIN_ONLY_FIELDS = {"employee_id", "is_active"}
+SYSTEM_ADMIN_ONLY_FIELDS = {"employee_id", "is_active", "separation_date"}
 
 
 def can_review_profile_requests(acting_employee):

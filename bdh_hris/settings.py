@@ -53,7 +53,15 @@ INSTALLED_APPS = [
     "documents",
     "notifications",
     "dashboard",
+    "auditlog",
 ]
+
+# CLAUDE.md §13: RA 10173 personnel-record retention period, in years, for a
+# SEPARATED employee (from Employee.separation_date). Kept configurable
+# (env override) rather than hardcoded, per the same principle as CTO's
+# multipliers (§7) — confirmed with the project owner as 10 years on
+# 2026-09-27. See auditlog/retention.py.
+RECORD_RETENTION_YEARS = int(os.environ.get("BDH_HRIS_RECORD_RETENTION_YEARS", "10"))
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -79,6 +87,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "notifications.context_processors.unread_notification_count",
                 "dashboard.context_processors.dashboard_link",
+                "auditlog.context_processors.audit_log_link",
             ],
         },
     },

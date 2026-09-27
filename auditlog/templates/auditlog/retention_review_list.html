@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Personnel Record Retention Review — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Personnel Record Retention Review</h1>
+<p><a href="{% url 'auditlog:audit_log' %}">Back to audit log</a></p>
+<p>Retention period: 10 years from separation date. Records with a separation date on or before
+  <strong>{{ cutoff_date }}</strong> are due for review. This screen only records the reviewer's
+  decision — it never deletes or archives anything automatically; any approved disposal is carried
+  out separately, outside this system.</p>
+
+<h2>Due for review ({{ due|length }})</h2>
+<table>
+  <tr><th>Employee</th><th>Employee ID</th><th>Separation date</th><th>Decision</th></tr>
+  {% for employee in due %}
+  <tr>
+    <td>{{ employee }}</td>
+    <td>{{ employee.employee_id }}</td>
+    <td>{{ employee.separation_date }}</td>
+    <td>
+      <form method="post" action="{% url 'auditlog:retention_review_decide' employee.pk %}">
+        {% csrf_token %}
+        <select name="decision" required>
+          <option value="">Choose...</option>
+          {% for code, label in decision_choices %}
+            <option value="{{ code }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+        <textarea name="reason" rows="2" placeholder="Reason for this decision (required)" required></textarea>
+        <button type="submit">Record decision</button>
+      </form>
+    </td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="4">No personnel records are currently due for retention review.</td></tr>
+  {% endfor %}
+</table>
+
+<h2>Decision history</h2>
+<table>
+  <tr><th>Employee</th><th>Decision</th><th>Reason</th><th>Decided by</th><th>Decided at</th></tr>
+  {% for record in history %}
+  <tr>
+    <td>{{ record.employee }}</td>
+    <td>{{ record.get_decision_display }}</td>
+    <td>{{ record.reason }}</td>
+    <td>{{ record.reviewed_by }}</td>
+    <td>{{ record.reviewed_at|date:"Y-m-d H:i" }}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="5">No retention decisions have been recorded yet.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}
