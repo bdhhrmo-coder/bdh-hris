@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "leave",
     "cto",
     "exchange",
+    "attendance",
 ]
 
 MIDDLEWARE = [

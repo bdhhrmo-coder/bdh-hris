@@ -108,6 +108,12 @@ class LeaveCreditTransaction(models.Model):
     leave_application = models.ForeignKey(
         "LeaveApplication", on_delete=models.SET_NULL, null=True, blank=True, related_name="ledger_entries"
     )
+    attendance_record = models.ForeignKey(
+        "attendance.AttendanceRecord", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="undertime_transactions",
+        help_text="Set only for the auto-deduction CLAUDE.md §9 requires ('Undertime auto-deducts from "
+        "leave credits') — confirmed 2026-09-27 that undertime charges against VL specifically.",
+    )
     notes = models.CharField(max_length=255, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)

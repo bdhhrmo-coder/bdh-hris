@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Attendance correction queue — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Attendance corrections awaiting my action</h1>
+<table>
+  <tr><th>Employee</th><th>Date</th><th>Type</th><th>Requested</th><th>Reason</th><th>Status</th><th>Action</th></tr>
+  {% for r in requests %}
+  <tr>
+    <td>{{ r.employee.full_name }}</td>
+    <td>{{ r.date }}</td>
+    <td>{{ r.get_correction_type_display }}</td>
+    <td>{% if r.requested_is_absent %}Mark Absent{% else %}{{ r.requested_time_in }} – {{ r.requested_time_out }}{% endif %}</td>
+    <td>{{ r.reason }}</td>
+    <td>{{ r.get_status_display }}</td>
+    <td>
+      <form method="post" action="{% url 'attendance:correction_action' r.pk %}" style="display:inline;">
+        {% csrf_token %}
+        {% if r.correction_type == "MINOR" and r.status == "SUBMITTED" %}
+          <button type="submit" name="action" value="approve">Authorize</button>
+          <button type="submit" name="action" value="reject">Reject</button>
+        {% elif r.status == "SUBMITTED" %}
+          <button type="submit" name="action" value="endorse">Endorse</button>
+          <button type="submit" name="action" value="reject">Reject</button>
+          <button type="submit" name="action" value="return">Return</button>
+        {% elif r.status == "ENDORSED_BY_SUPERVISOR" %}
+          <button type="submit" name="action" value="process">Process</button>
+          <button type="submit" name="action" value="reject">Reject</button>
+          <button type="submit" name="action" value="return">Return</button>
+        {% elif r.status == "PROCESSED_BY_HR" %}
+          <button type="submit" name="action" value="approve">Approve</button>
+          <button type="submit" name="action" value="reject">Reject</button>
+          <button type="submit" name="action" value="return">Return</button>
+        {% endif %}
+      </form>
+    </td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="7">Nothing awaiting your action.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

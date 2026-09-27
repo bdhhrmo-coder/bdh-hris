@@ -25,6 +25,7 @@ urlpatterns = [
     path("leave/", include("leave.urls")),
     path("cto/", include("cto.urls")),
     path("exchange/", include("exchange.urls")),
+    path("attendance/", include("attendance.urls")),
     path("login/", auth_views.LoginView.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
 ]

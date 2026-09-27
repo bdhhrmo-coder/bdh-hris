@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Request attendance correction — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Request an attendance correction</h1>
+<p>Routes to your Supervisor, then HR, then the Administrative Officer for final approval.</p>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Submit</button>
+</form>
+{% endblock %}
