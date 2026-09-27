@@ -21,9 +21,9 @@ Design notes, flagged rather than silently assumed:
     underneath each name — a printed name from the system record is not
     a substitute for the actual signature CLAUDE.md's "preserve human
     control" principle calls for.
-  - No BDH logo image is embedded (none was available to reuse); the
-    letterhead is text-only, in the same institutional style as CSC
-    Form 6. Swap in an image later if one is supplied.
+  - The BDH seal (form_templates/bdh_logo.png) is placed at the top left
+    of the letterhead, matching how the Provincial Government seal
+    appears on CSC Form 6.
 """
 
 import subprocess
@@ -31,10 +31,12 @@ import tempfile
 from pathlib import Path
 
 import openpyxl
+from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Alignment, Border, Font, Side
 
 from .balances import compute_available_balance, contract_years_started
 
+LOGO_PATH = Path(__file__).parent / "form_templates" / "bdh_logo.png"
 THIN = Side(style="thin")
 BOX = Border(top=THIN, bottom=THIN, left=THIN, right=THIN)
 BOTTOM = Border(bottom=THIN)
@@ -77,20 +79,27 @@ def fill_cosp_leave_form(application):
     ws.sheet_properties.pageSetUpPr.fitToPage = True
 
     # --- Letterhead ------------------------------------------------------
-    _merge_and_set(ws, "A1:G1", "Republic of the Philippines", italic=True, align="center")
-    _merge_and_set(ws, "A2:G2", "PROVINCIAL GOVERNMENT OF PALAWAN", bold=True, size=13, align="center")
-    _merge_and_set(ws, "A3:G3", "BATARAZA DISTRICT HOSPITAL", bold=True, size=13, align="center")
-    _merge_and_set(ws, "A4:G4", "Barangay Marangas, Bataraza, Palawan", italic=True, size=9, align="center")
-    _merge_and_set(ws, "A6:G6", "APPLICATION FOR COSP LEAVE", bold=True, size=15, align="center")
+    ws["G1"] = "Form No. BDH-HR-COSP-01"
+    ws["G1"].font = Font(size=8, italic=True, name="Arial")
+    ws["G1"].alignment = Alignment(horizontal="right")
+
+    _merge_and_set(ws, "A2:G2", "Republic of the Philippines", italic=True, align="center")
+    _merge_and_set(ws, "A3:G3", "PROVINCIAL GOVERNMENT OF PALAWAN", bold=True, size=13, align="center")
+    _merge_and_set(ws, "A4:G4", "BATARAZA DISTRICT HOSPITAL", bold=True, size=13, align="center")
+    _merge_and_set(ws, "A5:G5", "Barangay Marangas, Bataraza, Palawan", italic=True, size=9, align="center")
+    _merge_and_set(ws, "A7:G7", "APPLICATION FOR COSP LEAVE", bold=True, size=15, align="center")
     _merge_and_set(
-        ws, "A7:G7", "(Contract of Service Personnel — internal BDH leave benefit)",
+        ws, "A8:G8", "(Contract of Service Personnel — internal BDH leave benefit)",
         italic=True, size=9, align="center",
     )
-    ws["A1"] = "Form No. BDH-HR-COSP-01"
-    ws["A1"].font = Font(size=8, italic=True, name="Arial")
-    ws["A1"].alignment = Alignment(horizontal="left")
 
-    row = 9
+    if LOGO_PATH.exists():
+        logo = XLImage(str(LOGO_PATH))
+        logo.width = 70
+        logo.height = 70
+        ws.add_image(logo, "A1")
+
+    row = 10
 
     def label_value(label, value, span="B:D", height=1):
         nonlocal row
