@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Pending profile edit requests — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Pending self-service edit requests</h1>
+
+{% if requests %}
+<table>
+  <tr><th>Employee</th><th>Field</th><th>Old</th><th>Requested</th><th>Submitted</th><th>Action</th></tr>
+  {% for r in requests %}
+  <tr>
+    <td><a href="{% url 'employees:employee_detail' r.employee.pk %}">{{ r.employee.full_name }}</a></td>
+    <td>{{ r.get_field_name_display }}</td>
+    <td>{{ r.old_value }}</td>
+    <td>{{ r.requested_value }}</td>
+    <td>{{ r.requested_at|date:"Y-m-d" }}</td>
+    <td>
+      {% if r.employee_id == acting_employee.pk %}
+        <em>Your own request — needs another HR Administrator</em>
+      {% else %}
+        <form method="post" action="{% url 'employees:profile_edit_request_review' r.pk %}" style="display:inline;">
+          {% csrf_token %}
+          <input type="hidden" name="decision" value="approve">
+          <button type="submit">Approve</button>
+        </form>
+        <form method="post" action="{% url 'employees:profile_edit_request_review' r.pk %}" style="display:inline;">
+          {% csrf_token %}
+          <input type="hidden" name="decision" value="reject">
+          <button type="submit">Reject</button>
+        </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>No pending requests.</p>
+{% endif %}
+{% endblock %}

@@ -9,12 +9,16 @@ from orgstructure.models import Section
 
 from accounts.models import RoleAssignment
 
-from .forms import EmployeeCreateForm, EmployeeForm
-from .models import EducationHistory, Employee, EmployeeEditHistory
+from django.utils import timezone
+
+from .forms import EmployeeCreateForm, EmployeeForm, SelfServiceProfileForm
+from .models import EducationHistory, Employee, EmployeeEditHistory, EmployeeProfileEditRequest
 from .permissions import (
     can_create_employee,
     can_list_employees,
     can_open_employee_edit_screen,
+    can_review_profile_requests,
+    can_review_this_request,
     can_view_employee,
     get_acting_employee,
     is_self_record_locked,
@@ -192,3 +196,122 @@ def employee_edit(request, pk):
         "employees/employee_form.html",
         {"form": form, "employee": employee, "education_formset": education_formset},
     )
+
+
+@login_required
+def my_profile_edit_request(request):
+    """
+    Self-service edit for the employee's own contact info / address / civil
+    status (CLAUDE.md §6.4). This never saves the Employee record directly —
+    it only ever creates PENDING EmployeeProfileEditRequest rows for an HR
+    Administrator to approve.
+    """
+    acting_employee = get_acting_employee(request.user)
+    if acting_employee is None:
+        raise PermissionDenied("No employee record is linked to your account.")
+
+    if request.method == "POST":
+        form = SelfServiceProfileForm(request.POST, instance=acting_employee)
+        if form.is_valid():
+            changes = form.requested_changes()
+            for field_name, (old_value, new_value) in changes.items():
+                # Superseded by this new submission — drop any earlier
+                # pending request for the same field rather than stacking up.
+                EmployeeProfileEditRequest.objects.filter(
+                    employee=acting_employee, field_name=field_name, status=EmployeeProfileEditRequest.PENDING
+                ).delete()
+                EmployeeProfileEditRequest.objects.create(
+                    employee=acting_employee,
+                    field_name=field_name,
+                    old_value=old_value,
+                    requested_value=new_value,
+                )
+            if changes:
+                messages.success(
+                    request,
+                    f"Submitted {len(changes)} change(s) for HR Administrator approval. "
+                    "They won't take effect until approved.",
+                )
+            else:
+                messages.info(request, "No changes were made.")
+            return redirect("employees:my_profile_edit_request")
+    else:
+        form = SelfServiceProfileForm(instance=acting_employee)
+
+    pending = acting_employee.profile_edit_requests.filter(status=EmployeeProfileEditRequest.PENDING)
+    recent = acting_employee.profile_edit_requests.exclude(status=EmployeeProfileEditRequest.PENDING)[:20]
+    return render(
+        request,
+        "employees/my_profile_edit_request.html",
+        {"form": form, "pending": pending, "recent": recent},
+    )
+
+
+@login_required
+def profile_edit_request_queue(request):
+    acting_employee = get_acting_employee(request.user)
+    if not can_review_profile_requests(acting_employee):
+        raise PermissionDenied("Only an HR Administrator can review self-service edit requests.")
+
+    requests_qs = EmployeeProfileEditRequest.objects.filter(
+        status=EmployeeProfileEditRequest.PENDING
+    ).select_related("employee")
+    return render(
+        request,
+        "employees/profile_edit_request_queue.html",
+        {"requests": requests_qs, "acting_employee": acting_employee},
+    )
+
+
+@login_required
+def profile_edit_request_review(request, pk):
+    acting_employee = get_acting_employee(request.user)
+    edit_request = get_object_or_404(EmployeeProfileEditRequest, pk=pk)
+
+    if not can_review_profile_requests(acting_employee):
+        raise PermissionDenied("Only an HR Administrator can review self-service edit requests.")
+
+    if not can_review_this_request(acting_employee, edit_request):
+        messages.error(
+            request, "You cannot review your own self-service edit request — "
+            "ask another HR Administrator."
+        )
+        return redirect("employees:profile_edit_request_queue")
+
+    if edit_request.status != EmployeeProfileEditRequest.PENDING:
+        messages.info(request, "This request has already been reviewed.")
+        return redirect("employees:profile_edit_request_queue")
+
+    decision = request.POST.get("decision")
+    if decision == "approve":
+        target = edit_request.employee
+        current_value = getattr(target, edit_request.field_name)
+        setattr(target, edit_request.field_name, edit_request.requested_value)
+        target.save(update_fields=[edit_request.field_name])
+        EmployeeEditHistory.objects.create(
+            employee=target,
+            field_name=edit_request.field_name,
+            field_label=dict(EmployeeProfileEditRequest.SELF_SERVICE_FIELDS).get(
+                edit_request.field_name, edit_request.field_name
+            ),
+            old_value=current_value or "",
+            new_value=edit_request.requested_value,
+            reason="Self-service change request approved.",
+            changed_by=request.user,
+        )
+        edit_request.status = EmployeeProfileEditRequest.APPROVED
+        edit_request.reviewed_by = request.user
+        edit_request.reviewed_at = timezone.now()
+        edit_request.save()
+        messages.success(request, "Change approved and applied.")
+    elif decision == "reject":
+        edit_request.status = EmployeeProfileEditRequest.REJECTED
+        edit_request.reviewed_by = request.user
+        edit_request.reviewed_at = timezone.now()
+        edit_request.review_notes = request.POST.get("review_notes", "").strip()
+        edit_request.save()
+        messages.info(request, "Change rejected.")
+    else:
+        messages.error(request, "Unknown decision.")
+
+    return redirect("employees:profile_edit_request_queue")

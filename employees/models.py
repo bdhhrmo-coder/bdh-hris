@@ -182,3 +182,57 @@ class EmployeeEditHistory(models.Model):
 
     def __str__(self):
         return f"{self.employee} — {self.field_label or self.field_name} @ {self.edited_at:%Y-%m-%d %H:%M}"
+
+
+class EmployeeProfileEditRequest(models.Model):
+    """
+    Self-service profile edit request (CLAUDE.md §6.4). An employee may
+    request a change to their own contact information, address, or civil
+    status, but it does NOT take effect immediately — it sits here as
+    PENDING until an HR Administrator approves or rejects it. Approving
+    applies the change to the Employee record and logs it to
+    EmployeeEditHistory like any other edit.
+
+    Deliberately narrow to the four self-service fields named in §6.4 —
+    this is not a general-purpose edit-request system.
+    """
+
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    STATUS_CHOICES = [(PENDING, "Pending"), (APPROVED, "Approved"), (REJECTED, "Rejected")]
+
+    SELF_SERVICE_FIELDS = [
+        ("telephone_mobile", "Telephone/Mobile"),
+        ("email", "Email"),
+        ("residential_address", "Residential address"),
+        ("permanent_address", "Permanent address"),
+        ("civil_status", "Civil status"),
+    ]
+    SELF_SERVICE_FIELD_NAMES = [name for name, _ in SELF_SERVICE_FIELDS]
+
+    employee = models.ForeignKey(
+        Employee, on_delete=models.CASCADE, related_name="profile_edit_requests"
+    )
+    field_name = models.CharField(max_length=50, choices=SELF_SERVICE_FIELDS)
+    old_value = models.TextField(blank=True)
+    requested_value = models.TextField(blank=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=PENDING)
+
+    requested_at = models.DateTimeField(auto_now_add=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="profile_requests_reviewed",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-requested_at"]
+
+    def __str__(self):
+        label = dict(self.SELF_SERVICE_FIELDS).get(self.field_name, self.field_name)
+        return f"{self.employee} — {label} ({self.get_status_display()})"

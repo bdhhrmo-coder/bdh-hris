@@ -2,7 +2,7 @@ from django import forms
 
 from accounts.models import RoleAssignment
 
-from .models import Employee
+from .models import Employee, EmployeeProfileEditRequest
 from .permissions import SYSTEM_ADMIN_ONLY_FIELDS, is_self_record_locked
 
 
@@ -165,4 +165,42 @@ class EmployeeForm(forms.ModelForm):
                 old = self._old_snapshot.get(name)
                 if old != new:
                     changes[name] = (old, new)
+        return changes
+
+
+class SelfServiceProfileForm(forms.ModelForm):
+    """
+    Self-service edit for the four fields CLAUDE.md §6.4 allows an employee
+    to change themselves: contact information, address, and civil status.
+    Submitting this does NOT change the Employee record — see
+    employees.views.my_profile_edit_request, which turns whatever changed
+    into pending EmployeeProfileEditRequest rows for HR Administrator
+    approval instead of saving the form directly.
+    """
+
+    class Meta:
+        model = Employee
+        fields = EmployeeProfileEditRequest.SELF_SERVICE_FIELD_NAMES
+        widgets = {
+            "residential_address": forms.Textarea(attrs={"rows": 2}),
+            "permanent_address": forms.Textarea(attrs={"rows": 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Same reason as EmployeeForm: is_valid() mutates self.instance in
+        # place before save() is even called, so "old" values must be
+        # captured here, before validation runs.
+        self._old_snapshot = {name: getattr(self.instance, name, None) for name in self.fields}
+
+    def requested_changes(self):
+        """{field_name: (old_value, new_value)} for fields that changed."""
+        changes = {}
+        for name in self.fields:
+            if name not in self.changed_data:
+                continue
+            old = self._old_snapshot.get(name) or ""
+            new = self.cleaned_data.get(name) or ""
+            if old != new:
+                changes[name] = (old, new)
         return changes

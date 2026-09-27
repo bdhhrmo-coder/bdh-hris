@@ -5,7 +5,7 @@ from django.urls import reverse
 from accounts.models import RoleAssignment
 from orgstructure.models import Section
 
-from .models import EducationHistory, Employee, EmployeeEditHistory
+from .models import EducationHistory, Employee, EmployeeEditHistory, EmployeeProfileEditRequest
 
 # The Employee edit screen also carries an inline Education History formset.
 # Django's formsets require their management-form fields even when there's
@@ -321,3 +321,135 @@ class Phase2Tests(TestCase):
         self.assertFalse(
             EducationHistory.objects.filter(employee=self.nurse, school="Should Not Save University").exists()
         )
+
+
+class Phase3SelfServiceTests(TestCase):
+    """Self-service profile edit requests + HR Administrator approval queue."""
+
+    def setUp(self):
+        self.client = Client()
+        self.hr_admin_a = make_employee("hradmin3a", "EMP-201", role=RoleAssignment.HR_ADMINISTRATOR)
+        self.hr_admin_b = make_employee("hradmin3b", "EMP-202", role=RoleAssignment.HR_ADMINISTRATOR)
+        self.nurse = make_employee(
+            "nurse4", "EMP-203", role=RoleAssignment.EMPLOYEE, email="old@example.com"
+        )
+
+    def test_submitting_a_change_does_not_apply_it_immediately(self):
+        self.client.login(username="nurse4", password="testpass123")
+        self.client.post(
+            reverse("employees:my_profile_edit_request"),
+            {
+                "telephone_mobile": "09171234567",
+                "email": "old@example.com",  # unchanged
+                "residential_address": "",
+                "permanent_address": "",
+                "civil_status": "",
+            },
+        )
+        self.nurse.refresh_from_db()
+        self.assertEqual(self.nurse.telephone_mobile, "", "Self-service submission must not apply directly")
+        self.assertTrue(
+            EmployeeProfileEditRequest.objects.filter(
+                employee=self.nurse, field_name="telephone_mobile", status=EmployeeProfileEditRequest.PENDING
+            ).exists()
+        )
+
+    def test_can_only_request_changes_for_self(self):
+        # There is no pk in the self-service URL at all — confirm a second
+        # employee's submission creates a request against THEIR OWN record.
+        other = make_employee("nurse5", "EMP-204", role=RoleAssignment.EMPLOYEE)
+        self.client.login(username="nurse5", password="testpass123")
+        self.client.post(
+            reverse("employees:my_profile_edit_request"),
+            {
+                "telephone_mobile": "09179999999",
+                "email": "",
+                "residential_address": "",
+                "permanent_address": "",
+                "civil_status": "",
+            },
+        )
+        self.assertTrue(EmployeeProfileEditRequest.objects.filter(employee=other).exists())
+        self.assertFalse(EmployeeProfileEditRequest.objects.filter(employee=self.nurse).exists())
+
+    def test_only_hr_administrator_sees_the_queue(self):
+        self.client.login(username="nurse4", password="testpass123")
+        response = self.client.get(reverse("employees:profile_edit_request_queue"))
+        self.assertEqual(response.status_code, 403)
+
+        self.client.login(username="hradmin3a", password="testpass123")
+        response = self.client.get(reverse("employees:profile_edit_request_queue"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_approving_applies_change_and_logs_history(self):
+        req = EmployeeProfileEditRequest.objects.create(
+            employee=self.nurse,
+            field_name="telephone_mobile",
+            old_value="",
+            requested_value="09171234567",
+        )
+        self.client.login(username="hradmin3a", password="testpass123")
+        self.client.post(
+            reverse("employees:profile_edit_request_review", args=[req.pk]),
+            {"decision": "approve"},
+        )
+        self.nurse.refresh_from_db()
+        req.refresh_from_db()
+        self.assertEqual(self.nurse.telephone_mobile, "09171234567")
+        self.assertEqual(req.status, EmployeeProfileEditRequest.APPROVED)
+        self.assertTrue(
+            EmployeeEditHistory.objects.filter(
+                employee=self.nurse, field_name="telephone_mobile", new_value="09171234567"
+            ).exists()
+        )
+
+    def test_rejecting_does_not_apply_change(self):
+        req = EmployeeProfileEditRequest.objects.create(
+            employee=self.nurse,
+            field_name="civil_status",
+            old_value="",
+            requested_value="MARRIED",
+        )
+        self.client.login(username="hradmin3a", password="testpass123")
+        self.client.post(
+            reverse("employees:profile_edit_request_review", args=[req.pk]),
+            {"decision": "reject", "review_notes": "Please attach marriage certificate"},
+        )
+        self.nurse.refresh_from_db()
+        req.refresh_from_db()
+        self.assertEqual(self.nurse.civil_status, "")
+        self.assertEqual(req.status, EmployeeProfileEditRequest.REJECTED)
+
+    def test_hr_administrator_cannot_approve_own_request(self):
+        req = EmployeeProfileEditRequest.objects.create(
+            employee=self.hr_admin_a,
+            field_name="email",
+            old_value="",
+            requested_value="me@example.com",
+        )
+        self.client.login(username="hradmin3a", password="testpass123")
+        self.client.post(
+            reverse("employees:profile_edit_request_review", args=[req.pk]),
+            {"decision": "approve"},
+        )
+        req.refresh_from_db()
+        self.hr_admin_a.refresh_from_db()
+        self.assertEqual(req.status, EmployeeProfileEditRequest.PENDING, "Must not self-approve")
+        self.assertEqual(self.hr_admin_a.email, "")
+
+    def test_another_hr_administrator_can_approve_it(self):
+        req = EmployeeProfileEditRequest.objects.create(
+            employee=self.hr_admin_a,
+            field_name="email",
+            old_value="",
+            requested_value="me@example.com",
+        )
+        self.client.login(username="hradmin3b", password="testpass123")
+        self.client.post(
+            reverse("employees:profile_edit_request_review", args=[req.pk]),
+            {"decision": "approve"},
+        )
+        req.refresh_from_db()
+        self.hr_admin_a.refresh_from_db()
+        self.assertEqual(req.status, EmployeeProfileEditRequest.APPROVED)
+        self.assertEqual(self.hr_admin_a.email, "me@example.com")

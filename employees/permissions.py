@@ -73,3 +73,18 @@ def is_self_record_locked(acting_employee, target_employee):
 
 
 SYSTEM_ADMIN_ONLY_FIELDS = {"employee_id", "is_active"}
+
+
+def can_review_profile_requests(acting_employee):
+    """Approving/rejecting self-service edit requests is an HR Administrator action."""
+    if acting_employee is None:
+        return False
+    return acting_employee.has_role(RoleAssignment.HR_ADMINISTRATOR)
+
+
+def can_review_this_request(acting_employee, request_obj):
+    """An HR Administrator cannot approve or reject their own pending request —
+    same self-approval guard as the main Employee edit screen."""
+    if not can_review_profile_requests(acting_employee):
+        return False
+    return acting_employee.pk != request_obj.employee_id

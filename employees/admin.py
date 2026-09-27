@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import EducationHistory, Employee, EmployeeEditHistory
+from .models import EducationHistory, Employee, EmployeeEditHistory, EmployeeProfileEditRequest
 
 
 class EducationHistoryInline(admin.TabularInline):
@@ -32,3 +32,10 @@ class EmployeeEditHistoryAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(EmployeeProfileEditRequest)
+class EmployeeProfileEditRequestAdmin(admin.ModelAdmin):
+    list_display = ("employee", "field_name", "old_value", "requested_value", "status", "requested_at", "reviewed_by")
+    list_filter = ("status", "field_name")
+    search_fields = ("employee__surname", "employee__employee_id")
