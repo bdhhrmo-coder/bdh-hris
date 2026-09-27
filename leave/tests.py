@@ -311,3 +311,51 @@ class RoutingTests(TestCase):
             reverse("leave:leave_action", args=[application.pk]), {"action": "endorse"}
         )
         self.assertEqual(response.status_code, 403)
+
+
+class PrintCscForm6Tests(TestCase):
+    """The 'print CSC Form 6' view: who may open it, and that COSP Leave refuses it."""
+
+    def setUp(self):
+        self.section = Section.objects.get(name="Nursing Service Section")
+        self.vl = LeaveType.objects.get(code="VL")
+        self.cosp_leave = LeaveType.objects.get(code="COSP_LEAVE")
+        self.employee = make_employee("printemp1", "EMP-P1", date_hired=date(2020, 1, 1))
+        self.employee.sections.add(self.section)
+        self.employee.position = "Nurse II"
+        self.employee.salary_grade = "15"
+        self.employee.save()
+        self.application = LeaveApplication.objects.create(
+            employee=self.employee, leave_type=self.vl,
+            start_date=date(2026, 10, 5), end_date=date(2026, 10, 9), number_of_days=Decimal("5"),
+        )
+
+    def test_applicant_can_print_their_own_application(self):
+        self.client.login(username="printemp1", password="testpass123")
+        response = self.client.get(reverse("leave:print_csc_form6", args=[self.application.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+
+    def test_unrelated_employee_cannot_print(self):
+        make_employee("printemp2", "EMP-P2", date_hired=date(2020, 1, 1))
+        self.client.login(username="printemp2", password="testpass123")
+        response = self.client.get(reverse("leave:print_csc_form6", args=[self.application.pk]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_hr_can_print_any_application(self):
+        make_employee("printhr1", "EMP-P3", date_hired=date(2020, 1, 1), role=RoleAssignment.HR_PROCESSOR)
+        self.client.login(username="printhr1", password="testpass123")
+        response = self.client.get(reverse("leave:print_csc_form6", args=[self.application.pk]))
+        self.assertEqual(response.status_code, 200)
+
+    def test_cosp_leave_refuses_this_form(self):
+        cosp_employee = make_employee(
+            "printcosp1", "EMP-P4", date_hired=date(2024, 1, 1), employment_status="COSP"
+        )
+        application = LeaveApplication.objects.create(
+            employee=cosp_employee, leave_type=self.cosp_leave,
+            start_date=date(2026, 10, 5), end_date=date(2026, 10, 6), number_of_days=Decimal("2"),
+        )
+        self.client.login(username="printcosp1", password="testpass123")
+        response = self.client.get(reverse("leave:print_csc_form6", args=[application.pk]))
+        self.assertEqual(response.status_code, 403)

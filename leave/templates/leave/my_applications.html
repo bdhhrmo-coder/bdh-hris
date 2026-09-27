@@ -4,7 +4,7 @@
 <h1>My leave applications</h1>
 <p><a href="{% url 'leave:leave_apply' %}">+ New application</a></p>
 <table>
-  <tr><th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th>Submitted</th></tr>
+  <tr><th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th>Submitted</th><th>Form</th></tr>
   {% for a in applications %}
   <tr>
     <td>{{ a.leave_type.name }}</td>
@@ -12,9 +12,14 @@
     <td>{{ a.number_of_days }}</td>
     <td>{{ a.get_status_display }}</td>
     <td>{{ a.submitted_at|date:"Y-m-d" }}</td>
+    <td>
+      {% if not a.leave_type.requires_full_routing %}
+        <a href="{% url 'leave:print_csc_form6' a.pk %}" target="_blank">Print CSC Form 6</a>
+      {% endif %}
+    </td>
   </tr>
   {% empty %}
-  <tr><td colspan="5">No applications yet.</td></tr>
+  <tr><td colspan="6">No applications yet.</td></tr>
   {% endfor %}
 </table>
 {% endblock %}

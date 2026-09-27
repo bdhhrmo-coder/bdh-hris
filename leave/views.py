@@ -3,14 +3,17 @@ from datetime import date
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from employees.permissions import get_acting_employee
 
 from .balances import compute_available_balance
+from .csc_form6 import render_pdf as render_csc_form6_pdf
 from .forms import LeaveApplicationForm
 from .models import LeaveApplication, LeaveApplicationAction, LeaveCreditTransaction, LeaveType
 from .permissions import (
+    can_view_application,
     is_administrative_officer,
     is_chief_of_hospital,
     is_hr,
@@ -188,3 +191,27 @@ def leave_action(request, pk):
         raise PermissionDenied("You are not authorized to take this action on this application.")
 
     return redirect("leave:leave_queue")
+
+
+@login_required
+def print_csc_form6(request, pk):
+    """
+    Renders the official CSC Form No. 6 for this application as a PDF.
+    COSP Leave doesn't use this form (it gets its own custom BDH form per
+    CLAUDE.md §6.3), so it's refused here rather than silently printing the
+    wrong form.
+    """
+    acting_employee = get_acting_employee(request.user)
+    application = get_object_or_404(LeaveApplication, pk=pk)
+
+    if not can_view_application(acting_employee, application):
+        raise PermissionDenied("You are not authorized to view this application.")
+
+    if application.leave_type.requires_full_routing:
+        raise PermissionDenied("COSP Leave prints on the custom COSP leave form, not CSC Form 6.")
+
+    pdf_bytes = render_csc_form6_pdf(application)
+    filename = f"CSC-Form-6_{application.employee.surname}_{application.pk}.pdf"
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="{filename}"'
+    return response

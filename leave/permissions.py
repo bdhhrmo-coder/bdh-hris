@@ -59,6 +59,22 @@ def can_submit_for(acting_employee, target_employee):
     return acting_employee is not None and acting_employee.pk == target_employee.pk
 
 
+def can_view_application(acting_employee, application):
+    """
+    Who may open/print a given leave application: the applicant, anyone in
+    its routing/monitoring chain (HR, AO, COH), or the applicant's
+    supervisor — the same set of people who would ever see it in a queue
+    or need to hand the applicant a copy of the form.
+    """
+    if acting_employee is None:
+        return False
+    if acting_employee.pk == application.employee_id:
+        return True
+    if is_hr(acting_employee) or is_administrative_officer(acting_employee) or is_chief_of_hospital(acting_employee):
+        return True
+    return is_supervisor_of(acting_employee, application.employee)
+
+
 def visible_applications_for(acting_employee):
     """
     Applications this user may act on right now, scoped by role AND status.
