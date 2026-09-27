@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Leave queue — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Leave applications awaiting my action</h1>
+<table>
+  <tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th>Action</th></tr>
+  {% for a in applications %}
+  <tr>
+    <td>{{ a.employee.full_name }}</td>
+    <td>{{ a.leave_type.name }}</td>
+    <td>{{ a.start_date }} to {{ a.end_date }}</td>
+    <td>{{ a.number_of_days }}</td>
+    <td>{{ a.get_status_display }}</td>
+    <td>
+      <form method="post" action="{% url 'leave:leave_action' a.pk %}" style="display:inline;">
+        {% csrf_token %}
+        {% if a.status == "SUBMITTED" and not a.leave_type.requires_full_routing %}
+          <button type="submit" name="action" value="record">Record</button>
+          <button type="submit" name="action" value="reject">Reject</button>
+        {% elif a.status == "SUBMITTED" %}
+          <button type="submit" name="action" value="endorse">Endorse</button>
+          <button type="submit" name="action" value="reject">Reject</button>
+          <button type="submit" name="action" value="return">Return</button>
+        {% elif a.status == "ENDORSED_BY_SUPERVISOR" %}
+          <button type="submit" name="action" value="process">Process</button>
+          <button type="submit" name="action" value="reject">Reject</button>
+          <button type="submit" name="action" value="return">Return</button>
+        {% elif a.status == "PROCESSED_BY_HR" %}
+          <button type="submit" name="action" value="recommend">Recommend</button>
+          <button type="submit" name="action" value="reject">Reject</button>
+          <button type="submit" name="action" value="return">Return</button>
+        {% elif a.status == "RECOMMENDED_BY_AO" %}
+          <button type="submit" name="action" value="approve">Approve</button>
+          <button type="submit" name="action" value="reject">Reject</button>
+          <button type="submit" name="action" value="return">Return</button>
+        {% endif %}
+      </form>
+    </td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="6">Nothing awaiting your action.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

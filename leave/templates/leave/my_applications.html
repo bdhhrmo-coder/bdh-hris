@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}My leave applications — BDH HRIS{% endblock %}
+{% block content %}
+<h1>My leave applications</h1>
+<p><a href="{% url 'leave:leave_apply' %}">+ New application</a></p>
+<table>
+  <tr><th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th>Submitted</th></tr>
+  {% for a in applications %}
+  <tr>
+    <td>{{ a.leave_type.name }}</td>
+    <td>{{ a.start_date }} to {{ a.end_date }}</td>
+    <td>{{ a.number_of_days }}</td>
+    <td>{{ a.get_status_display }}</td>
+    <td>{{ a.submitted_at|date:"Y-m-d" }}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="5">No applications yet.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

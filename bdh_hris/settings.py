@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "orgstructure",
     "accounts",
     "employees",
+    "leave",
 ]
 
 MIDDLEWARE = [
