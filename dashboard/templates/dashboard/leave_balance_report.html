@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Leave Balance Report — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Leave Balance Report</h1>
+
+<form method="get">
+  <label>Department
+    <select name="section">
+      <option value="">All departments</option>
+      {% for s in sections %}
+        <option value="{{ s.pk }}" {% if selected_section.pk == s.pk %}selected{% endif %}>{{ s.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button type="submit">Apply</button>
+</form>
+
+<p>
+  <a href="?format=xlsx{% if selected_section %}&section={{ selected_section.pk }}{% endif %}">Download as Excel</a>
+  | <a href="?format=pdf{% if selected_section %}&section={{ selected_section.pk }}{% endif %}">Download as PDF</a>
+</p>
+
+<table>
+  <tr>
+    <th>Employee ID</th><th>Name</th><th>Section(s)</th>
+    {% for lt in leave_types %}<th>{{ lt.name }}</th>{% endfor %}
+  </tr>
+  {% for row in rows %}
+  <tr>
+    <td>{{ row.employee.employee_id }}</td>
+    <td>{{ row.employee }}</td>
+    <td>{% for s in row.employee.sections.all %}{{ s.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+    {% for balance in row.balances %}<td>{{ balance|default:"—" }}</td>{% endfor %}
+  </tr>
+  {% empty %}
+  <tr><td colspan="{{ leave_types|length|add:3 }}">No active employees found.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

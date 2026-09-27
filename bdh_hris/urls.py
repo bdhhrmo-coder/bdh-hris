@@ -29,6 +29,7 @@ urlpatterns = [
     path("official-requests/", include("official_requests.urls")),
     path("documents/", include("documents.urls")),
     path("notifications/", include("notifications.urls")),
+    path("dashboard/", include("dashboard.urls")),
     path("login/", auth_views.LoginView.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
 ]

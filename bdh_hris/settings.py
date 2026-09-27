@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "official_requests",
     "documents",
     "notifications",
+    "dashboard",
 ]
 
 MIDDLEWARE = [
@@ -77,6 +78,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "notifications.context_processors.unread_notification_count",
+                "dashboard.context_processors.dashboard_link",
             ],
         },
     },

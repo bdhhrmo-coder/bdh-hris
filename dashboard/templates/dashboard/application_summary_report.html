@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Application Summary Report — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Application Summary Report</h1>
+<p>Period: <strong>{{ period_label }}</strong>{% if selected_section %} — {{ selected_section.name }}{% endif %}</p>
+
+<form method="get">
+  <label>Period
+    <select name="period">
+      <option value="month">Month</option>
+      <option value="quarter">Quarter</option>
+      <option value="year">Year</option>
+    </select>
+  </label>
+  <label>Year <input type="number" name="year"></label>
+  <label>Month (1-12) <input type="number" name="month" min="1" max="12"></label>
+  <label>Quarter (1-4) <input type="number" name="quarter" min="1" max="4"></label>
+  <label>Department
+    <select name="section">
+      <option value="">All departments</option>
+      {% for s in sections %}
+        <option value="{{ s.pk }}" {% if selected_section.pk == s.pk %}selected{% endif %}>{{ s.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button type="submit">Apply</button>
+</form>
+
+<p>
+  <a href="?{{ request.GET.urlencode }}&format=xlsx">Download as Excel</a>
+  | <a href="?{{ request.GET.urlencode }}&format=pdf">Download as PDF</a>
+</p>
+
+<h2>By request type</h2>
+<table>
+  <tr><th>Request type</th><th>Pending</th><th>Approved</th><th>Not approved</th></tr>
+  {% for row in type_rows %}
+  <tr>
+    <td>{{ row.label }}</td>
+    <td>{{ row.pending }}</td>
+    <td>{{ row.approved }}</td>
+    <td>{{ row.not_approved }}</td>
+  </tr>
+  {% endfor %}
+  <tr>
+    <td><strong>TOTAL</strong></td>
+    <td><strong>{{ totals.pending }}</strong></td>
+    <td><strong>{{ totals.approved }}</strong></td>
+    <td><strong>{{ totals.not_approved }}</strong></td>
+  </tr>
+</table>
+
+<h2>By department</h2>
+<table>
+  <tr><th>Section</th><th>Headcount</th><th>Pending</th><th>Approved</th><th>Not approved</th></tr>
+  {% for row in department_rows %}
+  <tr>
+    <td>{{ row.section.name }}</td>
+    <td>{{ row.headcount }}</td>
+    <td>{{ row.pending }}</td>
+    <td>{{ row.approved }}</td>
+    <td>{{ row.not_approved }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

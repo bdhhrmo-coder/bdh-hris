@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+
+<form method="get">
+  <label>Period
+    <select name="period">
+      <option value="month" {% if get_params.period == "month" or not get_params.period %}selected{% endif %}>Month</option>
+      <option value="quarter" {% if get_params.period == "quarter" %}selected{% endif %}>Quarter</option>
+      <option value="year" {% if get_params.period == "year" %}selected{% endif %}>Year</option>
+    </select>
+  </label>
+  <label>Year <input type="number" name="year" value="{{ get_params.year|default:'' }}" placeholder="e.g. 2026"></label>
+  <label>Month (1-12) <input type="number" name="month" min="1" max="12" value="{{ get_params.month|default:'' }}"></label>
+  <label>Quarter (1-4) <input type="number" name="quarter" min="1" max="4" value="{{ get_params.quarter|default:'' }}"></label>
+  <label>Department
+    <select name="section">
+      <option value="">All departments</option>
+      {% for s in sections %}
+        <option value="{{ s.pk }}" {% if selected_section.pk == s.pk %}selected{% endif %}>{{ s.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button type="submit">Apply</button>
+</form>
+
+<p>Showing: <strong>{{ period_label }}</strong>{% if selected_section %} — {{ selected_section.name }}{% endif %}</p>
+
+<h2>Overview</h2>
+<table>
+  <tr><th>Headcount</th><th>On leave today</th><th>On CTO today</th><th>Pending</th><th>Approved</th><th>Not approved</th></tr>
+  <tr>
+    <td>{{ headcount }}</td>
+    <td>{{ on_leave_today }}</td>
+    <td>{{ on_cto_today }}</td>
+    <td>{{ totals.pending }}</td>
+    <td>{{ totals.approved }}</td>
+    <td>{{ totals.not_approved }}</td>
+  </tr>
+</table>
+
+<h2>Applications by status</h2>
+<img src="{{ pie_chart }}" alt="Applications by status pie chart" style="max-width: 320px;">
+
+<h2>Monthly trend</h2>
+<img src="{{ trend_chart }}" alt="Applications filed per month trend graph" style="max-width: 100%;">
+
+<h2>By request type ({{ period_label }})</h2>
+<table>
+  <tr><th>Request type</th><th>Pending</th><th>Approved</th><th>Not approved</th></tr>
+  {% for row in type_rows %}
+  <tr>
+    <td>{{ row.label }}</td>
+    <td>{{ row.pending }}</td>
+    <td>{{ row.approved }}</td>
+    <td>{{ row.not_approved }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<h2>By department ({{ period_label }})</h2>
+<table>
+  <tr><th>Section</th><th>Headcount</th><th>Pending</th><th>Approved</th><th>Not approved</th></tr>
+  {% for row in department_rows %}
+  <tr>
+    <td>{{ row.section.name }}</td>
+    <td>{{ row.headcount }}</td>
+    <td>{{ row.pending }}</td>
+    <td>{{ row.approved }}</td>
+    <td>{{ row.not_approved }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<h2>Reports</h2>
+<ul>
+  <li>
+    Leave Balance Report —
+    <a href="{% url 'dashboard:leave_balance_report' %}{% if selected_section %}?section={{ selected_section.pk }}{% endif %}">View</a>
+    | <a href="{% url 'dashboard:leave_balance_report' %}?format=xlsx{% if selected_section %}&section={{ selected_section.pk }}{% endif %}">Excel</a>
+    | <a href="{% url 'dashboard:leave_balance_report' %}?format=pdf{% if selected_section %}&section={{ selected_section.pk }}{% endif %}">PDF</a>
+  </li>
+  <li>
+    Application Summary Report ({{ period_label }}) —
+    <a href="{% url 'dashboard:application_summary_report' %}?{{ get_params.urlencode }}">View</a>
+    | <a href="{% url 'dashboard:application_summary_report' %}?{{ get_params.urlencode }}&format=xlsx">Excel</a>
+    | <a href="{% url 'dashboard:application_summary_report' %}?{{ get_params.urlencode }}&format=pdf">PDF</a>
+  </li>
+</ul>
+{% endblock %}
