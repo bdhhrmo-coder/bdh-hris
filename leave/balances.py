@@ -4,9 +4,10 @@ isolation — CLAUDE.md flags leave-accrual math as compliance-risk, same as
 the CTO multiplier math.
 
 Reference date used for both accrual styles: Employee.date_hired. CLAUDE.md
-does not say which date should anchor accrual, so this is a documented
-assumption, not a guess buried in code — flagged to the project owner
-alongside the rest of Phase 4.
+does not name a specific field for this, so it was flagged to the project
+owner and confirmed on 2026-09-27: accrual counts from actual service
+(date_hired), not from appointment paperwork (date_of_appointment) or
+from original_appointment_date (prior government service history).
 
 Rules implemented (see LeaveType docstring for the by-type breakdown):
   - ACCRUED (VL, SL): earns monthly_accrual_days for every FULL month of
