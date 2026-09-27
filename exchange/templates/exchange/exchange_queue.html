@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Duty exchange queue — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Duty exchange requests awaiting my action</h1>
+<table>
+  <tr><th>Employee A</th><th>Date A</th><th>Employee B</th><th>Date B</th><th>Emergency?</th><th>Status</th><th>Action</th></tr>
+  {% for r in requests %}
+  <tr>
+    <td>{{ r.employee_a.full_name }}</td>
+    <td>{{ r.date_a }}</td>
+    <td>{{ r.employee_b.full_name }}</td>
+    <td>{{ r.date_b }}</td>
+    <td>{% if r.is_emergency %}Yes — {{ r.emergency_justification }}{% else %}No{% endif %}</td>
+    <td>{{ r.get_status_display }}</td>
+    <td>
+      <form method="post" action="{% url 'exchange:exchange_action' r.pk %}" style="display:inline;">
+        {% csrf_token %}
+        {% if r.status == "SUBMITTED" %}
+          <button type="submit" name="action" value="endorse">Endorse</button>
+          <button type="submit" name="action" value="reject">Reject</button>
+          <button type="submit" name="action" value="return">Return</button>
+        {% elif r.status == "ENDORSED_BY_SUPERVISOR" %}
+          <button type="submit" name="action" value="process">Process</button>
+          <button type="submit" name="action" value="reject">Reject</button>
+          <button type="submit" name="action" value="return">Return</button>
+        {% elif r.status == "PROCESSED_BY_HR" %}
+          <button type="submit" name="action" value="recommend">Recommend</button>
+          <button type="submit" name="action" value="reject">Reject</button>
+          <button type="submit" name="action" value="return">Return</button>
+        {% elif r.status == "RECOMMENDED_BY_AO" %}
+          <button type="submit" name="action" value="approve">Approve</button>
+          <button type="submit" name="action" value="reject">Reject</button>
+          <button type="submit" name="action" value="return">Return</button>
+        {% endif %}
+      </form>
+    </td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="7">Nothing awaiting your action.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

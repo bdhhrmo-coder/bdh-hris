@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Request duty exchange — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Request duty exchange</h1>
+<p>One-for-one only: you take the other employee's date, they take yours. The other employee must consent before this is submitted for endorsement.</p>
+
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">File request</button>
+</form>
+{% endblock %}
