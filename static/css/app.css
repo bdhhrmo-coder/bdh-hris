@@ -96,14 +96,11 @@ h2 { font-size: 1.15rem; margin-top: 1.6em; }
   box-shadow: var(--shadow-sm);
 }
 
-.app-topbar .brand-mark {
-  width: 32px; height: 32px;
-  border-radius: 50%;
-  background: var(--teal-600);
-  color: #fff;
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 700; font-size: 0.85rem;
+.app-topbar .brand-logo {
+  height: 40px;
+  width: auto;
   flex-shrink: 0;
+  display: block;
 }
 
 .app-topbar .brand-text {
@@ -180,6 +177,36 @@ h2 { font-size: 1.15rem; margin-top: 1.6em; }
 @media (max-width: 860px) {
   .app-sidebar { display: none; }
   .app-main { margin-left: 0; }
+}
+
+@media (max-width: 480px) {
+  .app-topbar .brand-logo { height: 30px; }
+  .app-topbar { gap: 0.5rem; padding: 0 0.85rem; }
+}
+
+/* --- Watermark (logged-in screens only; base.html never renders it on
+   the login page) ----------------------------------------------------
+   Fixed + centered + negative z-index so it paints behind the topbar,
+   sidebar, and every normal-flow element (.app-main, .card, etc.) without
+   needing z-index bumps on any of them. pointer-events: none keeps it
+   from ever intercepting clicks. */
+.page-watermark {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(450px, 70vw);
+  z-index: -1;
+  opacity: 0.08;
+  pointer-events: none;
+}
+.page-watermark img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+@media (max-width: 480px) {
+  .page-watermark { width: min(260px, 80vw); }
 }
 
 /* --- Messages ------------------------------------------------------- */

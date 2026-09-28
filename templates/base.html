@@ -10,9 +10,12 @@
 </head>
 <body class="{% block body_class %}{% endblock %}">
   {% if user.is_authenticated %}
+    <div class="page-watermark" aria-hidden="true">
+      <img src="{% static 'images/bdh-logo.png' %}" alt="">
+    </div>
     <div class="app-shell">
       <header class="app-topbar">
-        <div class="brand-mark">BDH</div>
+        <img class="brand-logo" src="{% static 'images/bdh-logo.png' %}" alt="Bataraza District Hospital">
         <div class="brand-text">
           HRIS
           <small>Bataraza District Hospital</small>
