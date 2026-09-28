@@ -28,7 +28,9 @@ SECRET_KEY = os.environ.get(
 )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get("BDH_HRIS_DEBUG", "1") == "1"
+# Off unless explicitly turned on (BDH_HRIS_DEBUG=1), so a missing variable
+# on the server can never leave debug mode on. Set it to 1 for local dev.
+DEBUG = os.environ.get("BDH_HRIS_DEBUG", "0") == "1"
 
 ALLOWED_HOSTS = os.environ.get("BDH_HRIS_ALLOWED_HOSTS", "*").split(",")
 
