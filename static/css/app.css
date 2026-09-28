@@ -205,8 +205,20 @@ h2 { font-size: 1.15rem; margin-top: 1.6em; }
   width: 100%;
   height: auto;
 }
+.page-watermark-tagline {
+  margin: 0.85rem 0 0;
+  width: 100%;
+  text-align: center;
+  font-family: Arial, Helvetica, sans-serif; /* system-safe: no font download */
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 1rem;
+  color: var(--navy-900);
+}
 @media (max-width: 480px) {
   .page-watermark { width: min(260px, 80vw); }
+  .page-watermark-tagline { font-size: 0.65rem; letter-spacing: 0.14em; margin-top: 0.5rem; }
 }
 
 /* --- Messages ------------------------------------------------------- */
