@@ -1,9 +1,10 @@
 {% extends "base.html" %}
-{% load documents_tags %}
+{% load documents_tags badges %}
 {% block title %}My leave applications — BDH HRIS{% endblock %}
 {% block content %}
 <h1>My leave applications</h1>
-<p><a href="{% url 'leave:leave_apply' %}">+ New application</a></p>
+<p><a href="{% url 'leave:leave_apply' %}" class="btn">+ New application</a></p>
+<div class="card">
 <table>
   <tr><th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th>Submitted</th><th>Form</th><th>Documents</th></tr>
   {% for a in applications %}
@@ -11,7 +12,7 @@
     <td>{{ a.leave_type.name }}</td>
     <td>{{ a.start_date }} to {{ a.end_date }}</td>
     <td>{{ a.number_of_days }}</td>
-    <td>{{ a.get_status_display }}</td>
+    <td>{% status_badge a.status a.get_status_display %}</td>
     <td>{{ a.submitted_at|date:"Y-m-d" }}</td>
     <td>
       {% if a.leave_type.requires_full_routing %}
@@ -23,7 +24,8 @@
     <td><a href="{% documents_url a %}">Documents</a></td>
   </tr>
   {% empty %}
-  <tr><td colspan="7">No applications yet.</td></tr>
+  <tr><td colspan="7" class="empty-note">No applications yet.</td></tr>
   {% endfor %}
 </table>
+</div>
 {% endblock %}

@@ -4,6 +4,7 @@
 <h1>Pending self-service edit requests</h1>
 
 {% if requests %}
+<div class="card">
 <table>
   <tr><th>Employee</th><th>Field</th><th>Old</th><th>Requested</th><th>Submitted</th><th>Action</th></tr>
   {% for r in requests %}
@@ -13,16 +14,16 @@
     <td>{{ r.old_value }}</td>
     <td>{{ r.requested_value }}</td>
     <td>{{ r.requested_at|date:"Y-m-d" }}</td>
-    <td>
+    <td class="row-actions">
       {% if r.employee_id == acting_employee.pk %}
-        <em>Your own request — needs another HR Administrator</em>
+        <span class="empty-note">Your own request — needs another HR Administrator</span>
       {% else %}
-        <form method="post" action="{% url 'employees:profile_edit_request_review' r.pk %}" style="display:inline;">
+        <form method="post" action="{% url 'employees:profile_edit_request_review' r.pk %}">
           {% csrf_token %}
           <input type="hidden" name="decision" value="approve">
           <button type="submit">Approve</button>
         </form>
-        <form method="post" action="{% url 'employees:profile_edit_request_review' r.pk %}" style="display:inline;">
+        <form method="post" action="{% url 'employees:profile_edit_request_review' r.pk %}">
           {% csrf_token %}
           <input type="hidden" name="decision" value="reject">
           <button type="submit">Reject</button>
@@ -32,7 +33,8 @@
   </tr>
   {% endfor %}
 </table>
+</div>
 {% else %}
-<p>No pending requests.</p>
+<p class="empty-note">No pending requests.</p>
 {% endif %}
 {% endblock %}

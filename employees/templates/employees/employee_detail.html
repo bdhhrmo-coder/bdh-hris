@@ -11,52 +11,57 @@
   </div>
 {% endif %}
 
+<div class="card">
 <table>
   <tr><th>Position</th><td>{{ employee.position }}</td></tr>
   <tr><th>Employment status</th><td>{{ employee.get_employment_status_display }}</td></tr>
   <tr><th>Sections</th><td>{% for s in employee.sections.all %}{{ s }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td></tr>
   <tr><th>Email</th><td>{{ employee.email|default:"—" }}</td></tr>
   <tr><th>Mobile</th><td>{{ employee.telephone_mobile|default:"—" }}</td></tr>
-  <tr><th>Active</th><td>{{ employee.is_active }}</td></tr>
+  <tr><th>Active</th><td>{% if employee.is_active %}<span class="badge badge-approved">Active</span>{% else %}<span class="badge badge-not-approved">Inactive</span>{% endif %}</td></tr>
 </table>
-
 {% if can_edit %}
-  <p><a href="{% url 'employees:employee_edit' employee.pk %}">Edit this record</a></p>
+  <p style="margin-bottom:0;"><a href="{% url 'employees:employee_edit' employee.pk %}" class="btn">Edit this record</a></p>
 {% endif %}
+</div>
 
-<h2>Education history</h2>
-{% if education_history %}
-<table>
-  <tr><th>Level</th><th>School</th><th>Degree/Course</th><th>Units earned</th></tr>
-  {% for ed in education_history %}
-  <tr>
-    <td>{{ ed.education_level }}</td>
-    <td>{{ ed.school }}</td>
-    <td>{{ ed.degree_course|default:"—" }}</td>
-    <td>{{ ed.units_earned|default:"—" }}</td>
-  </tr>
-  {% endfor %}
-</table>
-{% else %}
-<p>No education records yet.</p>
-{% endif %}
+<div class="card">
+  <h2 style="margin-top:0;">Education history</h2>
+  {% if education_history %}
+  <table>
+    <tr><th>Level</th><th>School</th><th>Degree/Course</th><th>Units earned</th></tr>
+    {% for ed in education_history %}
+    <tr>
+      <td>{{ ed.education_level }}</td>
+      <td>{{ ed.school }}</td>
+      <td>{{ ed.degree_course|default:"—" }}</td>
+      <td>{{ ed.units_earned|default:"—" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="empty-note">No education records yet.</p>
+  {% endif %}
+</div>
 
-<h2>Edit history</h2>
-{% if history %}
-<table>
-  <tr><th>When</th><th>Field</th><th>Old value</th><th>New value</th><th>Reason</th><th>Changed by</th></tr>
-  {% for h in history %}
-  <tr>
-    <td>{{ h.edited_at|date:"Y-m-d H:i" }}</td>
-    <td>{{ h.field_label }}</td>
-    <td>{{ h.old_value|default:"—" }}</td>
-    <td>{{ h.new_value|default:"—" }}</td>
-    <td>{{ h.reason }}</td>
-    <td>{{ h.changed_by }}</td>
-  </tr>
-  {% endfor %}
-</table>
-{% else %}
-<p>No edits recorded yet.</p>
-{% endif %}
+<div class="card">
+  <h2 style="margin-top:0;">Edit history</h2>
+  {% if history %}
+  <table>
+    <tr><th>When</th><th>Field</th><th>Old value</th><th>New value</th><th>Reason</th><th>Changed by</th></tr>
+    {% for h in history %}
+    <tr>
+      <td>{{ h.edited_at|date:"Y-m-d H:i" }}</td>
+      <td>{{ h.field_label }}</td>
+      <td>{{ h.old_value|default:"—" }}</td>
+      <td>{{ h.new_value|default:"—" }}</td>
+      <td>{{ h.reason }}</td>
+      <td>{{ h.changed_by }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="empty-note">No edits recorded yet.</p>
+  {% endif %}
+</div>
 {% endblock %}

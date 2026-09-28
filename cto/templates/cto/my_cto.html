@@ -1,11 +1,19 @@
 {% extends "base.html" %}
-{% load documents_tags %}
+{% load documents_tags badges %}
 {% block title %}My CTO — BDH HRIS{% endblock %}
 {% block content %}
 <h1>My CTO</h1>
-<p>Available CTO balance: <strong>{{ balance }} day(s)</strong></p>
-<p><a href="{% url 'cto:cto_apply' %}">+ New CTO application</a></p>
 
+<div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 220px));">
+  <div class="kpi-tile accent-teal">
+    <div class="kpi-value">{{ balance }}</div>
+    <div class="kpi-label">Available CTO balance (days)</div>
+  </div>
+</div>
+
+<p><a href="{% url 'cto:cto_apply' %}" class="btn">+ New CTO application</a></p>
+
+<div class="card">
 <table>
   <tr><th>Dates</th><th>Days</th><th>Reason</th><th>Status</th><th>Submitted</th></tr>
   {% for a in applications %}
@@ -13,28 +21,31 @@
     <td>{{ a.start_date }} to {{ a.end_date }}</td>
     <td>{{ a.number_of_days }}</td>
     <td>{{ a.reason }}</td>
-    <td>{{ a.get_status_display }}</td>
+    <td>{% status_badge a.status a.get_status_display %}</td>
     <td>{{ a.submitted_at|date:"Y-m-d" }}</td>
   </tr>
   {% empty %}
-  <tr><td colspan="5">No CTO applications yet.</td></tr>
+  <tr><td colspan="5" class="empty-note">No CTO applications yet.</td></tr>
   {% endfor %}
 </table>
+</div>
 
-<h2>My CTO credit entries</h2>
-<p>Upload your Allowed to Work form, DTR/logbook copy, and OT Accomplishment Report here (or, for Medical Transport, your Trip Ticket and Certificate of Appearance/logbook).</p>
-<table>
-  <tr><th>Work date</th><th>Duty type</th><th>Hours</th><th>Credited days</th><th>Documents</th></tr>
-  {% for e in credit_entries %}
-  <tr>
-    <td>{{ e.work_date }}</td>
-    <td>{{ e.get_duty_type_display }}</td>
-    <td>{{ e.hours_worked }}</td>
-    <td>{{ e.credited_days }}</td>
-    <td><a href="{% documents_url e %}">Documents</a></td>
-  </tr>
-  {% empty %}
-  <tr><td colspan="5">No CTO credit entries recorded yet.</td></tr>
-  {% endfor %}
-</table>
+<div class="card">
+  <h2 style="margin-top:0;">My CTO credit entries</h2>
+  <p style="color:var(--gray-600);">Upload your Allowed to Work form, DTR/logbook copy, and OT Accomplishment Report here (or, for Medical Transport, your Trip Ticket and Certificate of Appearance/logbook).</p>
+  <table>
+    <tr><th>Work date</th><th>Duty type</th><th>Hours</th><th>Credited days</th><th>Documents</th></tr>
+    {% for e in credit_entries %}
+    <tr>
+      <td>{{ e.work_date }}</td>
+      <td>{{ e.get_duty_type_display }}</td>
+      <td>{{ e.hours_worked }}</td>
+      <td>{{ e.credited_days }}</td>
+      <td><a href="{% documents_url e %}">Documents</a></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5" class="empty-note">No CTO credit entries recorded yet.</td></tr>
+    {% endfor %}
+  </table>
+</div>
 {% endblock %}

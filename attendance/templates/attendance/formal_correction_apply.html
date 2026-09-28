@@ -2,10 +2,12 @@
 {% block title %}Request attendance correction — BDH HRIS{% endblock %}
 {% block content %}
 <h1>Request an attendance correction</h1>
-<p>Routes to your Supervisor, then HR, then the Administrative Officer for final approval.</p>
-<form method="post">
-  {% csrf_token %}
-  {{ form.as_p }}
-  <button type="submit">Submit</button>
-</form>
+<p style="color:var(--gray-600);">Routes to your Supervisor, then HR, then the Administrative Officer for final approval.</p>
+<div class="card">
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Submit</button>
+  </form>
+</div>
 {% endblock %}

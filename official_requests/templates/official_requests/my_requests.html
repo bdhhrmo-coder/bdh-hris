@@ -1,9 +1,10 @@
 {% extends "base.html" %}
-{% load documents_tags %}
+{% load documents_tags badges %}
 {% block title %}My requests — BDH HRIS{% endblock %}
 {% block content %}
 <h1>My requests</h1>
-<p><a href="{% url 'official_requests:request_apply' %}">+ New request</a></p>
+<p><a href="{% url 'official_requests:request_apply' %}" class="btn">+ New request</a></p>
+<div class="card">
 <table>
   <tr><th>Type</th><th>Dates</th><th>Purpose</th><th>Status</th><th>Submitted</th><th>Documents</th></tr>
   {% for r in requests %}
@@ -11,12 +12,13 @@
     <td>{{ r.get_request_type_display }}</td>
     <td>{{ r.start_date }} to {{ r.end_date }}</td>
     <td>{{ r.purpose|truncatechars:60 }}</td>
-    <td>{{ r.get_status_display }}</td>
+    <td>{% status_badge r.status r.get_status_display %}</td>
     <td>{{ r.submitted_at|date:"Y-m-d" }}</td>
     <td><a href="{% documents_url r %}">Documents</a></td>
   </tr>
   {% empty %}
-  <tr><td colspan="6">No requests yet.</td></tr>
+  <tr><td colspan="6" class="empty-note">No requests yet.</td></tr>
   {% endfor %}
 </table>
+</div>
 {% endblock %}

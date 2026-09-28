@@ -2,10 +2,12 @@
 {% block title %}Replace document — BDH HRIS{% endblock %}
 {% block content %}
 <h1>Replace document</h1>
-<p>Replacing: {{ old_document.original_filename }} — the old file is kept for the audit trail, not deleted.</p>
-<form method="post" enctype="multipart/form-data">
-  {% csrf_token %}
-  {{ form.as_p }}
-  <button type="submit">Upload replacement</button>
-</form>
+<p style="color:var(--gray-600);">Replacing: {{ old_document.original_filename }} — the old file is kept for the audit trail, not deleted.</p>
+<div class="card">
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Upload replacement</button>
+  </form>
+</div>
 {% endblock %}

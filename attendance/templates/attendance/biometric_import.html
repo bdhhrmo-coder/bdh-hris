@@ -3,29 +3,33 @@
 {% block content %}
 <h1>Import biometric attendance</h1>
 
-{% if mapping %}
-<p>Active column mapping: <strong>{{ mapping.name }}</strong> ({{ mapping.employee_id_column }}, {{ mapping.date_column }}, {{ mapping.time_in_column }}, {{ mapping.time_out_column }})</p>
-{% else %}
-<div class="msg error">No active column mapping configured. Ask an HR Administrator to set one up in Admin.</div>
-{% endif %}
+<div class="card">
+  {% if mapping %}
+  <p style="margin-top:0;">Active column mapping: <strong>{{ mapping.name }}</strong> ({{ mapping.employee_id_column }}, {{ mapping.date_column }}, {{ mapping.time_in_column }}, {{ mapping.time_out_column }})</p>
+  {% else %}
+  <div class="msg error">No active column mapping configured. Ask an HR Administrator to set one up in Admin.</div>
+  {% endif %}
 
-<form method="post" enctype="multipart/form-data">
-  {% csrf_token %}
-  {{ form.as_p }}
-  <button type="submit">Import</button>
-</form>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Import</button>
+  </form>
+</div>
 
 {% if batch %}
-<h2>Import result</h2>
-<table>
-  <tr><th>Rows read</th><td>{{ batch.row_count }}</td></tr>
-  <tr><th>Imported</th><td>{{ batch.imported_count }}</td></tr>
-  <tr><th>Skipped (already manually corrected)</th><td>{{ batch.skipped_count }}</td></tr>
-  <tr><th>Errors</th><td>{{ batch.error_count }}</td></tr>
-</table>
-{% if batch.error_log %}
-<h3>Error log</h3>
-<pre>{{ batch.error_log }}</pre>
-{% endif %}
+<div class="card">
+  <h2 style="margin-top:0;">Import result</h2>
+  <table>
+    <tr><th>Rows read</th><td>{{ batch.row_count }}</td></tr>
+    <tr><th>Imported</th><td>{{ batch.imported_count }}</td></tr>
+    <tr><th>Skipped (already manually corrected)</th><td>{{ batch.skipped_count }}</td></tr>
+    <tr><th>Errors</th><td>{{ batch.error_count }}</td></tr>
+  </table>
+  {% if batch.error_log %}
+  <h3>Error log</h3>
+  <pre style="white-space:pre-wrap;background:var(--gray-50);padding:0.75rem;border-radius:8px;">{{ batch.error_log }}</pre>
+  {% endif %}
+</div>
 {% endif %}
 {% endblock %}

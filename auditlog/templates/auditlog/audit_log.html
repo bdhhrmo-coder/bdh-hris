@@ -2,32 +2,35 @@
 {% block title %}Audit Log — BDH HRIS{% endblock %}
 {% block content %}
 <h1>Audit Log</h1>
-<p><a href="{% url 'auditlog:retention_review_list' %}">Personnel record retention review</a></p>
+<p><a href="{% url 'auditlog:retention_review_list' %}" class="btn btn-secondary">Personnel record retention review</a></p>
 
-<form method="get">
-  <label>Employee
-    <select name="employee">
-      <option value="">All employees</option>
-      {% for e in employees %}
-        <option value="{{ e.pk }}" {% if selected_employee_id == e.pk|stringformat:"s" %}selected{% endif %}>{{ e }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Module
-    <select name="module">
-      <option value="">All modules</option>
-      {% for m in modules %}
-        <option value="{{ m }}" {% if selected_module == m %}selected{% endif %}>{{ m }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>From <input type="date" name="date_from" value="{{ date_from }}"></label>
-  <label>To <input type="date" name="date_to" value="{{ date_to }}"></label>
-  <button type="submit">Apply</button>
-</form>
+<div class="card">
+  <form method="get" class="filter-bar">
+    <label>Employee
+      <select name="employee">
+        <option value="">All employees</option>
+        {% for e in employees %}
+          <option value="{{ e.pk }}" {% if selected_employee_id == e.pk|stringformat:"s" %}selected{% endif %}>{{ e }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Module
+      <select name="module">
+        <option value="">All modules</option>
+        {% for m in modules %}
+          <option value="{{ m }}" {% if selected_module == m %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>From <input type="date" name="date_from" value="{{ date_from }}"></label>
+    <label>To <input type="date" name="date_to" value="{{ date_to }}"></label>
+    <button type="submit">Apply</button>
+  </form>
+</div>
 
-<p>{{ row_count }} record{{ row_count|pluralize }}{% if truncated %} — showing the most recent 500{% endif %}</p>
+<p style="color:var(--gray-600);">{{ row_count }} record{{ row_count|pluralize }}{% if truncated %} — showing the most recent 500{% endif %}</p>
 
+<div class="card">
 <table>
   <tr><th>When</th><th>Module</th><th>Employee</th><th>Action</th><th>Detail</th><th>By</th></tr>
   {% for row in rows %}
@@ -40,7 +43,8 @@
     <td>{{ row.actor }}</td>
   </tr>
   {% empty %}
-  <tr><td colspan="6">No records match this filter.</td></tr>
+  <tr><td colspan="6" class="empty-note">No records match this filter.</td></tr>
   {% endfor %}
 </table>
+</div>
 {% endblock %}

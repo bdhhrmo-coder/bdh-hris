@@ -3,23 +3,26 @@
 {% block content %}
 <h1>Leave Balance Report</h1>
 
-<form method="get">
-  <label>Department
-    <select name="section">
-      <option value="">All departments</option>
-      {% for s in sections %}
-        <option value="{{ s.pk }}" {% if selected_section.pk == s.pk %}selected{% endif %}>{{ s.name }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <button type="submit">Apply</button>
-</form>
+<div class="card">
+  <form method="get" class="filter-bar">
+    <label>Department
+      <select name="section">
+        <option value="">All departments</option>
+        {% for s in sections %}
+          <option value="{{ s.pk }}" {% if selected_section.pk == s.pk %}selected{% endif %}>{{ s.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">Apply</button>
+  </form>
+</div>
 
-<p>
+<p class="btn-link-group">
   <a href="?format=xlsx{% if selected_section %}&section={{ selected_section.pk }}{% endif %}">Download as Excel</a>
-  | <a href="?format=pdf{% if selected_section %}&section={{ selected_section.pk }}{% endif %}">Download as PDF</a>
+  <a href="?format=pdf{% if selected_section %}&section={{ selected_section.pk }}{% endif %}">Download as PDF</a>
 </p>
 
+<div class="card">
 <table>
   <tr>
     <th>Employee ID</th><th>Name</th><th>Section(s)</th>
@@ -33,7 +36,8 @@
     {% for balance in row.balances %}<td>{{ balance|default:"—" }}</td>{% endfor %}
   </tr>
   {% empty %}
-  <tr><td colspan="{{ leave_types|length|add:3 }}">No active employees found.</td></tr>
+  <tr><td colspan="{{ leave_types|length|add:3 }}" class="empty-note">No active employees found.</td></tr>
   {% endfor %}
 </table>
+</div>
 {% endblock %}

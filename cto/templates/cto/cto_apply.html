@@ -2,11 +2,13 @@
 {% block title %}Apply for CTO — BDH HRIS{% endblock %}
 {% block content %}
 <h1>Apply for CTO</h1>
-<p>Available CTO balance: <strong>{{ balance }} day(s)</strong></p>
+<p>Available CTO balance: <strong style="color:var(--navy-900);">{{ balance }} day(s)</strong></p>
 
-<form method="post">
-  {% csrf_token %}
-  {{ form.as_p }}
-  <button type="submit">Submit</button>
-</form>
+<div class="card">
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Submit</button>
+  </form>
+</div>
 {% endblock %}

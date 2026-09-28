@@ -2,6 +2,7 @@
 {% block title %}Edit {{ employee.full_name }} — BDH HRIS{% endblock %}
 {% block content %}
 <h1>Edit {{ employee.full_name }}</h1>
+<div class="card">
 <form method="post">
   {% csrf_token %}
   <fieldset>
@@ -30,7 +31,7 @@
     <legend>Education history</legend>
     {{ education_formset.management_form }}
     {% for ed_form in education_formset %}
-      <div style="border-bottom:1px solid #eee; padding-bottom:0.5rem; margin-bottom:0.5rem;">
+      <div style="border-bottom:1px solid var(--gray-100); padding-bottom:0.5rem; margin-bottom:0.5rem;">
         {{ ed_form.id }}
         {{ ed_form.education_level.label_tag }} {{ ed_form.education_level }}
         {{ ed_form.school.label_tag }} {{ ed_form.school }}
@@ -44,6 +45,7 @@
   </fieldset>
 
   <button type="submit">Save</button>
-  <a href="{% url 'employees:employee_detail' employee.pk %}">Cancel</a>
+  <a href="{% url 'employees:employee_detail' employee.pk %}" class="btn btn-secondary">Cancel</a>
 </form>
+</div>
 {% endblock %}

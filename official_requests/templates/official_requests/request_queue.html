@@ -1,7 +1,9 @@
 {% extends "base.html" %}
+{% load badges %}
 {% block title %}Requests queue — BDH HRIS{% endblock %}
 {% block content %}
 <h1>Requests awaiting my action</h1>
+<div class="card">
 <table>
   <tr><th>Employee</th><th>Type</th><th>Dates</th><th>Purpose</th><th>Status</th><th>Action</th></tr>
   {% for r in requests %}
@@ -10,9 +12,9 @@
     <td>{{ r.get_request_type_display }}</td>
     <td>{{ r.start_date }} to {{ r.end_date }}</td>
     <td>{{ r.purpose|truncatechars:60 }}</td>
-    <td>{{ r.get_status_display }}</td>
-    <td>
-      <form method="post" action="{% url 'official_requests:request_action' r.pk %}" style="display:inline;">
+    <td>{% status_badge r.status r.get_status_display %}</td>
+    <td class="row-actions">
+      <form method="post" action="{% url 'official_requests:request_action' r.pk %}">
         {% csrf_token %}
         {% if r.next_action %}
           <button type="submit" name="action" value="{{ r.next_action }}">{{ r.next_action|capfirst }}</button>
@@ -25,7 +27,8 @@
     </td>
   </tr>
   {% empty %}
-  <tr><td colspan="6">Nothing awaiting your action.</td></tr>
+  <tr><td colspan="6" class="empty-note">Nothing awaiting your action.</td></tr>
   {% endfor %}
 </table>
+</div>
 {% endblock %}

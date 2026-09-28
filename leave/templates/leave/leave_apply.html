@@ -3,17 +3,21 @@
 {% block content %}
 <h1>Apply for leave</h1>
 
-<h2>My balances</h2>
-<table>
-  <tr><th>Leave type</th><th>Available</th></tr>
-  {% for lt, bal in balances %}
-  <tr><td>{{ lt.name }}</td><td>{% if bal is None %}Not capped — recorded only{% else %}{{ bal }} day(s){% endif %}</td></tr>
-  {% endfor %}
-</table>
+<div class="card">
+  <h2 style="margin-top:0;">My balances</h2>
+  <table>
+    <tr><th>Leave type</th><th>Available</th></tr>
+    {% for lt, bal in balances %}
+    <tr><td>{{ lt.name }}</td><td>{% if bal is None %}Not capped — recorded only{% else %}{{ bal }} day(s){% endif %}</td></tr>
+    {% endfor %}
+  </table>
+</div>
 
-<form method="post">
-  {% csrf_token %}
-  {{ form.as_p }}
-  <button type="submit">Submit</button>
-</form>
+<div class="card">
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Submit</button>
+  </form>
+</div>
 {% endblock %}

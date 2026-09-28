@@ -1,13 +1,14 @@
 {% extends "base.html" %}
+{% load badges %}
 {% block title %}Update my profile — BDH HRIS{% endblock %}
 {% block content %}
 <h1>Update my profile</h1>
-<p>Changes here are held for HR Administrator approval before they take effect.</p>
+<p style="color:var(--gray-600);">Changes here are held for HR Administrator approval before they take effect.</p>
 
 {% if pending %}
 <div class="locked-note">
   <strong>Pending approval:</strong>
-  <ul>
+  <ul style="margin-bottom:0;">
     {% for p in pending %}
     <li>{{ p.get_field_name_display }}: "{{ p.old_value }}" &rarr; "{{ p.requested_value }}" (submitted {{ p.requested_at|date:"Y-m-d" }})</li>
     {% endfor %}
@@ -15,28 +16,32 @@
 </div>
 {% endif %}
 
-<form method="post">
-  {% csrf_token %}
-  {{ form.as_p }}
-  <button type="submit">Submit for approval</button>
-</form>
+<div class="card">
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Submit for approval</button>
+  </form>
+</div>
 
-<h2>Recent requests</h2>
-{% if recent %}
-<table>
-  <tr><th>Field</th><th>Old</th><th>Requested</th><th>Status</th><th>Reviewed</th><th>Notes</th></tr>
-  {% for r in recent %}
-  <tr>
-    <td>{{ r.get_field_name_display }}</td>
-    <td>{{ r.old_value }}</td>
-    <td>{{ r.requested_value }}</td>
-    <td>{{ r.get_status_display }}</td>
-    <td>{{ r.reviewed_at|date:"Y-m-d"|default:"—" }}</td>
-    <td>{{ r.review_notes|default:"—" }}</td>
-  </tr>
-  {% endfor %}
-</table>
-{% else %}
-<p>No past requests.</p>
-{% endif %}
+<div class="card">
+  <h2 style="margin-top:0;">Recent requests</h2>
+  {% if recent %}
+  <table>
+    <tr><th>Field</th><th>Old</th><th>Requested</th><th>Status</th><th>Reviewed</th><th>Notes</th></tr>
+    {% for r in recent %}
+    <tr>
+      <td>{{ r.get_field_name_display }}</td>
+      <td>{{ r.old_value }}</td>
+      <td>{{ r.requested_value }}</td>
+      <td>{% status_badge r.status r.get_status_display %}</td>
+      <td>{{ r.reviewed_at|date:"Y-m-d"|default:"—" }}</td>
+      <td>{{ r.review_notes|default:"—" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="empty-note">No past requests.</p>
+  {% endif %}
+</div>
 {% endblock %}

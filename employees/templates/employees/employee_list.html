@@ -3,35 +3,35 @@
 {% block content %}
 <h1>Employees</h1>
 
-<form method="get" style="display:flex; gap:0.5rem; align-items:end; margin-bottom:1rem;">
-  <div style="flex:1;">
-    <label for="q">Search</label>
-    <input type="text" id="q" name="q" value="{{ query }}" placeholder="Name or Employee ID">
-  </div>
-  <div>
-    <label for="section">Section</label>
-    <select id="section" name="section">
-      <option value="">All</option>
-      {% for s in sections %}
-        <option value="{{ s.id }}" {% if selected_section == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div>
-    <label for="employment_status">Status</label>
-    <select id="employment_status" name="employment_status">
-      <option value="">All</option>
-      <option value="REGULAR" {% if selected_status == "REGULAR" %}selected{% endif %}>Regular</option>
-      <option value="COSP" {% if selected_status == "COSP" %}selected{% endif %}>COSP</option>
-    </select>
-  </div>
-  <div><button type="submit">Filter</button></div>
-</form>
+<div class="card">
+  <form method="get" class="filter-bar">
+    <label for="q">Search
+      <input type="text" id="q" name="q" value="{{ query }}" placeholder="Name or Employee ID">
+    </label>
+    <label for="section">Section
+      <select id="section" name="section">
+        <option value="">All</option>
+        {% for s in sections %}
+          <option value="{{ s.id }}" {% if selected_section == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label for="employment_status">Status
+      <select id="employment_status" name="employment_status">
+        <option value="">All</option>
+        <option value="REGULAR" {% if selected_status == "REGULAR" %}selected{% endif %}>Regular</option>
+        <option value="COSP" {% if selected_status == "COSP" %}selected{% endif %}>COSP</option>
+      </select>
+    </label>
+    <button type="submit">Filter</button>
+  </form>
+</div>
 
 {% if can_create %}
-<p><a href="{% url 'employees:employee_create' %}">+ New employee record</a></p>
+<p><a href="{% url 'employees:employee_create' %}" class="btn">+ New employee record</a></p>
 {% endif %}
 
+<div class="card">
 <table>
   <tr><th>Employee ID</th><th>Name</th><th>Position</th><th>Status</th><th>Active</th></tr>
   {% for e in employees %}
@@ -40,10 +40,11 @@
     <td><a href="{% url 'employees:employee_detail' e.pk %}">{{ e.full_name }}</a></td>
     <td>{{ e.position|default:"—" }}</td>
     <td>{{ e.get_employment_status_display }}</td>
-    <td>{{ e.is_active }}</td>
+    <td>{% if e.is_active %}<span class="badge badge-approved">Active</span>{% else %}<span class="badge badge-not-approved">Inactive</span>{% endif %}</td>
   </tr>
   {% empty %}
-  <tr><td colspan="5">No employees found.</td></tr>
+  <tr><td colspan="5" class="empty-note">No employees found.</td></tr>
   {% endfor %}
 </table>
+</div>
 {% endblock %}

@@ -357,6 +357,39 @@ button:active, .btn:active { transform: scale(0.98); }
 }
 .btn-secondary:hover { background: var(--navy-100); }
 
+/* Compact buttons for inline row actions (queue tables: Approve/Reject/...) */
+.btn-sm, .row-actions button {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.78rem;
+  margin: 0.1rem;
+}
+.row-actions { display: inline; }
+.row-actions form { display: inline; }
+.row-actions button[value="reject"],
+.row-actions button[value="return"] {
+  background: #fff;
+  color: var(--red-700);
+  border: 1px solid #f0c6c3;
+}
+.row-actions button[value="reject"]:hover,
+.row-actions button[value="return"]:hover { background: var(--red-100); }
+.row-actions button[value="consented"],
+.row-actions button[value="record"],
+.row-actions button[value="endorse"],
+.row-actions button[value="process"],
+.row-actions button[value="recommend"],
+.row-actions button[value="approve"] {
+  background: var(--green-700);
+}
+.row-actions button[value="consented"]:hover,
+.row-actions button[value="record"]:hover,
+.row-actions button[value="endorse"]:hover,
+.row-actions button[value="process"]:hover,
+.row-actions button[value="recommend"]:hover,
+.row-actions button[value="approve"]:hover { background: #175e30; }
+
+.empty-note { color: var(--gray-600); font-style: italic; }
+
 .btn-link-group a {
   margin-right: 0.75rem;
   font-weight: 600;

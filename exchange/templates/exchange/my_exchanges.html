@@ -1,47 +1,51 @@
 {% extends "base.html" %}
-{% load documents_tags %}
+{% load documents_tags badges %}
 {% block title %}My duty exchanges — BDH HRIS{% endblock %}
 {% block content %}
 <h1>My duty exchanges</h1>
-<p><a href="{% url 'exchange:exchange_apply' %}">+ New exchange request</a></p>
+<p><a href="{% url 'exchange:exchange_apply' %}" class="btn">+ New exchange request</a></p>
 
 {% if pending_my_consent %}
-<h2>Awaiting your consent</h2>
-<table>
-  <tr><th>With</th><th>Your date</th><th>Their date</th><th>Reason</th><th>Decision</th></tr>
-  {% for r in pending_my_consent %}
-  <tr>
-    <td>{{ r.employee_a.full_name }}</td>
-    <td>{{ r.date_b }}</td>
-    <td>{{ r.date_a }}</td>
-    <td>{{ r.reason }}</td>
-    <td>
-      <form method="post" action="{% url 'exchange:exchange_consent' r.pk %}" style="display:inline;">
-        {% csrf_token %}
-        <button type="submit" name="decision" value="consent">Consent</button>
-        <button type="submit" name="decision" value="decline">Decline</button>
-      </form>
-    </td>
-  </tr>
-  {% endfor %}
-</table>
+<div class="card">
+  <h2 style="margin-top:0;">Awaiting your consent</h2>
+  <table>
+    <tr><th>With</th><th>Your date</th><th>Their date</th><th>Reason</th><th>Decision</th></tr>
+    {% for r in pending_my_consent %}
+    <tr>
+      <td>{{ r.employee_a.full_name }}</td>
+      <td>{{ r.date_b }}</td>
+      <td>{{ r.date_a }}</td>
+      <td>{{ r.reason }}</td>
+      <td class="row-actions">
+        <form method="post" action="{% url 'exchange:exchange_consent' r.pk %}">
+          {% csrf_token %}
+          <button type="submit" name="decision" value="consent">Consent</button>
+          <button type="submit" name="decision" value="decline">Decline</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
 {% endif %}
 
-<h2>All my exchange requests</h2>
-<table>
-  <tr><th>Employee A</th><th>Date A</th><th>Employee B</th><th>Date B</th><th>Status</th><th>Filed</th><th>Documents</th></tr>
-  {% for r in requests %}
-  <tr>
-    <td>{{ r.employee_a.full_name }}</td>
-    <td>{{ r.date_a }}</td>
-    <td>{{ r.employee_b.full_name }}</td>
-    <td>{{ r.date_b }}</td>
-    <td>{{ r.get_status_display }}</td>
-    <td>{{ r.filed_at|date:"Y-m-d" }}</td>
-    <td><a href="{% documents_url r %}">Documents</a></td>
-  </tr>
-  {% empty %}
-  <tr><td colspan="7">No exchange requests yet.</td></tr>
-  {% endfor %}
-</table>
+<div class="card">
+  <h2 style="margin-top:0;">All my exchange requests</h2>
+  <table>
+    <tr><th>Employee A</th><th>Date A</th><th>Employee B</th><th>Date B</th><th>Status</th><th>Filed</th><th>Documents</th></tr>
+    {% for r in requests %}
+    <tr>
+      <td>{{ r.employee_a.full_name }}</td>
+      <td>{{ r.date_a }}</td>
+      <td>{{ r.employee_b.full_name }}</td>
+      <td>{{ r.date_b }}</td>
+      <td>{% status_badge r.status r.get_status_display %}</td>
+      <td>{{ r.filed_at|date:"Y-m-d" }}</td>
+      <td><a href="{% documents_url r %}">Documents</a></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="7" class="empty-note">No exchange requests yet.</td></tr>
+    {% endfor %}
+  </table>
+</div>
 {% endblock %}

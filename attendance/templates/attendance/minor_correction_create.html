@@ -2,10 +2,12 @@
 {% block title %}Minor attendance correction — BDH HRIS{% endblock %}
 {% block content %}
 <h1>Minor administrative attendance correction</h1>
-<p>For a straightforward fix (e.g. a biometric misread). If you are an HR Processor, this needs HR Administrator authorization before it takes effect.</p>
-<form method="post">
-  {% csrf_token %}
-  {{ form.as_p }}
-  <button type="submit">Submit</button>
-</form>
+<p style="color:var(--gray-600);">For a straightforward fix (e.g. a biometric misread). If you are an HR Processor, this needs HR Administrator authorization before it takes effect.</p>
+<div class="card">
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Submit</button>
+  </form>
+</div>
 {% endblock %}

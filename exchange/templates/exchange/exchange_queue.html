@@ -1,7 +1,9 @@
 {% extends "base.html" %}
+{% load badges %}
 {% block title %}Duty exchange queue — BDH HRIS{% endblock %}
 {% block content %}
 <h1>Duty exchange requests awaiting my action</h1>
+<div class="card">
 <table>
   <tr><th>Employee A</th><th>Date A</th><th>Employee B</th><th>Date B</th><th>Emergency?</th><th>Status</th><th>Action</th></tr>
   {% for r in requests %}
@@ -11,9 +13,9 @@
     <td>{{ r.employee_b.full_name }}</td>
     <td>{{ r.date_b }}</td>
     <td>{% if r.is_emergency %}Yes — {{ r.emergency_justification }}{% else %}No{% endif %}</td>
-    <td>{{ r.get_status_display }}</td>
-    <td>
-      <form method="post" action="{% url 'exchange:exchange_action' r.pk %}" style="display:inline;">
+    <td>{% status_badge r.status r.get_status_display %}</td>
+    <td class="row-actions">
+      <form method="post" action="{% url 'exchange:exchange_action' r.pk %}">
         {% csrf_token %}
         {% if r.status == "SUBMITTED" %}
           <button type="submit" name="action" value="endorse">Endorse</button>
@@ -36,7 +38,8 @@
     </td>
   </tr>
   {% empty %}
-  <tr><td colspan="7">Nothing awaiting your action.</td></tr>
+  <tr><td colspan="7" class="empty-note">Nothing awaiting your action.</td></tr>
   {% endfor %}
 </table>
+</div>
 {% endblock %}

@@ -1,7 +1,9 @@
 {% extends "base.html" %}
+{% load badges %}
 {% block title %}Attendance correction queue — BDH HRIS{% endblock %}
 {% block content %}
 <h1>Attendance corrections awaiting my action</h1>
+<div class="card">
 <table>
   <tr><th>Employee</th><th>Date</th><th>Type</th><th>Requested</th><th>Reason</th><th>Status</th><th>Action</th></tr>
   {% for r in requests %}
@@ -11,9 +13,9 @@
     <td>{{ r.get_correction_type_display }}</td>
     <td>{% if r.requested_is_absent %}Mark Absent{% else %}{{ r.requested_time_in }} – {{ r.requested_time_out }}{% endif %}</td>
     <td>{{ r.reason }}</td>
-    <td>{{ r.get_status_display }}</td>
-    <td>
-      <form method="post" action="{% url 'attendance:correction_action' r.pk %}" style="display:inline;">
+    <td>{% status_badge r.status r.get_status_display %}</td>
+    <td class="row-actions">
+      <form method="post" action="{% url 'attendance:correction_action' r.pk %}">
         {% csrf_token %}
         {% if r.correction_type == "MINOR" and r.status == "SUBMITTED" %}
           <button type="submit" name="action" value="approve">Authorize</button>
@@ -35,7 +37,8 @@
     </td>
   </tr>
   {% empty %}
-  <tr><td colspan="7">Nothing awaiting your action.</td></tr>
+  <tr><td colspan="7" class="empty-note">Nothing awaiting your action.</td></tr>
   {% endfor %}
 </table>
+</div>
 {% endblock %}
