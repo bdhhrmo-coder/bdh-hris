@@ -2,35 +2,49 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}BDH HRIS{% endblock %}</title>
-  <style>
-    body { font-family: Arial, sans-serif; max-width: 800px; margin: 2rem auto; color: #222; }
-    fieldset { border: 1px solid #ccc; margin-bottom: 1rem; padding: 1rem; }
-    label { display: block; margin-top: 0.5rem; font-weight: bold; }
-    input, select, textarea { width: 100%; padding: 0.3rem; margin-top: 0.2rem; box-sizing: border-box; }
-    input:disabled, select:disabled, textarea:disabled { background: #eee; color: #555; }
-    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
-    th, td { border: 1px solid #ccc; padding: 0.4rem; text-align: left; font-size: 0.9em; }
-    .msg { padding: 0.6rem 1rem; margin-bottom: 1rem; border-radius: 4px; }
-    .msg.success { background: #e6f4ea; color: #1e4620; }
-    .msg.info { background: #e8f0fe; color: #1a3e72; }
-    .msg.error { background: #fdecea; color: #611a15; }
-    .locked-note { background: #fff8e1; border: 1px solid #f0d878; padding: 0.75rem; margin-bottom: 1rem; }
-  </style>
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
 </head>
 <body>
   {% if user.is_authenticated %}
-    <p>
-      {% if can_view_dashboard %}<a href="{% url 'dashboard:dashboard_home' %}">Dashboard</a> | {% endif %}
-      {% if can_view_audit_log %}<a href="{% url 'auditlog:audit_log' %}">Audit Log</a> | {% endif %}
-      <a href="{% url 'notifications:notification_list' %}">Notifications{% if unread_notification_count %} ({{ unread_notification_count }}){% endif %}</a>
-    </p>
+    <div class="app-shell">
+      <header class="app-topbar">
+        <div class="brand-mark">BDH</div>
+        <div class="brand-text">
+          HRIS
+          <small>Bataraza District Hospital</small>
+        </div>
+        <div class="spacer"></div>
+        <div class="user-chip">
+          {% if user.employee %}{{ user.employee.first_name }} {{ user.employee.surname }}{% else %}{{ user.username }}{% endif %}
+          &middot; <a href="{% url 'logout' %}" style="color:#fff;">Log out</a>
+        </div>
+      </header>
+      <aside class="app-sidebar">
+        <nav>
+          {% if can_view_dashboard %}<a href="{% url 'dashboard:dashboard_home' %}">Dashboard</a>{% endif %}
+          {% if can_view_audit_log %}<a href="{% url 'auditlog:audit_log' %}">Audit Log</a>{% endif %}
+          <a href="{% url 'notifications:notification_list' %}">
+            Notifications
+            {% if unread_notification_count %}<span class="count">{{ unread_notification_count }}</span>{% endif %}
+          </a>
+        </nav>
+      </aside>
+      <main class="app-main">
+  {% else %}
+    <main style="max-width: 420px; margin: 4rem auto; padding: 0 1rem;">
   {% endif %}
-  {% if messages %}
-    {% for message in messages %}
-      <div class="msg {{ message.tags }}">{{ message }}</div>
-    {% endfor %}
+        {% if messages %}
+          {% for message in messages %}
+            <div class="msg {{ message.tags }}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+        {% block content %}{% endblock %}
+      </main>
+  {% if user.is_authenticated %}
+    </div>
   {% endif %}
-  {% block content %}{% endblock %}
 </body>
 </html>

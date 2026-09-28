@@ -22,17 +22,37 @@ def _fig_to_data_uri(fig):
     return "data:image/png;base64," + base64.b64encode(buffer.read()).decode("ascii")
 
 
+# Matches the app's CSS palette (static/css/app.css) so the server-rendered
+# charts read as part of the same system rather than matplotlib defaults.
+_AMBER = "#a3690a"
+_GREEN = "#1f7a3d"
+_RED = "#a3241f"
+_NAVY = "#123a63"
+_GRAY = "#5b6570"
+
+plt.rcParams.update({
+    "font.family": "DejaVu Sans",
+    "axes.edgecolor": "#dfe3e8",
+    "axes.labelcolor": _GRAY,
+    "text.color": "#1f2937",
+    "xtick.color": _GRAY,
+    "ytick.color": _GRAY,
+})
+
+
 def status_pie_chart(totals):
     labels = ["Pending", "Approved", "Not approved"]
     values = [totals["pending"], totals["approved"], totals["not_approved"]]
+    colors = [_AMBER, _GREEN, _RED]
 
     fig, ax = plt.subplots(figsize=(4, 4))
     if sum(values) == 0:
         ax.text(0.5, 0.5, "No applications in this period", ha="center", va="center", wrap=True)
         ax.axis("off")
     else:
-        ax.pie(values, labels=labels, autopct="%1.0f%%", startangle=90)
-    ax.set_title("Applications by status")
+        ax.pie(values, labels=labels, colors=colors, autopct="%1.0f%%", startangle=90,
+               wedgeprops={"edgecolor": "white", "linewidth": 1.5})
+    ax.set_title("Applications by status", color=_NAVY, fontweight="bold")
     return _fig_to_data_uri(fig)
 
 
@@ -41,10 +61,12 @@ def monthly_trend_chart(trend):
     values = [point["count"] for point in trend]
 
     fig, ax = plt.subplots(figsize=(8, 3.5))
-    ax.plot(labels, values, marker="o")
-    ax.set_title("Applications filed per month (all types)")
+    ax.plot(labels, values, marker="o", color=_NAVY, linewidth=2, markerfacecolor="#157a6e", markersize=6)
+    ax.fill_between(range(len(labels)), values, color=_NAVY, alpha=0.06)
+    ax.set_title("Applications filed per month (all types)", color=_NAVY, fontweight="bold")
     ax.set_ylabel("Applications filed")
     ax.set_ylim(bottom=0)
+    ax.spines[["top", "right"]].set_visible(False)
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
     fig.tight_layout()
     return _fig_to_data_uri(fig)

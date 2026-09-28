@@ -1,10 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Log in — BDH HRIS{% endblock %}
 {% block content %}
-<h1>BDH HRIS — Log in</h1>
-<form method="post">
-  {% csrf_token %}
-  {{ form.as_p }}
-  <button type="submit">Log in</button>
-</form>
+<div class="card" style="text-align:center;">
+  <div style="width:56px;height:56px;border-radius:50%;background:var(--navy-900);color:#fff;
+              display:flex;align-items:center;justify-content:center;font-weight:700;
+              margin:0 auto 0.75rem;">BDH</div>
+  <h1 style="margin-bottom:0.1em;">HRIS</h1>
+  <p style="color:var(--gray-600);margin-top:0;font-size:0.9rem;">Bataraza District Hospital &mdash; Human Resource Information System</p>
+  <form method="post" style="text-align:left;margin-top:1.25rem;">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" style="width:100%;margin-top:0.75rem;">Log in</button>
+  </form>
+</div>
 {% endblock %}
