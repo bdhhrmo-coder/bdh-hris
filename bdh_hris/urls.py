@@ -19,6 +19,8 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
+from accounts.views import BDHLoginView
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("employees/", include("employees.urls")),
@@ -31,6 +33,6 @@ urlpatterns = [
     path("notifications/", include("notifications.urls")),
     path("dashboard/", include("dashboard.urls")),
     path("audit-log/", include("auditlog.urls")),
-    path("login/", auth_views.LoginView.as_view(), name="login"),
+    path("login/", BDHLoginView.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
 ]

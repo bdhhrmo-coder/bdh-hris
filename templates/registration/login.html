@@ -1,16 +1,88 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Log in — BDH HRIS{% endblock %}
+{% block body_class %}login-page{% endblock %}
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/login.css' %}">
+{% endblock %}
+
 {% block content %}
-<div class="card" style="text-align:center;">
-  <div style="width:56px;height:56px;border-radius:50%;background:var(--navy-900);color:#fff;
-              display:flex;align-items:center;justify-content:center;font-weight:700;
-              margin:0 auto 0.75rem;">BDH</div>
-  <h1 style="margin-bottom:0.1em;">HRIS</h1>
-  <p style="color:var(--gray-600);margin-top:0;font-size:0.9rem;">Bataraza District Hospital &mdash; Human Resource Information System</p>
-  <form method="post" style="text-align:left;margin-top:1.25rem;">
+<div class="login-blob login-blob-a" aria-hidden="true"></div>
+<div class="login-blob login-blob-b" aria-hidden="true"></div>
+
+<div class="login-card" x-data="{ showPassword: false, submitting: false, showForgot: false }">
+  <div class="login-brand">
+    <img src="{% static 'images/bdh-logo.png' %}" alt="Bataraza District Hospital seal">
+    <h1>BDH Human Resource<br>Information System</h1>
+    <p>Personnel, Attendance &amp; Leave Management</p>
+  </div>
+
+  {% if form.non_field_errors %}
+    <div class="msg error" role="alert" aria-live="polite">
+      {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+    </div>
+  {% endif %}
+
+  <form method="post" action="{% url 'login' %}" @submit="submitting = true" novalidate>
     {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit" style="width:100%;margin-top:0.75rem;">Log in</button>
+    <input type="hidden" name="next" value="{{ next }}">
+
+    <div class="login-field">
+      <label for="id_username">Username or Employee ID</label>
+      <input
+        type="text"
+        name="username"
+        id="id_username"
+        class="input-control"
+        placeholder="Enter your username"
+        autocomplete="username"
+        autofocus
+        required
+        value="{{ form.username.value|default:'' }}"
+      >
+    </div>
+
+    <div class="login-field password-field">
+      <label for="id_password">Password</label>
+      <input
+        type="password"
+        name="password"
+        id="id_password"
+        class="input-control"
+        placeholder="Enter your password"
+        autocomplete="current-password"
+        required
+        :type="showPassword ? 'text' : 'password'"
+      >
+      <button
+        type="button"
+        class="password-toggle"
+        @click="showPassword = !showPassword"
+        :aria-label="showPassword ? 'Hide password' : 'Show password'"
+        x-text="showPassword ? 'Hide' : 'Show'"
+      >Show</button>
+    </div>
+
+    <div class="login-row">
+      <label class="remember-me" for="id_remember_me">
+        <input type="checkbox" name="remember_me" id="id_remember_me">
+        Remember me
+      </label>
+      <button type="button" class="forgot-link" @click="showForgot = !showForgot" aria-expanded="false" :aria-expanded="showForgot.toString()">
+        Forgot password?
+      </button>
+    </div>
+
+    <p class="forgot-note" x-cloak x-show="showForgot" x-transition.duration.150ms>
+      Password resets aren't self-service yet &mdash; please contact your
+      HR Administrator or System Administrator to have your password reset.
+    </p>
+
+    <button type="submit" class="login-submit" :disabled="submitting">
+      <span x-show="!submitting">Sign In</span>
+      <span x-show="submitting" x-cloak class="spinner" aria-hidden="true"></span>
+      <span x-show="submitting" x-cloak>Signing in&hellip;</span>
+    </button>
   </form>
 </div>
 {% endblock %}
