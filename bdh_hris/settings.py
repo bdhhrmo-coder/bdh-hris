@@ -32,6 +32,15 @@ DEBUG = os.environ.get("BDH_HRIS_DEBUG", "1") == "1"
 
 ALLOWED_HOSTS = os.environ.get("BDH_HRIS_ALLOWED_HOSTS", "*").split(",")
 
+# Only needed if the app is ever put behind a reverse proxy or reached by a
+# hostname where the browser's Origin header wouldn't otherwise match
+# ALLOWED_HOSTS (Django's CSRF check requires this since Django 4). Empty by
+# default — plain HTTP, direct-to-Waitress, single-hostname deployments (the
+# documented setup in DEPLOYMENT.md) don't need it set.
+CSRF_TRUSTED_ORIGINS = [
+    origin for origin in os.environ.get("BDH_HRIS_CSRF_TRUSTED_ORIGINS", "").split(",") if origin
+]
+
 
 # Application definition
 
@@ -65,6 +74,11 @@ RECORD_RETENTION_YEARS = int(os.environ.get("BDH_HRIS_RECORD_RETENTION_YEARS", "
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Serves static files directly from Waitress in production (CLAUDE.md
+    # §2) — no separate IIS/nginx. Harmless in dev too: before collectstatic
+    # has ever run there's nothing in STATIC_ROOT, so it just falls through
+    # and Django's own runserver static handling (DEBUG=True) takes over.
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -159,6 +173,24 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 
+# Where `manage.py collectstatic` gathers files for WhiteNoise to serve in
+# production. Only used when DEBUG=False (see STORAGES below) — local dev
+# and the test suite keep using Django's own static handling, unchanged.
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": (
+            "django.contrib.staticfiles.storage.StaticFilesStorage"
+            if DEBUG
+            else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        ),
+    },
+}
+
 # CLAUDE.md §10: uploaded documents (medical certificates, government IDs,
 # etc.) are confidential HR records — they must NEVER be served as plain
 # static files. There is deliberately no MEDIA_URL/serve-media route in
@@ -167,7 +199,15 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 MEDIA_ROOT = os.environ.get("BDH_HRIS_MEDIA_ROOT", str(BASE_DIR / "secure_media"))
 
 LOGIN_URL = "login"
-LOGIN_REDIRECT_URL = "/admin/"
+# "Notifications" is deliberately the landing page: it's the one screen the
+# sidebar shows to every role, Employee through System Administrator (see
+# templates/base.html) — Dashboard and Audit Log are HR/AO/COH/SysAdmin-only
+# (dashboard/permissions.py, auditlog/permissions.py) and would 403 for a
+# plain Employee or Supervisor. The scaffold default of "/admin/" left every
+# non-staff login landing on the bare Django admin, so this was changed as
+# part of deployment prep — flagging it here since it changes what a person
+# sees right after signing in, even though it touches no permission logic.
+LOGIN_REDIRECT_URL = "notifications:notification_list"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

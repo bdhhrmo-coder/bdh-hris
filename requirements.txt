@@ -3,3 +3,9 @@ psycopg2-binary==2.9.13
 openpyxl==3.1.5
 reportlab==4.4.10
 matplotlib==3.10.9
+
+# Deployment (CLAUDE.md §2): Waitress serves the app as a Windows Service
+# (via NSSM); WhiteNoise serves static files directly from Waitress so no
+# separate IIS/nginx is needed.
+waitress==3.0.2
+whitenoise==6.12.0
