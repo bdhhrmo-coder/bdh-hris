@@ -106,14 +106,22 @@ if ($existing) {
 }
 
 Write-Host "Installing service '$ServiceName'..."
-# NSSM stores whatever we pass as the app's command-line arguments VERBATIM
-# and does not re-quote it when it later launches the service - so if
+# NSSM stores whatever we pass as the app's command-line arguments VERBATIM,
+# and re-quoting it ourselves doesn't help - `nssm set` strips a
+# surrounding quote pair itself before storing the value, so the quotes
+# never survive to the command line NSSM builds at service start. If
 # $ServeScript contains a space (a username like "C:\Users\Jane Doe\...",
-# for instance), an unquoted path here gets truncated at the space when
-# Windows parses the service's command line. Install with no arguments
-# first, then set AppParameters explicitly with the path quoted.
+# for instance), that unquoted path gets truncated at the space when
+# Windows parses the service's command line, and Waitress fails to start.
+#
+# The reliable fix is to sidestep string-quoting entirely: AppDirectory is
+# passed to CreateProcess as its own discrete parameter (the working
+# directory), never pasted into the command-line string, so it's immune to
+# this problem regardless of spaces. Point the service at the project
+# folder via AppDirectory and launch serve.py by its bare relative name -
+# with no spaces of its own, there's nothing left to split on.
 & $Nssm install $ServiceName $PythonExe
-& $Nssm set $ServiceName AppParameters "`"$ServeScript`""
+& $Nssm set $ServiceName AppParameters "serve.py"
 & $Nssm set $ServiceName AppDirectory $ProjectDir
 & $Nssm set $ServiceName AppEnvironmentExtra "DJANGO_SETTINGS_MODULE=bdh_hris.settings"
 & $Nssm set $ServiceName AppStdout (Join-Path $LogDir "service-stdout.log")
