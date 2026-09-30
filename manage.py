@@ -3,10 +3,14 @@
 
 import os
 import sys
+from pathlib import Path
 
 
 def main():
     """Run administrative tasks."""
+    from bdh_hris.envfile import load_env_file
+
+    load_env_file(Path(__file__).resolve().parent / ".env")
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "bdh_hris.settings")
     try:
         from django.core.management import execute_from_command_line

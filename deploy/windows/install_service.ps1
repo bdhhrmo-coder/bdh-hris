@@ -33,10 +33,6 @@
 .PARAMETER NssmPath
     Full path to nssm.exe. Default: assumes nssm.exe is on PATH.
 
-.PARAMETER EnvFile
-    Path to the .env file the service should load its BDH_HRIS_* settings
-    from. Default: <ProjectDir>\.env
-
 .EXAMPLE
     # Run from an elevated (Administrator) PowerShell prompt:
     cd C:\BDH-HRIS\deploy\windows
@@ -51,8 +47,7 @@ param(
     [string]$ServiceName = "BDH-HRIS",
     [string]$ProjectDir  = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path,
     [string]$PythonExe   = $null,
-    [string]$NssmPath    = "nssm.exe",
-    [string]$EnvFile     = $null
+    [string]$NssmPath    = "nssm.exe"
 )
 
 $ErrorActionPreference = "Stop"
@@ -65,14 +60,13 @@ if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Adm
 }
 
 if (-not $PythonExe) { $PythonExe = Join-Path $ProjectDir ".venv\Scripts\python.exe" }
-if (-not $EnvFile)   { $EnvFile   = Join-Path $ProjectDir ".env" }
 $ServeScript = Join-Path $ProjectDir "serve.py"
+$EnvFile     = Join-Path $ProjectDir ".env"
 $LogDir      = Join-Path $ProjectDir "logs"
 
 Write-Host "Project dir : $ProjectDir"
 Write-Host "Python exe  : $PythonExe"
 Write-Host "serve.py    : $ServeScript"
-Write-Host "Env file    : $EnvFile"
 Write-Host ""
 
 if (-not (Test-Path $PythonExe)) {
@@ -84,7 +78,7 @@ if (-not (Test-Path $ServeScript)) {
     exit 1
 }
 if (-not (Test-Path $EnvFile)) {
-    Write-Warning "$EnvFile does not exist yet. The service will still install, but Waitress will run with defaults (SQLite, DEBUG on) until you create it - copy .env.example to .env and fill it in, then re-run this script."
+    Write-Warning "$EnvFile does not exist yet. serve.py will still start, but Waitress will run with defaults (SQLite, DEBUG on) until you create it - copy .env.example to .env and fill it in, then restart the service (nssm restart $ServiceName)."
 }
 
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
@@ -123,7 +117,6 @@ Write-Host "Installing service '$ServiceName'..."
 & $Nssm install $ServiceName $PythonExe
 & $Nssm set $ServiceName AppParameters "serve.py"
 & $Nssm set $ServiceName AppDirectory $ProjectDir
-& $Nssm set $ServiceName AppEnvironmentExtra "DJANGO_SETTINGS_MODULE=bdh_hris.settings"
 & $Nssm set $ServiceName AppStdout (Join-Path $LogDir "service-stdout.log")
 & $Nssm set $ServiceName AppStderr (Join-Path $LogDir "service-stderr.log")
 & $Nssm set $ServiceName AppRotateFiles 1
@@ -133,20 +126,15 @@ Write-Host "Installing service '$ServiceName'..."
 & $Nssm set $ServiceName DisplayName "BDH HRIS (Waitress)"
 & $Nssm set $ServiceName Description "Bataraza District Hospital HRIS web application, served by Waitress."
 
-# NSSM doesn't read .env files itself; python-dotenv isn't a project
-# dependency (deliberately - one less moving part), so instead we point
-# the service at the env file via a tiny wrapper NSSM already supports:
-# AppEnvironmentExtra only takes literal KEY=VALUE pairs, not a file. The
-# simplest reliable option on Windows is to load .env into the SERVICE's
-# own environment block once, here, at install time.
-if (Test-Path $EnvFile) {
-    Write-Host "Loading $EnvFile into the service's environment..."
-    $envLines = Get-Content $EnvFile | Where-Object { $_ -match "=" -and -not $_.TrimStart().StartsWith("#") }
-    if ($envLines.Count -gt 0) {
-        & $Nssm set $ServiceName AppEnvironmentExtra ($envLines -join "`r`n")
-    }
-}
-
+# .env is loaded by serve.py itself (bdh_hris/envfile.py), not by NSSM.
+# An earlier version of this script loaded .env into the service's
+# environment here via NSSM's AppEnvironmentExtra - dropped after it was
+# found, in testing on a real Windows machine, to silently lose one
+# variable out of a real .env's worth of values (a reproducible bug in
+# how NSSM re-parses its own command line for that setting, not something
+# worth working around a second time). Letting the app own its own
+# configuration loading is both simpler and more reliable than routing it
+# through the service supervisor.
 Write-Host ""
 Write-Host "Starting service '$ServiceName'..."
 & $Nssm start $ServiceName

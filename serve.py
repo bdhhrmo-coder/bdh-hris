@@ -11,7 +11,13 @@ Usage (from the project's virtualenv):
     python serve.py
 
 Configuration is via the same BDH_HRIS_* environment variables as the rest
-of the app (see .env.example) plus:
+of the app (see .env.example). This script loads .env itself (see
+bdh_hris/envfile.py) - it does not rely on NSSM's AppEnvironmentExtra or
+any other launcher to have already put them in the environment. A real
+environment variable set before launch always wins over .env, so an
+operator can still override one value for a single run without editing
+the file. Beyond the BDH_HRIS_* settings shared with the rest of the app,
+this script also reads:
 
     BDH_HRIS_HOST     interface to bind to (default 0.0.0.0 - all interfaces
                        on the hospital LAN; the server has no public NIC)
@@ -28,8 +34,13 @@ usual Django release steps first (see DEPLOYMENT.md):
 """
 
 import os
+from pathlib import Path
 
 from waitress import serve
+
+from bdh_hris.envfile import load_env_file
+
+load_env_file(Path(__file__).resolve().parent / ".env")
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "bdh_hris.settings")
 

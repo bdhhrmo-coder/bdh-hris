@@ -122,8 +122,10 @@ Get-Service BDH-HRIS
 and browse to the app again, this time without a console window open.
 
 **To update `.env` later** (a new setting, a rotated password, etc.), edit
-the file and re-run `install_service.ps1` - it's safe to re-run and picks
-up the new values. Simple service commands you'll use day to day:
+the file and restart the service - serve.py loads `.env` itself on every
+start, so a plain restart picks up the new values (no need to re-run
+`install_service.ps1` unless you're also changing the project location or
+Python path). Simple service commands you'll use day to day:
 
 ```powershell
 nssm restart BDH-HRIS
