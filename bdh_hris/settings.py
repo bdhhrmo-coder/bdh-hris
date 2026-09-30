@@ -102,6 +102,7 @@ TEMPLATES = [
                 "notifications.context_processors.unread_notification_count",
                 "dashboard.context_processors.dashboard_link",
                 "auditlog.context_processors.audit_log_link",
+                "employees.context_processors.nav_links",
             ],
         },
     },

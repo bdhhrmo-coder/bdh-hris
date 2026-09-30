@@ -34,11 +34,32 @@
       <aside class="app-sidebar">
         <nav>
           {% if can_view_dashboard %}<a href="{% url 'dashboard:dashboard_home' %}">Dashboard</a>{% endif %}
-          {% if can_view_audit_log %}<a href="{% url 'auditlog:audit_log' %}">Audit Log</a>{% endif %}
+          {% if can_list_employees %}<a href="{% url 'employees:employee_list' %}">Employees</a>{% endif %}
           <a href="{% url 'notifications:notification_list' %}">
             Notifications
             {% if unread_notification_count %}<span class="count">{{ unread_notification_count }}</span>{% endif %}
           </a>
+
+          <p class="nav-section-label">My Requests</p>
+          <a href="{% url 'leave:my_applications' %}">Leave</a>
+          <a href="{% url 'cto:my_cto' %}">CTO</a>
+          <a href="{% url 'exchange:my_exchanges' %}">Exchange of Duty</a>
+          <a href="{% url 'attendance:my_attendance' %}">Attendance</a>
+          <a href="{% url 'official_requests:my_requests' %}">Official Business/Time/Travel/OT</a>
+
+          {% if has_approval_role %}
+          <p class="nav-section-label">Approvals</p>
+          <a href="{% url 'leave:leave_queue' %}">Leave Queue</a>
+          <a href="{% url 'cto:cto_queue' %}">CTO Queue</a>
+          <a href="{% url 'exchange:exchange_queue' %}">Exchange Queue</a>
+          <a href="{% url 'attendance:correction_queue' %}">Attendance Correction Queue</a>
+          <a href="{% url 'official_requests:request_queue' %}">Requests Queue</a>
+          {% endif %}
+
+          {% if can_view_audit_log %}
+          <p class="nav-section-label">Compliance</p>
+          <a href="{% url 'auditlog:audit_log' %}">Audit Log</a>
+          {% endif %}
         </nav>
       </aside>
       <main class="app-main">
