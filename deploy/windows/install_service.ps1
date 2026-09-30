@@ -106,7 +106,14 @@ if ($existing) {
 }
 
 Write-Host "Installing service '$ServiceName'..."
-& $Nssm install $ServiceName $PythonExe $ServeScript
+# NSSM stores whatever we pass as the app's command-line arguments VERBATIM
+# and does not re-quote it when it later launches the service - so if
+# $ServeScript contains a space (a username like "C:\Users\Jane Doe\...",
+# for instance), an unquoted path here gets truncated at the space when
+# Windows parses the service's command line. Install with no arguments
+# first, then set AppParameters explicitly with the path quoted.
+& $Nssm install $ServiceName $PythonExe
+& $Nssm set $ServiceName AppParameters "`"$ServeScript`""
 & $Nssm set $ServiceName AppDirectory $ProjectDir
 & $Nssm set $ServiceName AppEnvironmentExtra "DJANGO_SETTINGS_MODULE=bdh_hris.settings"
 & $Nssm set $ServiceName AppStdout (Join-Path $LogDir "service-stdout.log")
