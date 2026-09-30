@@ -24,7 +24,11 @@
         <div class="spacer"></div>
         <div class="user-chip">
           {% if user.employee %}{{ user.employee.first_name }} {{ user.employee.surname }}{% else %}{{ user.username }}{% endif %}
-          &middot; <a href="{% url 'logout' %}" style="color:#fff;">Log out</a>
+          &middot;
+          <form method="post" action="{% url 'logout' %}" class="logout-form">
+            {% csrf_token %}
+            <button type="submit" class="link-button">Log out</button>
+          </form>
         </div>
       </header>
       <aside class="app-sidebar">

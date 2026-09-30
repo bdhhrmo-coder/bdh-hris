@@ -396,6 +396,23 @@ button:active, .btn:active { transform: scale(0.98); }
 }
 .btn-secondary:hover { background: var(--navy-100); }
 
+/* Log out must POST (Django's LogoutView rejects GET), so it's a form, not
+   a plain link — style it to still read as inline text in the topbar. */
+.logout-form { display: inline; }
+.link-button {
+  display: inline;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: #fff;
+  font: inherit;
+  font-weight: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.link-button:hover { background: none; text-decoration: none; }
+
 /* Compact buttons for inline row actions (queue tables: Approve/Reject/...) */
 .btn-sm, .row-actions button {
   padding: 0.3rem 0.65rem;
