@@ -18,10 +18,19 @@ Including another URLconf
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
+from django.views.generic import RedirectView
 
 from accounts.views import BDHLoginView
 
 urlpatterns = [
+    # The site had no "/" page at all, so a visitor who just opened
+    # http://<server>/ with nothing after it had nowhere to go — the only
+    # other URL people instinctively try is /admin/, which is Django's own
+    # administration panel (a different, staff-only login), not this app.
+    # Point "/" at the real login page instead: BDHLoginView already
+    # forwards an already-signed-in visitor on to LOGIN_REDIRECT_URL, so
+    # this covers both "just opened the site" and "already logged in".
+    path("", RedirectView.as_view(pattern_name="login", permanent=False), name="home"),
     path("admin/", admin.site.urls),
     path("employees/", include("employees.urls")),
     path("leave/", include("leave.urls")),
