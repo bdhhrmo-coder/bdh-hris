@@ -28,7 +28,10 @@ SECRET_KEY = os.environ.get(
 )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get("BDH_HRIS_DEBUG", "1") == "1"
+# Defaults to OFF: a forgotten/missing BDH_HRIS_DEBUG must never leave debug
+# pages (stack traces, settings, query details) exposed. For local
+# development, opt in explicitly: BDH_HRIS_DEBUG=1 (e.g. in your own .env).
+DEBUG = os.environ.get("BDH_HRIS_DEBUG", "0") == "1"
 
 ALLOWED_HOSTS = os.environ.get("BDH_HRIS_ALLOWED_HOSTS", "*").split(",")
 
