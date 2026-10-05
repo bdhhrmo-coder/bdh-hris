@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}CTO claims — BDH HRIS{% endblock %}
+{% block content %}
+<h1>CTO claims</h1>
+<p style="color:var(--gray-600);">Approving OT does not credit CTO. File a claim for each workday of an approved OT request, upload the required documents, then submit it. CTO is credited only when the claim is submitted.</p>
+{% if can_file_exception %}
+<p><a href="{% url 'cto:credit_entry_create' %}" class="btn">+ Exception claim (no OT request)</a></p>
+{% endif %}
+
+<div class="card">
+  <h2 style="margin-top:0;">Approved OT open for claims</h2>
+  <table>
+    <tr><th>Employee</th><th>OT dates</th><th>Approved hours</th><th>Left to claim</th><th>Purpose</th><th></th></tr>
+    {% for ot in ot_requests %}
+    <tr>
+      <td>{{ ot.employee.full_name }}</td>
+      <td>{{ ot.start_date }} to {{ ot.end_date }}</td>
+      <td>{{ ot.hours_requested }}</td>
+      <td>{{ ot.remaining_hours }}</td>
+      <td>{{ ot.purpose|truncatechars:60 }}</td>
+      <td><a href="{% url 'cto:claim_create' ot.pk %}" class="btn">File claim</a></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6" class="empty-note">No approved OT requests with hours left to claim.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Draft claims (not yet credited)</h2>
+  <table>
+    <tr><th>Employee</th><th>Work date</th><th>Hours</th><th>OT request</th><th></th></tr>
+    {% for e in drafts %}
+    <tr>
+      <td>{{ e.employee.full_name }}</td>
+      <td>{{ e.work_date }}</td>
+      <td>{{ e.hours_worked }}</td>
+      <td>{% if e.ot_request %}{{ e.ot_request.start_date }} to {{ e.ot_request.end_date }}{% else %}Exception{% endif %}</td>
+      <td><a href="{% url 'cto:claim_detail' e.pk %}">Open</a></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5" class="empty-note">No draft claims.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Recently credited</h2>
+  <table>
+    <tr><th>Employee</th><th>Work date</th><th>Credited days</th><th>Credited</th><th></th></tr>
+    {% for e in recent_credited %}
+    <tr>
+      <td>{{ e.employee.full_name }}</td>
+      <td>{{ e.work_date }}</td>
+      <td>{{ e.credited_days }}</td>
+      <td>{{ e.credited_at|date:"Y-m-d" }}</td>
+      <td><a href="{% url 'cto:claim_detail' e.pk %}">Open</a></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5" class="empty-note">Nothing credited yet.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

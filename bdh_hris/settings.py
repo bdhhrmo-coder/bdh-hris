@@ -74,6 +74,13 @@ INSTALLED_APPS = [
 # 2026-09-27. See auditlog/retention.py.
 RECORD_RETENTION_YEARS = int(os.environ.get("BDH_HRIS_RECORD_RETENTION_YEARS", "10"))
 
+# CLAUDE.md §7 CTO year-end dates, as (month, day). Kept here rather than
+# in cto/balances.py so a policy change doesn't need a code edit (§15;
+# confirmed 2026-09-28). The OT-to-CTO multipliers are configured
+# separately, in the CTOMultiplierRate table.
+CTO_FILING_DEADLINE_MONTH_DAY = (11, 30)  # last day to file a CTO claim for that year's work
+CTO_USAGE_CUTOFF_MONTH_DAY = (12, 15)  # CTO usage dates cannot extend past this
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     # Serves static files directly from Waitress in production (CLAUDE.md

@@ -4,21 +4,28 @@ from io import StringIO
 
 from django.contrib.auth.models import User
 from django.core.management import call_command
-from django.test import Client, TestCase
+from django.contrib.contenttypes.models import ContentType
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from accounts.models import RoleAssignment
 from employees.models import Employee
+
+from documents.models import DocumentRequirement, UploadedDocument
+from official_requests.models import OfficialRequest
 
 from .balances import (
     compute_available_cto_balance,
     compute_credit,
     cto_used_in_month,
     exceeds_monthly_cap,
+    filed_too_early,
+    filing_window_opens,
     forms_illegal_consecutive_run,
     violates_filing_deadline,
     violates_usage_cutoff,
 )
+from .claims import claim_submission_errors, claimable_ot_requests, credit_claim
 from .models import CTOCreditEntry, CTOCreditTransaction, CTOMultiplierRate, CTOUsageApplication
 from .permissions import is_cto_eligible
 
@@ -376,3 +383,220 @@ class CTORoutingPermissionTests(TestCase):
 
         self.application.refresh_from_db()
         self.assertEqual(self.application.status, CTOUsageApplication.RECOMMENDED_BY_AO)
+
+
+class FilingWindowTests(TestCase):
+    """Confirmed 2026-09-28: a claim is filed no earlier than the month
+    after the workday, and no later than that year's filing deadline; both
+    year-end dates come from settings, not code."""
+
+    def test_window_opens_on_first_of_next_month(self):
+        self.assertEqual(filing_window_opens(date(2026, 3, 15)), date(2026, 4, 1))
+        self.assertEqual(filing_window_opens(date(2026, 3, 31)), date(2026, 4, 1))
+
+    def test_december_work_rolls_into_january(self):
+        self.assertEqual(filing_window_opens(date(2026, 12, 5)), date(2027, 1, 1))
+
+    def test_same_month_filing_is_too_early(self):
+        self.assertTrue(filed_too_early(date(2026, 3, 5), date(2026, 3, 31)))
+        self.assertFalse(filed_too_early(date(2026, 3, 5), date(2026, 4, 1)))
+
+    def test_november_work_cannot_be_filed_in_time(self):
+        work = date(2026, 11, 10)
+        filed = filing_window_opens(work)
+        self.assertTrue(violates_filing_deadline(work, filed))
+
+    @override_settings(CTO_FILING_DEADLINE_MONTH_DAY=(10, 31))
+    def test_filing_deadline_comes_from_settings(self):
+        self.assertTrue(violates_filing_deadline(date(2026, 6, 1), date(2026, 11, 1)))
+
+    @override_settings(CTO_USAGE_CUTOFF_MONTH_DAY=(12, 10))
+    def test_usage_cutoff_comes_from_settings(self):
+        self.assertTrue(violates_usage_cutoff(date(2026, 12, 11)))
+
+
+def make_approved_ot(employee, start, end, hours, restday=False):
+    return OfficialRequest.objects.create(
+        request_type=OfficialRequest.OT_RESTDAY_HOLIDAY, employee=employee, start_date=start, end_date=end,
+        purpose="Test OT", hours_requested=Decimal(hours), is_restday_or_holiday=restday,
+        status=OfficialRequest.APPROVED,
+    )
+
+
+def make_draft_claim(ot, work_date, hours, actor_user, restday=False):
+    return CTOCreditEntry.objects.create(
+        employee=ot.employee, ot_request=ot, work_date=work_date, hours_worked=Decimal(hours),
+        is_restday_or_holiday=restday, shift_hours_used=8, multiplier_applied="1.00",
+        credited_hours=Decimal(hours), credited_days="1.00", recorded_by=actor_user,
+    )
+
+
+def upload_all_required(entry, actor_user):
+    """Attach one active document per configured requirement (the §7 set
+    is seeded by documents/migrations/0002)."""
+    content_type = ContentType.objects.get_for_model(entry)
+    for req in DocumentRequirement.objects.filter(content_type=content_type, sub_type_value__in=["", entry.duty_type]):
+        UploadedDocument.objects.create(
+            content_type=content_type, object_id=entry.pk, requirement=req, file="secure_documents/x.pdf",
+            original_filename="x.pdf", file_size=1, file_type=UploadedDocument.PDF, uploaded_by=actor_user,
+        )
+
+
+class CTOClaimSubmissionTests(TestCase):
+    """Settled 2026-09-28: approved OT never credits CTO by itself; a claim
+    credits only on submission, once every §7 check passes."""
+
+    def setUp(self):
+        make_rate(weekday="1.00", restday="1.50")
+        self.hr = make_employee("claim_hr", "EMP-CL-1", role=RoleAssignment.HR_PROCESSOR)
+        self.employee = make_employee("claim_emp", "EMP-CL-2")
+        self.ot = make_approved_ot(self.employee, date(2026, 3, 6), date(2026, 3, 7), "16")
+        self.ok_day = date(2026, 4, 10)
+
+    def test_approved_ot_alone_credits_nothing(self):
+        self.assertEqual(compute_available_cto_balance(self.employee), Decimal("0"))
+        self.assertFalse(CTOCreditEntry.objects.exists())
+
+    def test_missing_documents_block_submission(self):
+        entry = make_draft_claim(self.ot, date(2026, 3, 6), "8", self.hr.user)
+        errors = credit_claim(entry, self.hr.user, self.ok_day)
+        self.assertTrue(any("Required documents" in e for e in errors))
+        self.assertEqual(compute_available_cto_balance(self.employee), Decimal("0"))
+
+    def test_same_month_submission_is_blocked(self):
+        entry = make_draft_claim(self.ot, date(2026, 3, 6), "8", self.hr.user)
+        upload_all_required(entry, self.hr.user)
+        errors = claim_submission_errors(entry, date(2026, 3, 31))
+        self.assertTrue(any("month after the workday" in e for e in errors))
+
+    def test_submission_after_deadline_is_blocked(self):
+        entry = make_draft_claim(self.ot, date(2026, 3, 6), "8", self.hr.user)
+        upload_all_required(entry, self.hr.user)
+        errors = claim_submission_errors(entry, date(2026, 12, 1))
+        self.assertTrue(any("filing deadline" in e for e in errors))
+
+    def test_complete_claim_credits_with_configured_multiplier(self):
+        entry = make_draft_claim(self.ot, date(2026, 3, 7), "8", self.hr.user, restday=True)
+        upload_all_required(entry, self.hr.user)
+        self.assertEqual(credit_claim(entry, self.hr.user, self.ok_day), [])
+        entry.refresh_from_db()
+        self.assertEqual(entry.status, CTOCreditEntry.CREDITED)
+        self.assertEqual(entry.multiplier_applied, Decimal("1.50"))
+        self.assertEqual(entry.credited_days, Decimal("1.50"))  # 8h x 1.5 / 8h shift
+        self.assertEqual(entry.credited_by, self.hr.user)
+        ledger = CTOCreditTransaction.objects.get(credit_entry=entry)
+        self.assertEqual(ledger.days, Decimal("1.50"))
+
+    def test_multiplier_is_read_from_rate_table(self):
+        make_rate(weekday="1.25", restday="2.00")  # policy change, same effective date
+        entry = make_draft_claim(self.ot, date(2026, 3, 6), "8", self.hr.user)
+        upload_all_required(entry, self.hr.user)
+        credit_claim(entry, self.hr.user, self.ok_day)
+        entry.refresh_from_db()
+        self.assertEqual(entry.multiplier_applied, Decimal("1.25"))
+
+    def test_claim_cannot_be_credited_twice(self):
+        entry = make_draft_claim(self.ot, date(2026, 3, 6), "8", self.hr.user)
+        upload_all_required(entry, self.hr.user)
+        credit_claim(entry, self.hr.user, self.ok_day)
+        self.assertEqual(credit_claim(entry, self.hr.user, self.ok_day), ["This claim has already been credited."])
+        self.assertEqual(CTOCreditTransaction.objects.filter(credit_entry=entry).count(), 1)
+
+    def test_hours_over_approved_total_are_blocked(self):
+        make_draft_claim(self.ot, date(2026, 3, 6), "10", self.hr.user)
+        entry = make_draft_claim(self.ot, date(2026, 3, 7), "8", self.hr.user)
+        upload_all_required(entry, self.hr.user)
+        errors = claim_submission_errors(entry, self.ok_day)
+        self.assertTrue(any("approved hours" in e for e in errors))
+
+    def test_fully_claimed_ot_is_no_longer_listed(self):
+        self.assertIn(self.ot, claimable_ot_requests())
+        make_draft_claim(self.ot, date(2026, 3, 6), "8", self.hr.user)
+        make_draft_claim(self.ot, date(2026, 3, 7), "8", self.hr.user)
+        self.assertNotIn(self.ot, claimable_ot_requests())
+
+
+class _FakeDate(date):
+    fixed_today = date(2026, 4, 10)
+
+    @classmethod
+    def today(cls):
+        return cls.fixed_today
+
+
+class CTOClaimViewTests(TestCase):
+    def setUp(self):
+        from unittest.mock import patch
+
+        patcher = patch("cto.views.date", _FakeDate)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        make_rate()
+        self.hr = make_employee("claimv_hr", "EMP-CV-1", role=RoleAssignment.HR_PROCESSOR)
+        self.hr_admin = make_employee("claimv_hra", "EMP-CV-2", role=RoleAssignment.HR_ADMINISTRATOR)
+        self.employee = make_employee("claimv_emp", "EMP-CV-3")
+        self.ot = make_approved_ot(self.employee, date(2026, 3, 6), date(2026, 3, 7), "16")
+        self.client.force_login(self.hr.user)
+
+    def _file(self, work_date="2026-03-06", hours="8", restday=False):
+        return self.client.post(reverse("cto:claim_create", args=[self.ot.pk]), {
+            "work_date": work_date, "duty_type": CTOCreditEntry.DUTY_REGULAR, "hours_worked": hours,
+            "is_restday_or_holiday": restday, "notes": "",
+        })
+
+    def test_filing_creates_linked_draft_without_credit(self):
+        self._file()
+        entry = CTOCreditEntry.objects.get()
+        self.assertEqual(entry.ot_request, self.ot)
+        self.assertEqual(entry.status, CTOCreditEntry.DRAFT)
+        self.assertFalse(CTOCreditTransaction.objects.exists())
+
+    def test_work_date_outside_ot_is_rejected(self):
+        self._file(work_date="2026-03-08")
+        self.assertFalse(CTOCreditEntry.objects.exists())
+
+    def test_one_claim_per_workday(self):
+        self._file(hours="4")
+        self._file(hours="4")
+        self.assertEqual(CTOCreditEntry.objects.count(), 1)
+
+    def test_hours_beyond_approved_total_rejected_at_filing(self):
+        self._file(work_date="2026-03-06", hours="10")
+        self._file(work_date="2026-03-07", hours="8")
+        self.assertEqual(CTOCreditEntry.objects.count(), 1)
+
+    def test_cannot_file_from_unapproved_ot(self):
+        self.ot.status = OfficialRequest.RECOMMENDED_BY_AO
+        self.ot.save()
+        self.assertEqual(self._file().status_code, 404)
+
+    def test_employee_cannot_file_or_submit(self):
+        self.client.force_login(self.employee.user)
+        self.assertEqual(self._file().status_code, 403)
+
+    def test_submit_credits_only_with_documents(self):
+        self._file()
+        entry = CTOCreditEntry.objects.get()
+        self.client.post(reverse("cto:claim_submit", args=[entry.pk]))
+        self.assertEqual(compute_available_cto_balance(self.employee), Decimal("0"))
+        upload_all_required(entry, self.hr.user)
+        self.client.post(reverse("cto:claim_submit", args=[entry.pk]))
+        entry.refresh_from_db()
+        self.assertEqual(entry.status, CTOCreditEntry.CREDITED)
+        self.assertEqual(compute_available_cto_balance(self.employee), Decimal("1.00"))
+
+    def test_exception_claim_is_hr_admin_only_and_needs_reason(self):
+        data = {
+            "employee": self.employee.pk, "work_date": "2026-03-10", "duty_type": CTOCreditEntry.DUTY_REGULAR,
+            "hours_worked": "8", "is_restday_or_holiday": False, "exception_reason": "", "notes": "",
+        }
+        self.assertEqual(self.client.post(reverse("cto:credit_entry_create"), data).status_code, 403)
+        self.client.force_login(self.hr_admin.user)
+        self.client.post(reverse("cto:credit_entry_create"), data)
+        self.assertFalse(CTOCreditEntry.objects.exists())
+        data["exception_reason"] = "Certified emergency duty"
+        self.client.post(reverse("cto:credit_entry_create"), data)
+        entry = CTOCreditEntry.objects.get()
+        self.assertIsNone(entry.ot_request)
+        self.assertEqual(entry.status, CTOCreditEntry.DRAFT)
+        self.assertFalse(CTOCreditTransaction.objects.exists())

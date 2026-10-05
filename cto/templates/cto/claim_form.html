@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}File CTO claim — BDH HRIS{% endblock %}
+{% block content %}
+<h1>File CTO claim</h1>
+<div class="card">
+  <p style="margin-top:0;"><strong>{{ ot_request.employee.full_name }}</strong> — approved OT {{ ot_request.start_date }} to {{ ot_request.end_date }}, {{ ot_request.hours_requested }} approved hours ({{ remaining_hours }} left to claim).</p>
+  <p style="color:var(--gray-600);">One claim per workday. Enter that day's actual hours from the DTR, and tick rest day/holiday if that day was one. This saves a draft; nothing is credited until the claim is submitted with its documents.</p>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Save draft claim</button>
+  </form>
+</div>
+{% endblock %}

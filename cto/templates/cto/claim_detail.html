@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% load documents_tags %}
+{% block title %}CTO claim — BDH HRIS{% endblock %}
+{% block content %}
+<h1>CTO claim</h1>
+
+<div class="card">
+  <p style="margin-top:0;">
+    {% if entry.status == "CREDITED" %}<span class="badge badge-approved">Credited</span>{% else %}<span class="badge badge-pending">Draft — not yet credited</span>{% endif %}
+  </p>
+  <table>
+    <tr><th>Employee</th><td>{{ entry.employee.full_name }}</td></tr>
+    <tr><th>OT request</th><td>{% if entry.ot_request %}Approved OT {{ entry.ot_request.start_date }} to {{ entry.ot_request.end_date }} ({{ entry.ot_request.hours_requested }} approved hours){% else %}None — exception claim: {{ entry.exception_reason }}{% endif %}</td></tr>
+    <tr><th>Work date</th><td>{{ entry.work_date }}</td></tr>
+    <tr><th>Duty type</th><td>{{ entry.get_duty_type_display }}</td></tr>
+    <tr><th>Hours worked</th><td>{{ entry.hours_worked }}{% if entry.is_restday_or_holiday %} (rest day/holiday){% endif %}</td></tr>
+    <tr><th>{% if entry.status == "CREDITED" %}Credited{% else %}Would credit{% endif %}</th><td>{{ entry.credited_hours }} hours = {{ entry.credited_days }} day(s) at {{ entry.multiplier_applied }}x</td></tr>
+    <tr><th>Filing window</th><td>{{ filing_window_opens }} to {{ filing_deadline }}</td></tr>
+    <tr><th>Drafted by</th><td>{{ entry.recorded_by }} on {{ entry.recorded_at|date:"Y-m-d H:i" }}</td></tr>
+    {% if entry.credited_at %}<tr><th>Credited by</th><td>{{ entry.credited_by }} on {{ entry.credited_at|date:"Y-m-d H:i" }}</td></tr>{% endif %}
+    {% if entry.notes %}<tr><th>Notes</th><td>{{ entry.notes }}</td></tr>{% endif %}
+  </table>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Required documents</h2>
+  <table>
+    {% for row in requirement_status %}
+    <tr>
+      <td>{{ row.label }}</td>
+      <td>{% if row.satisfied %}<span class="badge badge-approved">Submitted</span>{% elif row.is_mandatory %}<span class="badge badge-pending">Missing</span>{% else %}Optional{% endif %}</td>
+    </tr>
+    {% empty %}
+    <tr><td class="empty-note">No document requirements configured.</td></tr>
+    {% endfor %}
+  </table>
+  <p><a href="{% documents_url entry %}">View / upload documents</a></p>
+</div>
+
+{% if can_act %}
+<div class="card">
+  {% if submission_errors %}
+  <h2 style="margin-top:0;">Not ready to submit</h2>
+  <ul>{% for e in submission_errors %}<li>{{ e }}</li>{% endfor %}</ul>
+  {% else %}
+  <h2 style="margin-top:0;">Ready to submit</h2>
+  {% endif %}
+  <form method="post" action="{% url 'cto:claim_submit' entry.pk %}" style="display:inline;">
+    {% csrf_token %}
+    <button type="submit" {% if submission_errors %}disabled{% endif %}>Submit and credit CTO</button>
+  </form>
+  {% if can_discard %}
+  <form method="post" action="{% url 'cto:claim_discard' entry.pk %}" style="display:inline;">
+    {% csrf_token %}
+    <button type="submit">Discard draft</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+
+<p>{% if is_hr %}<a href="{% url 'cto:claims_home' %}">&larr; CTO claims</a>{% else %}<a href="{% url 'cto:my_cto' %}">&larr; My CTO</a>{% endif %}</p>
+{% endblock %}

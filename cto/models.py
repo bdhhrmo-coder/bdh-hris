@@ -5,16 +5,19 @@ for the math this is built on top of, kept isolated and unit-tested the
 same way leave/balances.py is.
 
 Two separate things happen here, on purpose:
-  - CREDITING (earning CTO from OT/restday/holiday work): recorded directly
-    by HR for now. §7 describes this as a "claim...filed...with required
-    attachments", which reads like the same thing as the "Authorized
-    OT/restday/holiday work" request in §6.2's routing table — but that
-    request workflow is explicitly Phase 8, not built yet. Rather than
-    block the whole CTO engine on a phase that hasn't started, HR records
-    a verified credit entry directly (confirmed 2026-09-27: no file
-    upload yet either — Phase 9's job). Once Phase 8 exists, its approved
-    OT/restday/holiday requests can create these entries instead of HR
-    typing them in by hand; the ledger underneath doesn't change.
+  - CREDITING (earning CTO from OT/restday/holiday work): a CTO claim
+    (CTOCreditEntry), filed by HR from an APPROVED "Authorized OT/restday/
+    holiday work" request (official_requests.OfficialRequest). Settled
+    2026-09-28 (see CLAUDE.md §7): approving OT never creates CTO credit
+    by itself. The OT approval and the claim are separate records; the
+    claim links back to the OT (ot_request) for the audit trail. A claim
+    starts as a DRAFT so its required documents can be attached, and only
+    credits the ledger when HR submits it and every §7 check passes (see
+    views.claim_submit). One claim per workday; the hours across all of
+    one OT's claims cannot exceed the OT's approved hours. An HR
+    Administrator may also file an exception claim with no OT request
+    (e.g. certified emergency or Medical Transport duty), with a required
+    reason — it goes through the same draft/documents/submit checks.
   - SPENDING (using banked CTO as time off): full routing chain per
     §6.2 — Employee -> Supervisor -> HR -> AO -> COH, same shape as COSP
     Leave in the leave app (and deliberately reuses leave.permissions'
@@ -58,11 +61,14 @@ class CTOMultiplierRate(models.Model):
 
 class CTOCreditEntry(models.Model):
     """
-    One verified OT/rest-day/holiday work record, converted to CTO credit.
-    Recorded by HR directly (see module docstring) — not itself routed
-    through Supervisor/AO/COH; HR is trusted to have verified the
-    attachments described in §7 against the employee's DTR/logbook before
-    entering this.
+    A CTO claim: one workday of OT/rest-day/holiday work, converted to CTO
+    credit once submitted (see the module docstring). Normally linked to
+    an approved OT request; exception claims have no ot_request and must
+    give an exception_reason instead.
+
+    multiplier_applied/credited_hours/credited_days/shift_hours_used are
+    computed when the draft is saved (as a preview) and recomputed at
+    submission, which is the snapshot that is actually credited.
 
     duty_type (added for Phase 9's document-requirements system, confirmed
     2026-09-27): the standard §7 attachment set (Allowed to Work form,
@@ -74,6 +80,10 @@ class CTOCreditEntry(models.Model):
     for how the two sets are configured.
     """
 
+    DRAFT = "DRAFT"
+    CREDITED = "CREDITED"
+    STATUS_CHOICES = [(DRAFT, "Draft — not yet credited"), (CREDITED, "Credited")]
+
     DUTY_REGULAR = "REGULAR"
     DUTY_MEDICAL_TRANSPORT = "MEDICAL_TRANSPORT"
     DUTY_TYPE_CHOICES = [
@@ -84,6 +94,19 @@ class CTOCreditEntry(models.Model):
     employee = models.ForeignKey(
         "employees.Employee", on_delete=models.CASCADE, related_name="cto_credit_entries"
     )
+    ot_request = models.ForeignKey(
+        "official_requests.OfficialRequest",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="cto_claims",
+        help_text="The approved OT/rest-day/holiday request this claim is filed from. "
+        "Blank only for an HR Administrator exception claim.",
+    )
+    exception_reason = models.TextField(
+        blank=True, help_text="Required when there is no OT request (exception claim)."
+    )
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=DRAFT)
     work_date = models.DateField(help_text="The date the OT/rest-day/holiday work was performed.")
     duty_type = models.CharField(max_length=20, choices=DUTY_TYPE_CHOICES, default=DUTY_REGULAR)
     hours_worked = models.DecimalField(max_digits=5, decimal_places=2)
@@ -103,16 +126,39 @@ class CTOCreditEntry(models.Model):
     notes = models.CharField(max_length=255, blank=True)
     recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     recorded_at = models.DateTimeField(auto_now_add=True)
+    credited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    credited_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-work_date"]
+        constraints = [
+            models.UniqueConstraint(fields=["ot_request", "work_date"], name="one_cto_claim_per_ot_workday"),
+        ]
 
     def __str__(self):
         return f"{self.employee} worked {self.hours_worked}h on {self.work_date} -> {self.credited_days} CTO day(s)"
 
+    def is_exception(self):
+        return self.ot_request_id is None
+
     def clean(self):
         if self.employee_id and self.employee.has_role("CHIEF_OF_HOSPITAL"):
             raise ValidationError("CTO is not applicable to the Chief of Hospital (CLAUDE.md §7).")
+        if self.ot_request_id is None:
+            if not self.exception_reason.strip():
+                raise ValidationError({"exception_reason": "A reason is required for a claim with no OT request."})
+            return
+        ot = self.ot_request
+        if ot.request_type != ot.OT_RESTDAY_HOLIDAY or ot.status != ot.APPROVED:
+            raise ValidationError("A CTO claim can only be filed from an approved OT/rest-day/holiday request.")
+        if self.employee_id != ot.employee_id:
+            raise ValidationError("The claim must be for the same employee as the OT request.")
+        if self.work_date and not (ot.start_date <= self.work_date <= ot.end_date):
+            raise ValidationError(
+                {"work_date": f"The work date must fall within the OT request ({ot.start_date} to {ot.end_date})."}
+            )
 
 
 class CTOCreditTransaction(models.Model):
