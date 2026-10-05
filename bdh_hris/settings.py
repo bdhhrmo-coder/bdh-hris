@@ -218,6 +218,11 @@ LOGIN_URL = "login"
 # part of deployment prep — flagging it here since it changes what a person
 # sees right after signing in, even though it touches no permission logic.
 LOGIN_REDIRECT_URL = "notifications:notification_list"
+# Without this, Django shows its own built-in "Logged out" page (the Django
+# administration one), whose "Log in again" link goes to /admin/login/ - a
+# staff-only login that rejects normal accounts. Send people straight back to
+# the real BDH login page instead.
+LOGOUT_REDIRECT_URL = "login"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

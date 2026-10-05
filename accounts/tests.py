@@ -103,6 +103,13 @@ class LoginLogoutTests(TestCase):
         self.client.post(reverse("logout"))
         self.assertNotIn("_auth_user_id", self.client.session)
 
+    def test_logout_returns_to_bdh_login_not_django_admin(self):
+        self.login()
+        response = self.client.post(reverse("logout"))
+        self.assertRedirects(response, reverse("login"), fetch_redirect_response=False)
+        page = self.client.get(reverse("login"))
+        self.assertNotContains(page, "Django administration")
+
     def test_topbar_logout_is_a_post_form(self):
         self.login()
         page = self.client.get(reverse("notifications:notification_list"))
