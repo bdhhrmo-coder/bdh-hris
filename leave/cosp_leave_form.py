@@ -26,8 +26,6 @@ Design notes, flagged rather than silently assumed:
     appears on CSC Form 6.
 """
 
-import subprocess
-import tempfile
 from pathlib import Path
 
 import openpyxl
@@ -35,6 +33,7 @@ from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Alignment, Border, Font, Side
 
 from .balances import compute_available_balance, contract_years_started
+from .pdf_convert import workbook_to_pdf
 
 LOGO_PATH = Path(__file__).parent / "form_templates" / "bdh_logo.png"
 THIN = Side(style="thin")
@@ -208,19 +207,6 @@ def fill_cosp_leave_form(application):
 
 
 def render_pdf(application) -> bytes:
-    """Fills the form and converts it to PDF bytes via headless LibreOffice."""
-    wb = fill_cosp_leave_form(application)
-    with tempfile.TemporaryDirectory() as tmpdir:
-        xlsx_path = Path(tmpdir) / "form.xlsx"
-        wb.save(xlsx_path)
-        result = subprocess.run(
-            [
-                "libreoffice", "--headless", "--norestore",
-                "--convert-to", "pdf", "--outdir", tmpdir, str(xlsx_path),
-            ],
-            capture_output=True, timeout=60,
-        )
-        pdf_path = Path(tmpdir) / "form.pdf"
-        if not pdf_path.exists():
-            raise RuntimeError(f"COSP Leave form PDF conversion failed: {result.stderr.decode(errors='replace')}")
-        return pdf_path.read_bytes()
+    """Fills the form and converts it to PDF bytes via headless LibreOffice
+    (see leave/pdf_convert.py for how the executable is located)."""
+    return workbook_to_pdf(fill_cosp_leave_form(application), "COSP Leave form")

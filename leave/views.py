@@ -197,6 +197,22 @@ def leave_action(request, pk):
     return redirect("leave:leave_queue")
 
 
+def _pdf_unavailable(request, exc):
+    """PDF conversion needs LibreOffice on the server (see
+    leave/pdf_convert.py). If it's missing or fails, tell the user plainly
+    instead of showing a bare "Server Error (500)"; the detail goes to the
+    service log for the System Administrator."""
+    import logging
+
+    logging.getLogger(__name__).error("Leave form PDF conversion failed: %s", exc)
+    messages.error(
+        request,
+        "The printable form could not be generated right now. Please contact your System "
+        "Administrator (the server's PDF converter may not be installed).",
+    )
+    return redirect("leave:my_applications")
+
+
 @login_required
 def print_csc_form6(request, pk):
     """
@@ -214,7 +230,10 @@ def print_csc_form6(request, pk):
     if application.leave_type.requires_full_routing:
         raise PermissionDenied("COSP Leave prints on the custom COSP leave form, not CSC Form 6.")
 
-    pdf_bytes = render_csc_form6_pdf(application)
+    try:
+        pdf_bytes = render_csc_form6_pdf(application)
+    except RuntimeError as exc:
+        return _pdf_unavailable(request, exc)
     filename = f"CSC-Form-6_{application.employee.surname}_{application.pk}.pdf"
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = f'inline; filename="{filename}"'
@@ -237,7 +256,10 @@ def print_cosp_leave_form(request, pk):
     if not application.leave_type.requires_full_routing:
         raise PermissionDenied("This leave type prints on CSC Form 6, not the COSP leave form.")
 
-    pdf_bytes = render_cosp_leave_form_pdf(application)
+    try:
+        pdf_bytes = render_cosp_leave_form_pdf(application)
+    except RuntimeError as exc:
+        return _pdf_unavailable(request, exc)
     filename = f"COSP-Leave-Form_{application.employee.surname}_{application.pk}.pdf"
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = f'inline; filename="{filename}"'

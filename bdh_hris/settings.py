@@ -35,6 +35,12 @@ DEBUG = os.environ.get("BDH_HRIS_DEBUG", "0") == "1"
 
 ALLOWED_HOSTS = os.environ.get("BDH_HRIS_ALLOWED_HOSTS", "*").split(",")
 
+# Full path to LibreOffice's executable (soffice.exe on Windows), used to
+# turn the filled CSC Form 6 / COSP Leave form into a PDF. Blank = look for
+# it on PATH and in LibreOffice's usual install folders (see
+# leave/pdf_convert.py). Set this only if it's installed somewhere unusual.
+LIBREOFFICE_PATH = os.environ.get("BDH_HRIS_LIBREOFFICE_PATH", "")
+
 # Only needed if the app is ever put behind a reverse proxy or reached by a
 # hostname where the browser's Origin header wouldn't otherwise match
 # ALLOWED_HOSTS (Django's CSRF check requires this since Django 4). Empty by

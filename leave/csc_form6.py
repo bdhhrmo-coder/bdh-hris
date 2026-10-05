@@ -18,12 +18,12 @@ payroll-adjacent concept, out of Phase 4's scope) — this always marks
 "Not Requested" as a placeholder default. Flagged here, not hidden.
 """
 
-import subprocess
-import tempfile
 from copy import copy
 from pathlib import Path
 
 import openpyxl
+
+from .pdf_convert import workbook_to_pdf
 
 TEMPLATE_PATH = Path(__file__).parent / "form_templates" / "CSC_Form_6_blank.xlsx"
 
@@ -93,19 +93,6 @@ def fill_csc_form6(application):
 
 
 def render_pdf(application) -> bytes:
-    """Fills the form and converts it to PDF bytes via headless LibreOffice."""
-    wb = fill_csc_form6(application)
-    with tempfile.TemporaryDirectory() as tmpdir:
-        xlsx_path = Path(tmpdir) / "form.xlsx"
-        wb.save(xlsx_path)
-        result = subprocess.run(
-            [
-                "libreoffice", "--headless", "--norestore",
-                "--convert-to", "pdf", "--outdir", tmpdir, str(xlsx_path),
-            ],
-            capture_output=True, timeout=60,
-        )
-        pdf_path = Path(tmpdir) / "form.pdf"
-        if not pdf_path.exists():
-            raise RuntimeError(f"CSC Form 6 PDF conversion failed: {result.stderr.decode(errors='replace')}")
-        return pdf_path.read_bytes()
+    """Fills the form and converts it to PDF bytes via headless LibreOffice
+    (see leave/pdf_convert.py for how the executable is located)."""
+    return workbook_to_pdf(fill_csc_form6(application), "CSC Form 6")

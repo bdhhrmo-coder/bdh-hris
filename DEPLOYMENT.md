@@ -24,6 +24,14 @@ Install these on the Windows Server first:
   `C:\Tools\nssm-2.24\`. There is no installer; you'll either add its `win64`
   folder to your PATH or point the install script at it directly.
 
+- **LibreOffice** (free, from libreoffice.org) - needed only for printing the
+  leave forms (CSC Form 6 and the COSP Leave form) as PDF. Without it,
+  everything else works, but "Print" on a leave application shows a
+  message asking the user to contact the System Administrator. The app
+  looks for `soffice.exe` on PATH and in the usual install folders
+  (`C:\Program Files\LibreOffice\program\`). If you installed it
+  somewhere else, set `BDH_HRIS_LIBREOFFICE_PATH` in `.env` (see step 3).
+
 You do **not** need IIS, nginx, or Docker Desktop.
 
 ---
@@ -55,7 +63,8 @@ Fill in, at minimum:
   ```powershell
   .venv\Scripts\python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
   ```
-- `BDH_HRIS_DEBUG=0`
+- `BDH_HRIS_DEBUG=0` - debug is **off by default** if this line is missing;
+  never set it to `1` on the real server
 - `BDH_HRIS_ALLOWED_HOSTS` - the hostname(s)/IP staff will use to reach it,
   e.g. `bdh-hris,10.20.30.40`
 - `BDH_HRIS_DB_NAME`, `BDH_HRIS_DB_USER`, `BDH_HRIS_DB_PASSWORD` - matching
@@ -64,12 +73,18 @@ Fill in, at minimum:
   (medical certificates, IDs). These are confidential (CLAUDE.md §10); put
   this outside any web-served folder and restrict its NTFS permissions to
   the account the service runs as.
-- `BDH_HRIS_BACKUP_DIR` - see §6 below
+- `BDH_HRIS_BACKUP_DIR` - see §8 below
+- `BDH_HRIS_LIBREOFFICE_PATH` - **optional.** Full path to `soffice.exe`,
+  only if LibreOffice is installed in a non-standard folder, e.g.
+  `C:\Tools\LibreOffice\program\soffice.exe`. Leave blank otherwise.
 
 See every setting's comment in `.env.example` for details - don't guess at
 one that isn't clear; ask the project owner.
 
 ## 4. Initialize the database and static files
+
+(On a brand-new empty database there is nothing to back up yet. Every
+migrate after real data exists must be preceded by a backup - see §9.)
 
 ```powershell
 .venv\Scripts\python manage.py migrate
@@ -193,6 +208,16 @@ login page.
 
 **Deploying a code update:**
 
+**Always back up the database first** - a migration changes the database
+structure and cannot be casually undone. Run the backup by hand, and check
+that a new `.sql` file appeared before continuing:
+
+```powershell
+C:\BDH-HRIS\scripts\run_backup.bat
+```
+
+Then update:
+
 ```powershell
 cd C:\BDH-HRIS
 git pull
@@ -236,8 +261,12 @@ open items the project owner already flagged:
 - [ ] Submitted one of each request type end-to-end (Leave, CTO, Exchange
       of Duty, Attendance Correction, Official Business/Time/Travel/OT) and
       confirmed it routes and prints correctly
-- [ ] Confirmed `BDH_HRIS_DEBUG=0` in the real `.env` (a stray `DEBUG=1` in
-      production would leak internal details in error pages)
+- [ ] Confirmed `BDH_HRIS_DEBUG` is `0` (or absent) in the real `.env` (a
+      stray `DEBUG=1` in production would leak internal details in error pages)
+- [ ] Printed one CSC Form 6 and one COSP Leave form as PDF and confirmed
+      they open (this proves LibreOffice is installed and found)
+- [ ] Took a backup before the first `migrate` on the server, and before
+      every update after that (see §9)
 - [ ] Ran the backup once by hand and confirmed a real `.sql` file appears
 - [ ] Rebooted the server once and confirmed the BDH-HRIS service comes
       back up on its own, with no one needing to log in and start it
