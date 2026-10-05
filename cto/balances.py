@@ -43,12 +43,14 @@ anchor-date question was):
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
+from django.conf import settings
 from django.db.models import Sum
 
 MONTHLY_USAGE_CAP_DAYS = Decimal("5")
 MAX_CONSECUTIVE_DAYS = 2  # "no 3+ consecutive days" -> at most 2 in a row
-USAGE_CUTOFF_MONTH_DAY = (12, 15)  # December 15
-FILING_DEADLINE_MONTH_DAY = (11, 30)  # November 30
+# The Nov 30 filing deadline and Dec 15 usage cutoff live in settings
+# (CTO_FILING_DEADLINE_MONTH_DAY / CTO_USAGE_CUTOFF_MONTH_DAY) and are read
+# at call time, so a settings change takes effect without a code edit.
 
 
 def compute_credit(hours_worked, is_restday_or_holiday, multiplier_rate, shift_hours):
@@ -161,12 +163,29 @@ def forms_illegal_consecutive_run(employee, start_date, end_date, exclude_applic
 
 def violates_usage_cutoff(end_date):
     """True if end_date falls after December 15 of its own year."""
-    cutoff = date(end_date.year, *USAGE_CUTOFF_MONTH_DAY)
+    cutoff = date(end_date.year, *settings.CTO_USAGE_CUTOFF_MONTH_DAY)
     return end_date > cutoff
 
 
 def violates_filing_deadline(work_date, filed_date):
     """True if a credit claim for work_date is being filed after that
     year's November 30 deadline."""
-    deadline = date(work_date.year, *FILING_DEADLINE_MONTH_DAY)
+    deadline = date(work_date.year, *settings.CTO_FILING_DEADLINE_MONTH_DAY)
     return filed_date > deadline
+
+
+def filing_window_opens(work_date):
+    """First day a CTO claim for work_date may be filed: the 1st of the
+    following month (§7: "claims filed the month after the compensable
+    workday"). Confirmed 2026-09-28 as "no earlier than next month" — the
+    window then stays open until that year's filing deadline, so November
+    and December work cannot be claimed without a COH exception."""
+    if work_date.month == 12:
+        return date(work_date.year + 1, 1, 1)
+    return date(work_date.year, work_date.month + 1, 1)
+
+
+def filed_too_early(work_date, filed_date):
+    """True if a claim for work_date is being filed before its filing
+    window opens (see filing_window_opens)."""
+    return filed_date < filing_window_opens(work_date)

@@ -19,12 +19,17 @@ class CTOMultiplierRateAdmin(admin.ModelAdmin):
 @admin.register(CTOCreditEntry)
 class CTOCreditEntryAdmin(admin.ModelAdmin):
     list_display = (
-        "employee", "work_date", "duty_type", "hours_worked", "is_restday_or_holiday",
+        "employee", "work_date", "status", "ot_request", "duty_type", "hours_worked", "is_restday_or_holiday",
         "multiplier_applied", "credited_hours", "credited_days", "recorded_by",
     )
-    list_filter = ("duty_type", "is_restday_or_holiday")
+    list_filter = ("status", "duty_type", "is_restday_or_holiday")
     search_fields = ("employee__surname", "employee__employee_id")
-    readonly_fields = ("multiplier_applied", "credited_hours", "credited_days", "shift_hours_used", "recorded_by")
+    # status is read-only so a claim can't be marked CREDITED here without
+    # passing the §7 checks and creating its ledger row (cto/claims.py).
+    readonly_fields = (
+        "status", "multiplier_applied", "credited_hours", "credited_days", "shift_hours_used",
+        "recorded_by", "credited_by", "credited_at",
+    )
     inlines = [UploadedDocumentInline]
 
 

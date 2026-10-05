@@ -31,20 +31,21 @@
 </div>
 
 <div class="card">
-  <h2 style="margin-top:0;">My CTO credit entries</h2>
-  <p style="color:var(--gray-600);">Upload your Allowed to Work form, DTR/logbook copy, and OT Accomplishment Report here (or, for Medical Transport, your Trip Ticket and Certificate of Appearance/logbook).</p>
+  <h2 style="margin-top:0;">My CTO claims</h2>
+  <p style="color:var(--gray-600);">HR files a claim for each workday of your approved OT. Upload your Allowed to Work form, DTR/logbook copy, and OT Accomplishment Report here (or, for Medical Transport, your Trip Ticket and Certificate of Appearance/logbook). CTO is credited only after HR submits the claim.</p>
   <table>
-    <tr><th>Work date</th><th>Duty type</th><th>Hours</th><th>Credited days</th><th>Documents</th></tr>
+    <tr><th>Work date</th><th>Duty type</th><th>Hours</th><th>Credited days</th><th>Status</th><th>Documents</th></tr>
     {% for e in credit_entries %}
     <tr>
       <td>{{ e.work_date }}</td>
       <td>{{ e.get_duty_type_display }}</td>
       <td>{{ e.hours_worked }}</td>
-      <td>{{ e.credited_days }}</td>
+      <td>{% if e.status == "CREDITED" %}{{ e.credited_days }}{% else %}—{% endif %}</td>
+      <td><a href="{% url 'cto:claim_detail' e.pk %}">{{ e.get_status_display }}</a></td>
       <td><a href="{% documents_url e %}">Documents</a></td>
     </tr>
     {% empty %}
-    <tr><td colspan="5" class="empty-note">No CTO credit entries recorded yet.</td></tr>
+    <tr><td colspan="6" class="empty-note">No CTO claims yet.</td></tr>
     {% endfor %}
   </table>
 </div>

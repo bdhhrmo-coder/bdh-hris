@@ -5,7 +5,6 @@ from django.test import Client, TestCase
 from django.urls import reverse
 
 from accounts.models import RoleAssignment
-from cto.models import CTOCreditEntry
 from employees.models import Employee
 from leave.models import LeaveType
 from leave.permissions import employees_with_role, hr_employees, supervisors_of
@@ -158,19 +157,20 @@ class ExchangeNotificationIntegrationTests(TestCase):
 
 
 class CTONotificationIntegrationTests(TestCase):
-    def test_credit_entry_notifies_employee(self):
+    def test_credited_claim_notifies_employee(self):
+        from unittest.mock import patch
+
+        from cto.tests import _FakeDate, make_approved_ot, make_draft_claim, upload_all_required
+
         hr = make_employee("ctonotif_hr", "EMP-CN-1", role=RoleAssignment.HR_PROCESSOR)
         employee = make_employee("ctonotif_emp", "EMP-CN-2")
+        ot = make_approved_ot(employee, date(2026, 3, 5), date(2026, 3, 5), "8")
+        entry = make_draft_claim(ot, date(2026, 3, 5), "8", hr.user)
+        upload_all_required(entry, hr.user)
         client = Client()
         client.login(username="ctonotif_hr", password="testpass123")
-        client.post(reverse("cto:credit_entry_create"), {
-            "employee": employee.pk,
-            "work_date": "2026-03-05",
-            "duty_type": CTOCreditEntry.DUTY_REGULAR,
-            "hours_worked": "8.00",
-            "is_restday_or_holiday": False,
-            "notes": "",
-        })
+        with patch("cto.views.date", _FakeDate):
+            client.post(reverse("cto:claim_submit", args=[entry.pk]))
         self.assertTrue(Notification.objects.filter(recipient=employee, message__icontains="credited").exists())
         self.assertFalse(Notification.objects.filter(recipient=hr).exists())
 

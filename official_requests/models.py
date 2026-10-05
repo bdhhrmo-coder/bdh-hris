@@ -14,14 +14,11 @@ ROUTING_CONFIG):
   - Travel:                   Employee -> Supervisor -> AO -> COH (no HR step)
   - Authorized OT/restday/holiday work: Employee -> Supervisor -> HR -> AO -> COH
 
-Deliberately NOT wired here (per the Build Order's "no special business
-rules yet"): an approved OT_RESTDAY_HOLIDAY request does not yet create a
-cto.CTOCreditEntry automatically, even though cto/models.py's module
-docstring flags this as the natural next step once this phase existed.
-HR still records CTO credit by hand (cto.credit_entry_create) for now;
-wiring approval here to auto-credit CTO is real business logic beyond
-this phase's stated scope, and should be its own confirmed decision,
-not folded in silently.
+Settled 2026-09-28 (CLAUDE.md §7): approving an OT_RESTDAY_HOLIDAY request
+does NOT create CTO credit. HR files a separate CTO claim per workday from
+the approved request (cto.CTOCreditEntry.ot_request links back here), and
+CTO is credited only when that claim is submitted with its required
+documents — see cto/claims.py. Nothing in this app touches CTO.
 """
 
 from django.conf import settings

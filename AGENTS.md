@@ -1,6 +1,6 @@
-# CLAUDE.md — Bataraza District Hospital (BDH) HRIS
+# AGENTS.md — Bataraza District Hospital (BDH) HRIS
 
-This file gives Claude Code persistent context for this project. Read this before making changes. Business rules here reflect actual approved BDH policy — do not alter leave, CTO, or approval logic without explicit confirmation from the project owner.
+This file gives Codex persistent context for this project. Read this before making changes. Business rules here reflect actual approved BDH policy — do not alter leave, CTO, or approval logic without explicit confirmation from the project owner.
 
 ---
 
@@ -270,7 +270,7 @@ Do not attempt to build this in one pass. Suggested phase order:
 
 ---
 
-## 15. General Working Rules for Claude Code on This Project
+## 15. General Working Rules for Codex on This Project
 
 - Never guess at business rules in Sections 6–10 — they reflect actual signed BDH policy. If a rule seems ambiguous or conflicting, stop and ask rather than assuming.
 - Treat Regular Leave's "data-entry only" status as a hard constraint, not a simplification to "fix" later.

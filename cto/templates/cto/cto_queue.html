@@ -3,6 +3,7 @@
 {% block title %}CTO queue — BDH HRIS{% endblock %}
 {% block content %}
 <h1>CTO applications awaiting my action</h1>
+{% if is_hr %}<p><a href="{% url 'cto:claims_home' %}">CTO claims from approved OT &rarr;</a></p>{% endif %}
 <div class="card">
 <table>
   <tr><th>Employee</th><th>Dates</th><th>Days</th><th>Reason</th><th>Status</th><th>Action</th></tr>

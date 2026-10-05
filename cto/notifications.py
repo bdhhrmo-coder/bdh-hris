@@ -54,8 +54,9 @@ def notify_status_change(application):
 
 
 def notify_credit_entry(entry):
-    """HR's direct-entry screen (credit_entry_create) has no routing chain
-    to notify along — just the one employee who just got credited."""
+    """Sent when a CTO claim is submitted and credited (cto.claims.
+    credit_claim) — there's no routing chain to notify along, just the
+    one employee who just got credited."""
     notify(
         entry.employee,
         f"You were credited {entry.credited_days} CTO day(s) for {entry.get_duty_type_display()} on {entry.work_date}.",

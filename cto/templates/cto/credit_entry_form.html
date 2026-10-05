@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Record CTO credit — BDH HRIS{% endblock %}
+{% block title %}Exception CTO claim — BDH HRIS{% endblock %}
 {% block content %}
-<h1>Record CTO credit</h1>
-<p style="color:var(--gray-600);">For a verified OT / rest-day / holiday claim, after checking the Allowed to Work form, DTR/logbook copy, and OT Accomplishment Report.</p>
+<h1>Exception CTO claim</h1>
+<p style="color:var(--gray-600);">HR Administrator only. For credit with no approved OT request behind it (e.g. certified emergency duty). A reason is required. This saves a draft; it goes through the same document and filing-date checks as any other claim before anything is credited.</p>
 
 <div class="card">
   <form method="post">
     {% csrf_token %}
     {{ form.as_p }}
-    <button type="submit">Record credit</button>
+    <button type="submit">Save draft claim</button>
   </form>
 </div>
 {% endblock %}

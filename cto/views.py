@@ -1,18 +1,26 @@
 from datetime import date
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
+
+from documents.models import UploadedDocument
+from documents.requirements import requirement_status_for
+from official_requests.models import OfficialRequest
 
 from .balances import (
     compute_available_cto_balance,
     exceeds_monthly_cap,
+    filing_window_opens,
     forms_illegal_consecutive_run,
     violates_filing_deadline,
     violates_usage_cutoff,
 )
-from .forms import CTOCreditEntryForm, CTOUsageApplicationForm
+from .claims import claim_submission_errors, claimable_ot_requests, credit_claim, remaining_claimable_hours
+from .forms import CTOClaimForm, CTOExceptionClaimForm, CTOUsageApplicationForm
 from .models import CTOCreditEntry, CTOCreditTransaction, CTOUsageApplication, CTOUsageApplicationAction
 from .notifications import notify_credit_entry, notify_status_change
 from .permissions import (
@@ -27,46 +35,157 @@ from .permissions import (
 )
 
 
+def _save_draft_claim(form, user):
+    entry = form.save(commit=False)
+    entry.status = CTOCreditEntry.DRAFT
+    entry.multiplier_applied = form.cleaned_data["_multiplier_applied"]
+    entry.credited_hours = form.cleaned_data["_credited_hours"]
+    entry.credited_days = form.cleaned_data["_credited_days"]
+    entry.shift_hours_used = form.cleaned_data["_shift_hours_used"]
+    entry.recorded_by = user
+    entry.full_clean()
+    entry.save()
+    return entry
+
+
+def _deadline_error(form, work_date):
+    """A draft that could never be submitted isn't worth creating."""
+    if work_date and violates_filing_deadline(work_date, date.today()):
+        deadline = date(work_date.year, *settings.CTO_FILING_DEADLINE_MONTH_DAY)
+        form.add_error(
+            "work_date",
+            f"The filing deadline for {work_date.year} work ({deadline:%B %d, %Y}) has passed. "
+            "A Chief of Hospital exception is required.",
+        )
+        return True
+    return False
+
+
 @login_required
-def credit_entry_create(request):
-    """HR's direct-entry screen for a verified OT/rest-day/holiday claim."""
+def claims_home(request):
+    """HR's CTO claims screen: approved OT requests still open for claims,
+    draft claims awaiting documents/submission, and recent credited ones."""
     acting_employee = get_acting_employee(request.user)
     if not is_hr(acting_employee):
-        raise PermissionDenied("Only HR may record a CTO credit entry.")
+        raise PermissionDenied("Only HR may file CTO claims.")
+    return render(request, "cto/claims_home.html", {
+        "ot_requests": claimable_ot_requests(),
+        "drafts": CTOCreditEntry.objects.filter(status=CTOCreditEntry.DRAFT).select_related("employee", "ot_request"),
+        "recent_credited": CTOCreditEntry.objects.filter(status=CTOCreditEntry.CREDITED)
+        .select_related("employee", "ot_request").order_by("-credited_at")[:20],
+        "can_file_exception": acting_employee.is_hr_administrator(),
+    })
+
+
+@login_required
+def claim_create(request, ot_pk):
+    """File a draft CTO claim for one workday of an approved OT request."""
+    acting_employee = get_acting_employee(request.user)
+    if not is_hr(acting_employee):
+        raise PermissionDenied("Only HR may file CTO claims.")
+    ot_request = get_object_or_404(
+        OfficialRequest, pk=ot_pk, request_type=OfficialRequest.OT_RESTDAY_HOLIDAY, status=OfficialRequest.APPROVED
+    )
+    if not is_cto_eligible(ot_request.employee):
+        raise PermissionDenied("CTO is not applicable to the Chief of Hospital.")
 
     if request.method == "POST":
-        form = CTOCreditEntryForm(request.POST)
-        if form.is_valid():
-            work_date = form.cleaned_data["work_date"]
-            if violates_filing_deadline(work_date, date.today()):
-                form.add_error(
-                    "work_date",
-                    f"This claim is for work in {work_date.year} but the November 30, {work_date.year} "
-                    "filing deadline has passed. A Chief of Hospital exception is required.",
-                )
-            else:
-                entry = form.save(commit=False)
-                entry.multiplier_applied = form.cleaned_data["_multiplier_applied"]
-                entry.credited_hours = form.cleaned_data["_credited_hours"]
-                entry.credited_days = form.cleaned_data["_credited_days"]
-                entry.shift_hours_used = form.cleaned_data["_shift_hours_used"]
-                entry.recorded_by = request.user
-                entry.full_clean()
-                entry.save()
-                CTOCreditTransaction.objects.create(
-                    employee=entry.employee,
-                    transaction_type=CTOCreditTransaction.EARNED,
-                    days=entry.credited_days,
-                    transaction_date=entry.work_date,
-                    credit_entry=entry,
-                    created_by=request.user,
-                )
-                notify_credit_entry(entry)
-                messages.success(request, f"Credited {entry.credited_days} CTO day(s) to {entry.employee}.")
-                return redirect("cto:credit_entry_create")
+        form = CTOClaimForm(request.POST, ot_request=ot_request)
+        if form.is_valid() and not _deadline_error(form, form.cleaned_data["work_date"]):
+            entry = _save_draft_claim(form, request.user)
+            messages.success(request, "Draft claim saved. Upload the required documents, then submit it.")
+            return redirect("cto:claim_detail", pk=entry.pk)
     else:
-        form = CTOCreditEntryForm()
+        form = CTOClaimForm(ot_request=ot_request)
+    return render(request, "cto/claim_form.html", {
+        "form": form, "ot_request": ot_request, "remaining_hours": remaining_claimable_hours(ot_request),
+    })
+
+
+@login_required
+def credit_entry_create(request):
+    """HR Administrator only: an exception claim with no OT request behind
+    it. Saved as a draft; credited only through claim_submit like any
+    other claim."""
+    acting_employee = get_acting_employee(request.user)
+    if acting_employee is None or not acting_employee.is_hr_administrator():
+        raise PermissionDenied("Only an HR Administrator may file an exception CTO claim.")
+
+    if request.method == "POST":
+        form = CTOExceptionClaimForm(request.POST)
+        if form.is_valid() and not _deadline_error(form, form.cleaned_data["work_date"]):
+            entry = _save_draft_claim(form, request.user)
+            messages.success(request, "Draft exception claim saved. Upload the required documents, then submit it.")
+            return redirect("cto:claim_detail", pk=entry.pk)
+    else:
+        form = CTOExceptionClaimForm()
     return render(request, "cto/credit_entry_form.html", {"form": form})
+
+
+@login_required
+def claim_detail(request, pk):
+    acting_employee = get_acting_employee(request.user)
+    entry = get_object_or_404(CTOCreditEntry.objects.select_related("employee", "ot_request"), pk=pk)
+    hr = is_hr(acting_employee)
+    if not hr and not (acting_employee is not None and acting_employee.pk == entry.employee_id):
+        raise PermissionDenied("You are not authorized to view this CTO claim.")
+    is_draft = entry.status == CTOCreditEntry.DRAFT
+    return render(request, "cto/claim_detail.html", {
+        "entry": entry,
+        "requirement_status": requirement_status_for(entry),
+        "submission_errors": claim_submission_errors(entry, date.today()) if is_draft else [],
+        "filing_window_opens": filing_window_opens(entry.work_date),
+        "filing_deadline": date(entry.work_date.year, *settings.CTO_FILING_DEADLINE_MONTH_DAY),
+        "is_hr": hr,
+        "can_act": hr and is_draft,
+        "can_discard": hr and is_draft and not _has_documents(entry),
+    })
+
+
+def _has_documents(entry):
+    return UploadedDocument.objects.filter(
+        content_type=ContentType.objects.get_for_model(entry), object_id=entry.pk, is_active=True
+    ).exists()
+
+
+@login_required
+def claim_submit(request, pk):
+    """The only place a CTO claim credits the ledger — and only if every
+    §7 check in cto/claims.py passes."""
+    if request.method != "POST":
+        return redirect("cto:claim_detail", pk=pk)
+    acting_employee = get_acting_employee(request.user)
+    if not is_hr(acting_employee):
+        raise PermissionDenied("Only HR may submit CTO claims.")
+    entry = get_object_or_404(CTOCreditEntry, pk=pk)
+
+    errors = credit_claim(entry, request.user, date.today())
+    if errors:
+        for error in errors:
+            messages.error(request, error)
+    else:
+        entry.refresh_from_db()
+        notify_credit_entry(entry)
+        messages.success(request, f"Credited {entry.credited_days} CTO day(s) to {entry.employee}.")
+    return redirect("cto:claim_detail", pk=pk)
+
+
+@login_required
+def claim_discard(request, pk):
+    """Discard a mistaken draft. Only while no documents are attached, so
+    the upload audit trail never points at a deleted claim."""
+    if request.method != "POST":
+        return redirect("cto:claim_detail", pk=pk)
+    acting_employee = get_acting_employee(request.user)
+    if not is_hr(acting_employee):
+        raise PermissionDenied("Only HR may discard CTO claims.")
+    entry = get_object_or_404(CTOCreditEntry, pk=pk, status=CTOCreditEntry.DRAFT)
+    if _has_documents(entry):
+        messages.error(request, "This draft has documents attached and can't be discarded.")
+        return redirect("cto:claim_detail", pk=pk)
+    entry.delete()
+    messages.success(request, "Draft claim discarded.")
+    return redirect("cto:claims_home")
 
 
 @login_required
@@ -99,7 +218,8 @@ def cto_apply(request):
             days = form.cleaned_data["number_of_days"]
 
             if violates_usage_cutoff(end):
-                form.add_error("end_date", f"CTO usage cannot extend past December 15, {end.year}.")
+                cutoff = date(end.year, *settings.CTO_USAGE_CUTOFF_MONTH_DAY)
+                form.add_error("end_date", f"CTO usage cannot extend past {cutoff:%B %d, %Y}.")
             elif exceeds_monthly_cap(acting_employee, start, days):
                 form.add_error(None, "This would exceed the 5-CTO-day-per-month usage cap.")
             elif forms_illegal_consecutive_run(acting_employee, start, end):
@@ -127,7 +247,7 @@ def cto_apply(request):
 def cto_queue(request):
     acting_employee = get_acting_employee(request.user)
     applications = visible_cto_applications_for(acting_employee).select_related("employee")
-    return render(request, "cto/cto_queue.html", {"applications": applications})
+    return render(request, "cto/cto_queue.html", {"applications": applications, "is_hr": is_hr(acting_employee)})
 
 
 def _finalize_success(application, actor_user):
