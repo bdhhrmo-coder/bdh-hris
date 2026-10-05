@@ -16,6 +16,9 @@
 */
 
 :root {
+  /* Top bar height - shared by the bar, the sidebar offset and the main
+     content offset so they always line up. */
+  --topbar-h: 64px;
   --navy-900: #0b2c4d;
   --navy-800: #123a63;
   --navy-700: #1a4b7a;
@@ -85,7 +88,7 @@ h2 { font-size: 1.15rem; margin-top: 1.6em; }
 .app-topbar {
   position: fixed;
   top: 0; left: 0; right: 0;
-  height: 56px;
+  height: var(--topbar-h);
   background: var(--navy-900);
   color: #fff;
   display: flex;
@@ -97,7 +100,7 @@ h2 { font-size: 1.15rem; margin-top: 1.6em; }
 }
 
 .app-topbar .brand-logo {
-  height: 40px;
+  height: 50px;
   width: auto;
   flex-shrink: 0;
   display: block;
@@ -126,7 +129,7 @@ h2 { font-size: 1.15rem; margin-top: 1.6em; }
 
 .app-sidebar {
   position: fixed;
-  top: 56px; bottom: 0; left: 0;
+  top: var(--topbar-h); bottom: 0; left: 0;
   width: 216px;
   background: #fff;
   border-right: 1px solid var(--gray-200);
@@ -171,7 +174,7 @@ h2 { font-size: 1.15rem; margin-top: 1.6em; }
 
 .app-main {
   margin-left: 216px;
-  margin-top: 56px;
+  margin-top: var(--topbar-h);
   padding: 1.5rem 2rem 3rem;
   width: 100%;
   max-width: 1200px;
@@ -189,7 +192,7 @@ h2 { font-size: 1.15rem; margin-top: 1.6em; }
 }
 
 @media (max-width: 480px) {
-  .app-topbar .brand-logo { height: 30px; }
+  .app-topbar .brand-logo { height: 38px; }
   .app-topbar { gap: 0.5rem; padding: 0 0.85rem; }
 }
 
