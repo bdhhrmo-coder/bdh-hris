@@ -170,23 +170,47 @@ file, ideally on a different drive than the OS/database. This project ships
 `scripts/backup_db.py` (does the dump) and `scripts/run_backup.bat` (a
 Task Scheduler-friendly wrapper).
 
-Register it once, from an elevated PowerShell/Command Prompt:
+Register it once, from an **elevated** (Run as Administrator) PowerShell
+prompt. Change the two paths if the project isn't at `C:\BDH-HRIS`:
 
 ```powershell
-schtasks /create /tn "BDH HRIS Nightly Backup" /tr "C:\BDH-HRIS\scripts\run_backup.bat" /sc daily /st 02:00 /ru SYSTEM
+$name = "BDH HRIS Nightly Backup"
+$bat  = 'C:\BDH-HRIS\scripts\run_backup.bat'
+$action    = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument "/c `"$bat`"" -WorkingDirectory 'C:\BDH-HRIS\scripts'
+$trigger   = New-ScheduledTaskTrigger -Daily -At 2:00AM
+$settings  = New-ScheduledTaskSettingsSet -WakeToRun -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 1)
+$principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+Register-ScheduledTask -TaskName $name -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force
 ```
 
-(`/st 02:00` = 2:00 AM; change to whatever fits the hospital's quiet hours.
-`/ru SYSTEM` runs it without needing a specific user's password stored -
-fine as long as the SYSTEM account can reach PostgreSQL and the backup
-folder; if PostgreSQL is set to only trust specific Windows users, use
-`/ru <a-service-account>` instead and you'll be prompted for its password.)
+Why it's set up this way (each of these broke the backup on the test PC):
 
-Verify it once by hand:
+- **The script path is quoted.** If the project folder has a space in its
+  path (e.g. `C:\Users\WINDOWS 11\...`), an unquoted path makes Windows
+  look for the wrong file, and the task fails without writing anything to
+  `backup.log`. The older `schtasks /create /tr ...` form did exactly this.
+- **`-WakeToRun`** lets the task wake the computer if it has gone to sleep.
+  Better still, set the server's power plan to **never sleep** - a server
+  that sleeps also stops serving the HRIS to staff.
+- **`-StartWhenAvailable`** runs a missed backup as soon as the computer is
+  back on, instead of skipping that night.
+- **SYSTEM** runs it without storing anyone's password. This works because
+  `.env` gives the full `pg_dump` path (`BDH_HRIS_PG_DUMP_PATH`) and the
+  database password - the SYSTEM account doesn't have PostgreSQL on its PATH.
+
+(`2:00AM` - change to whatever fits the hospital's quiet hours.)
+
+Verify it once **as the task itself**, not just by running the .bat by hand
+(running it by hand doesn't test the task's path, account or settings):
 
 ```powershell
-C:\BDH-HRIS\scripts\run_backup.bat
+Start-ScheduledTask -TaskName "BDH HRIS Nightly Backup"
+Start-Sleep 25
+Get-ScheduledTaskInfo -TaskName "BDH HRIS Nightly Backup" | Select-Object LastRunTime, LastTaskResult, NextRunTime
 ```
+
+`LastTaskResult` must be `0`. Then, the morning after the first scheduled
+night, check that a backup with a ~2:00 AM timestamp exists.
 
 Check `%BDH_HRIS_BACKUP_DIR%\backup.log` afterward for an `OK` line and a
 new `hris_backup_YYYY-MM-DD_HHMMSS.sql` file.
@@ -267,6 +291,8 @@ open items the project owner already flagged:
       they open (this proves LibreOffice is installed and found)
 - [ ] Took a backup before the first `migrate` on the server, and before
       every update after that (see §9)
-- [ ] Ran the backup once by hand and confirmed a real `.sql` file appears
+- [ ] Ran the backup once **as the scheduled task** (`LastTaskResult` 0) and
+      confirmed a real `.sql` file appears; the next morning, confirmed the
+      ~2:00 AM backup ran on its own
 - [ ] Rebooted the server once and confirmed the BDH-HRIS service comes
       back up on its own, with no one needing to log in and start it
