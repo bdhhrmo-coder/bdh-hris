@@ -11,6 +11,8 @@ from documents.models import UploadedDocument
 from documents.requirements import requirement_status_for
 from official_requests.models import OfficialRequest
 
+from printouts.http import pdf_response
+
 from .balances import (
     compute_available_cto_balance,
     exceeds_monthly_cap,
@@ -344,3 +346,18 @@ def cto_action(request, pk):
         raise PermissionDenied("You are not authorized to take this action on this application.")
 
     return redirect("cto:cto_queue")
+
+
+@login_required
+def print_cto_form(request, pk):
+    """Form No. BDH-ADM-HR-01F04-B (see cto/cto_form.py)."""
+    from .cto_form import render_pdf
+
+    acting_employee = get_acting_employee(request.user)
+    application = get_object_or_404(CTOUsageApplication, pk=pk)
+    if not can_view_cto_application(acting_employee, application):
+        raise PermissionDenied("You are not authorized to view this CTO application.")
+    return pdf_response(
+        request, lambda: render_pdf(application, printed_by=request.user),
+        f"CTO-Application_{application.employee.surname}_{application.pk}.pdf", "cto:my_cto",
+    )

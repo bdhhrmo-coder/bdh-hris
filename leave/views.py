@@ -257,7 +257,7 @@ def print_cosp_leave_form(request, pk):
         raise PermissionDenied("This leave type prints on CSC Form 6, not the COSP leave form.")
 
     try:
-        pdf_bytes = render_cosp_leave_form_pdf(application)
+        pdf_bytes = render_cosp_leave_form_pdf(application, printed_by=request.user)
     except RuntimeError as exc:
         return _pdf_unavailable(request, exc)
     filename = f"COSP-Leave-Form_{application.employee.surname}_{application.pk}.pdf"

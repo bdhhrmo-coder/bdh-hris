@@ -12,23 +12,24 @@
     <td>{{ r.date }}</td>
     <td>{{ r.get_correction_type_display }}</td>
     <td>{% if r.requested_is_absent %}Mark Absent{% else %}{{ r.requested_time_in }} – {{ r.requested_time_out }}{% endif %}</td>
-    <td>{{ r.reason }}</td>
+    <td>{% if r.correction_type == "FORMAL" %}{{ r.get_reason_category_display }}{% if r.reason %}: {% endif %}{% endif %}{{ r.reason }}</td>
     <td>{% status_badge r.status r.get_status_display %}</td>
     <td class="row-actions">
+      {% if r.correction_type == "FORMAL" %}<a href="{% url 'attendance:print_correction_form' r.pk %}" target="_blank">Print form</a>{% endif %}
       <form method="post" action="{% url 'attendance:correction_action' r.pk %}">
         {% csrf_token %}
         {% if r.correction_type == "MINOR" and r.status == "SUBMITTED" %}
           <button type="submit" name="action" value="approve">Authorize</button>
           <button type="submit" name="action" value="reject">Reject</button>
         {% elif r.status == "SUBMITTED" %}
-          <button type="submit" name="action" value="endorse">Endorse</button>
+          <button type="submit" name="action" value="validate">Validate</button>
           <button type="submit" name="action" value="reject">Reject</button>
           <button type="submit" name="action" value="return">Return</button>
         {% elif r.status == "ENDORSED_BY_SUPERVISOR" %}
           <button type="submit" name="action" value="process">Process</button>
           <button type="submit" name="action" value="reject">Reject</button>
           <button type="submit" name="action" value="return">Return</button>
-        {% elif r.status == "PROCESSED_BY_HR" %}
+        {% elif r.status == "VALIDATED" or r.status == "PROCESSED_BY_HR" %}
           <button type="submit" name="action" value="approve">Approve</button>
           <button type="submit" name="action" value="reject">Reject</button>
           <button type="submit" name="action" value="return">Return</button>

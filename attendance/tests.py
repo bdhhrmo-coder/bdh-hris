@@ -255,57 +255,111 @@ class MinorCorrectionFlowTests(TestCase):
 
 
 class FormalCorrectionFlowTests(TestCase):
-    """CLAUDE.md §6.2: Employee -> Supervisor -> HR -> AO (no COH step)."""
+    """Missed Log Justification Form, BDH-ADM-AO-01F10 Rev. 2 (owner
+    decision 2026-10-06): Employee -> ICTU Staff (Offline / Failed Attempt
+    / Wrong Button) or HR (Attended activity / Others) -> AO. No Supervisor
+    step and no COH step."""
 
     def setUp(self):
         self.employee = make_employee("formal1", "EMP-FORMAL1")
         self.supervisor = make_employee("formalsup1", "EMP-FORMALSUP1", role=RoleAssignment.SUPERVISOR)
+        self.ictu = make_employee("formalictu1", "EMP-FORMALICTU1", role=RoleAssignment.ICTU_STAFF)
         self.hr = make_employee("formalhr1", "EMP-FORMALHR1", role=RoleAssignment.HR_PROCESSOR)
         self.ao = make_employee("formalao1", "EMP-FORMALAO1", role=RoleAssignment.ADMINISTRATIVE_OFFICER)
         self.client = Client()
 
-    def test_employee_files_own_formal_correction(self):
+    def file(self, category="FAILED_ATTEMPT", reason=""):
         self.client.force_login(self.employee.user)
-        self.client.post(reverse("attendance:formal_correction_apply"), {
+        return self.client.post(reverse("attendance:formal_correction_apply"), {
             "date": "2026-05-05", "requested_time_in": "08:00", "requested_time_out": "16:00",
-            "reason": "Forgot to log in due to system outage.",
+            "reason_category": category, "reason": reason,
         })
+
+    def act(self, who, correction, action):
+        self.client.force_login(who.user)
+        return self.client.post(reverse("attendance:correction_action", args=[correction.pk]), {"action": action})
+
+    def test_employee_files_own_formal_correction(self):
+        self.file()
         correction = AttendanceCorrectionRequest.objects.get()
         self.assertEqual(correction.correction_type, AttendanceCorrectionRequest.FORMAL)
         self.assertEqual(correction.status, AttendanceCorrectionRequest.SUBMITTED)
+        self.assertEqual(correction.reason_category, "FAILED_ATTEMPT")
 
-    def test_full_chain_ends_at_ao_with_no_coh_step(self):
-        coh = make_employee("formalcoh1", "EMP-FORMALCOH1", role=RoleAssignment.CHIEF_OF_HOSPITAL)
+    def test_reason_category_must_be_chosen(self):
         self.client.force_login(self.employee.user)
         self.client.post(reverse("attendance:formal_correction_apply"), {
-            "date": "2026-05-05", "requested_time_in": "08:00", "requested_time_out": "16:00",
-            "reason": "Forgot to log in.",
+            "date": "2026-05-05", "requested_time_in": "08:00", "requested_time_out": "16:00", "reason": "x",
         })
+        self.assertFalse(AttendanceCorrectionRequest.objects.exists())
+
+    def test_attended_activity_and_others_need_details(self):
+        for category in ("ATTENDED_ACTIVITY", "OTHERS"):
+            self.file(category=category, reason="")
+        self.assertFalse(AttendanceCorrectionRequest.objects.exists())
+        self.file(category="ATTENDED_ACTIVITY", reason="DOH orientation")
+        self.assertTrue(AttendanceCorrectionRequest.objects.exists())
+
+    def test_system_reasons_are_validated_by_ictu_then_approved_by_ao(self):
+        for category in ("OFFLINE", "FAILED_ATTEMPT", "WRONG_ENTRY"):
+            AttendanceCorrectionRequest.objects.all().delete()
+            AttendanceRecord.objects.all().delete()
+            self.file(category=category)
+            correction = AttendanceCorrectionRequest.objects.get()
+            self.assertEqual(self.act(self.hr, correction, "validate").status_code, 403)  # HR is not the validator
+            self.act(self.ictu, correction, "validate")
+            correction.refresh_from_db()
+            self.assertEqual(correction.status, AttendanceCorrectionRequest.VALIDATED)
+            self.act(self.ao, correction, "approve")
+            correction.refresh_from_db()
+            self.assertEqual(correction.status, AttendanceCorrectionRequest.APPROVED)
+            self.assertTrue(AttendanceRecord.objects.filter(employee=self.employee, date=date(2026, 5, 5)).exists())
+
+    def test_activity_and_other_reasons_are_validated_by_hr(self):
+        self.file(category="OTHERS", reason="Biometric was relocated during repairs")
         correction = AttendanceCorrectionRequest.objects.get()
+        self.assertEqual(self.act(self.ictu, correction, "validate").status_code, 403)
+        self.act(self.hr, correction, "validate")
+        correction.refresh_from_db()
+        self.assertEqual(correction.status, AttendanceCorrectionRequest.VALIDATED)
 
-        self.client.force_login(self.supervisor.user)
-        self.client.post(reverse("attendance:correction_action", args=[correction.pk]), {"action": "endorse"})
-        self.client.force_login(self.hr.user)
-        self.client.post(reverse("attendance:correction_action", args=[correction.pk]), {"action": "process"})
+    def test_supervisor_and_coh_have_no_step(self):
+        coh = make_employee("formalcoh1", "EMP-FORMALCOH1", role=RoleAssignment.CHIEF_OF_HOSPITAL)
+        self.file()
+        correction = AttendanceCorrectionRequest.objects.get()
+        self.assertEqual(self.act(self.supervisor, correction, "endorse").status_code, 403)
+        self.assertEqual(self.act(self.supervisor, correction, "validate").status_code, 403)
+        self.act(self.ictu, correction, "validate")
+        self.assertEqual(self.act(coh, correction, "approve").status_code, 403)
 
-        # COH has no role in this chain — approving here should be refused.
-        self.client.force_login(coh.user)
-        response = self.client.post(reverse("attendance:correction_action", args=[correction.pk]), {"action": "approve"})
-        self.assertEqual(response.status_code, 403)
+    def test_ao_cannot_approve_before_validation(self):
+        self.file()
+        correction = AttendanceCorrectionRequest.objects.get()
+        self.assertEqual(self.act(self.ao, correction, "approve").status_code, 403)
 
-        self.client.force_login(self.ao.user)
-        self.client.post(reverse("attendance:correction_action", args=[correction.pk]), {"action": "approve"})
+    def test_queues_show_each_validator_only_their_reasons(self):
+        from .permissions import visible_correction_requests_for
+
+        self.file(category="OFFLINE")
+        self.file(category="OTHERS", reason="Seminar")
+        ictu_queue = visible_correction_requests_for(self.ictu)
+        hr_queue = visible_correction_requests_for(self.hr)
+        self.assertEqual([c.reason_category for c in ictu_queue], ["OFFLINE"])
+        self.assertEqual([c.reason_category for c in hr_queue], ["OTHERS"])
+        self.assertFalse(visible_correction_requests_for(self.supervisor).exists())
+
+    def test_old_chain_requests_can_still_finish(self):
+        correction = AttendanceCorrectionRequest.objects.create(
+            correction_type="FORMAL", employee=self.employee, date=date(2026, 5, 6), requested_time_in=time(8, 0),
+            reason="Old request", status=AttendanceCorrectionRequest.ENDORSED_BY_SUPERVISOR, filed_by=self.employee.user,
+        )
+        self.act(self.hr, correction, "process")
+        self.act(self.ao, correction, "approve")
         correction.refresh_from_db()
         self.assertEqual(correction.status, AttendanceCorrectionRequest.APPROVED)
-        self.assertTrue(AttendanceRecord.objects.filter(employee=self.employee, date=date(2026, 5, 5)).exists())
 
-    def test_hr_cannot_act_before_supervisor_endorsement(self):
-        self.client.force_login(self.employee.user)
-        self.client.post(reverse("attendance:formal_correction_apply"), {
-            "date": "2026-05-05", "requested_time_in": "08:00", "requested_time_out": "16:00",
-            "reason": "Forgot to log in.",
-        })
-        correction = AttendanceCorrectionRequest.objects.get()
-        self.client.force_login(self.hr.user)
-        response = self.client.post(reverse("attendance:correction_action", args=[correction.pk]), {"action": "process"})
-        self.assertEqual(response.status_code, 403)
+    def test_ictu_staff_sidebar_shows_only_the_correction_queue(self):
+        self.client.force_login(self.ictu.user)
+        html = self.client.get(reverse("notifications:notification_list")).content.decode()
+        self.assertIn("Attendance Correction Queue", html)
+        self.assertNotIn("Leave Queue", html)

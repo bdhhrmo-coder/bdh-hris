@@ -2,10 +2,10 @@
 the CLAUDE.md §11/§2 in-app-only-for-now rationale), split by
 correction_type the same way attendance.views.correction_action is: the
 MINOR path (HR Processor -> HR Administrator, no Supervisor/AO step) and
-the FORMAL path (Supervisor -> HR -> AO, per §6.2 — no COH step for
-attendance corrections)."""
+the FORMAL path (BDH-ADM-AO-01F10, 2026-10-06: ICTU Staff or HR validates,
+depending on the reason, then the AO approves - no COH step)."""
 
-from leave.permissions import employees_with_role, hr_employees, supervisors_of
+from leave.permissions import employees_with_role, hr_employees
 from notifications.services import notify
 
 from .models import AttendanceCorrectionRequest
@@ -34,9 +34,19 @@ def notify_status_change(correction):
             )
     else:
         if status == AttendanceCorrectionRequest.SUBMITTED:
+            validators = (
+                employees_with_role(RoleAssignment.ICTU_STAFF) if correction.validated_by_ictu else hr_employees()
+            )
             notify(
-                supervisors_of(correction.employee),
-                f"{correction.employee} filed an attendance correction request — awaiting your endorsement.",
+                validators,
+                f"{correction.employee} filed a missed log justification ({correction.get_reason_category_display()}) "
+                "— awaiting your validation.",
+                _QUEUE_URL,
+            )
+        elif status == AttendanceCorrectionRequest.VALIDATED:
+            notify(
+                employees_with_role(RoleAssignment.ADMINISTRATIVE_OFFICER),
+                f"A validated attendance correction for {correction.employee} is awaiting your approval.",
                 _QUEUE_URL,
             )
         elif status == AttendanceCorrectionRequest.ENDORSED_BY_SUPERVISOR:

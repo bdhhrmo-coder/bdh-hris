@@ -23,9 +23,18 @@ Confirmed with the project owner on 2026-09-27:
         corrections"). If an HR Administrator files it themselves, it is
         auto-approved — there is no reason to route it back to the same
         role.
-      FORMAL: the employee themselves files it -> Supervisor endorses ->
-        HR processes -> AO approves (final — §6.2 lists no COH step for
-        this request type, unlike CTO/COSP Leave/Exchange of Duty).
+      FORMAL (changed 2026-10-06 by the project owner, to follow the
+        Missed Log Justification Form, BDH-ADM-AO-01F10): the employee
+        files it with a reason category -> ONE validator, chosen by that
+        category -> AO approves (final; no COH step).
+          Offline / Failed Attempt / Wrong Button-Invalid Entry
+              -> ICTU Staff validates (a biometric/system problem)
+          Attended meeting-activity-training / Others
+              -> HR validates
+        There is no Supervisor step (F10 has none). Requests already
+        endorsed or processed under the old Employee -> Supervisor -> HR ->
+        AO chain finish on that chain (ENDORSED_BY_SUPERVISOR /
+        PROCESSED_BY_HR are kept for them).
 
 Biometric data is advisory, not authoritative (§9): once an
 AttendanceRecord has been hand-corrected (source=MANUAL), a later
@@ -185,19 +194,38 @@ class AttendanceCorrectionRequest(models.Model):
     ]
 
     SUBMITTED = "SUBMITTED"
-    ENDORSED_BY_SUPERVISOR = "ENDORSED_BY_SUPERVISOR"
-    PROCESSED_BY_HR = "PROCESSED_BY_HR"
+    VALIDATED = "VALIDATED"
+    ENDORSED_BY_SUPERVISOR = "ENDORSED_BY_SUPERVISOR"  # old chain only
+    PROCESSED_BY_HR = "PROCESSED_BY_HR"  # old chain only
     APPROVED = "APPROVED"
     RETURNED = "RETURNED"
     REJECTED = "REJECTED"
     STATUS_CHOICES = [
         (SUBMITTED, "Submitted"),
+        (VALIDATED, "Validated"),
         (ENDORSED_BY_SUPERVISOR, "Endorsed by Supervisor"),
         (PROCESSED_BY_HR, "Processed by HR"),
         (APPROVED, "Approved"),
         (RETURNED, "Returned"),
         (REJECTED, "Rejected"),
     ]
+
+    # Reason categories, exactly as on the Missed Log Justification Form
+    # (BDH-ADM-AO-01F10). * = validated by ICTU Staff, ** = by HR.
+    REASON_OFFLINE = "OFFLINE"
+    REASON_FAILED_ATTEMPT = "FAILED_ATTEMPT"
+    REASON_WRONG_ENTRY = "WRONG_ENTRY"
+    REASON_ATTENDED_ACTIVITY = "ATTENDED_ACTIVITY"
+    REASON_OTHERS = "OTHERS"
+    REASON_CATEGORY_CHOICES = [
+        (REASON_OFFLINE, "Offline"),
+        (REASON_FAILED_ATTEMPT, "Failed Attempt"),
+        (REASON_WRONG_ENTRY, "Wrong Button Selected / Invalid Entry"),
+        (REASON_ATTENDED_ACTIVITY, "Attended meeting / activity / training / others (specify)"),
+        (REASON_OTHERS, "Others (specify)"),
+    ]
+    ICTU_VALIDATED_REASONS = {REASON_OFFLINE, REASON_FAILED_ATTEMPT, REASON_WRONG_ENTRY}
+    REASONS_NEEDING_DETAILS = {REASON_ATTENDED_ACTIVITY, REASON_OTHERS}
 
     correction_type = models.CharField(max_length=10, choices=CORRECTION_TYPE_CHOICES)
     employee = models.ForeignKey(
@@ -209,7 +237,14 @@ class AttendanceCorrectionRequest(models.Model):
     requested_is_absent = models.BooleanField(
         default=False, help_text="Check to correct this date to Absent instead of supplying times."
     )
-    reason = models.CharField(max_length=255)
+    reason_category = models.CharField(
+        "Reason", max_length=20, choices=REASON_CATEGORY_CHOICES, default=REASON_OTHERS,
+        help_text="As on the Missed Log Justification Form. Decides who validates (ICTU or HR).",
+    )
+    reason = models.CharField(
+        "Details", max_length=255, blank=True,
+        help_text="Required for 'Attended meeting/activity/training' and 'Others': say what it was.",
+    )
     status = models.CharField(max_length=25, choices=STATUS_CHOICES, default=SUBMITTED)
     filed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+",
@@ -224,7 +259,20 @@ class AttendanceCorrectionRequest(models.Model):
     def __str__(self):
         return f"{self.get_correction_type_display()} — {self.employee} {self.date} ({self.status})"
 
+    @property
+    def validated_by_ictu(self):
+        return self.reason_category in self.ICTU_VALIDATED_REASONS
+
+    @property
+    def validator_label(self):
+        return "ICTU Staff" if self.validated_by_ictu else "HR Staff"
+
     def clean(self):
+        if not self.reason.strip():
+            if self.correction_type == self.MINOR:
+                raise ValidationError({"reason": "Give the reason for this correction."})
+            if self.reason_category in self.REASONS_NEEDING_DETAILS:
+                raise ValidationError({"reason": "Please specify the meeting/activity/training or other reason."})
         if self.requested_is_absent and (self.requested_time_in or self.requested_time_out):
             raise ValidationError("Check 'mark as absent' OR give time in/out, not both.")
         if not self.requested_is_absent and not self.requested_time_in and not self.requested_time_out:

@@ -15,6 +15,7 @@
     <td>{{ a.reason }}</td>
     <td>{% status_badge a.status a.get_status_display %}</td>
     <td class="row-actions">
+      <a href="{% url 'cto:print_cto_form' a.pk %}" target="_blank">Print form</a>
       <form method="post" action="{% url 'cto:cto_action' a.pk %}">
         {% csrf_token %}
         {% if a.status == "SUBMITTED" %}

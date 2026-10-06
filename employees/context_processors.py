@@ -42,7 +42,12 @@ def nav_links(request):
         acting_employee.has_role(role) for role in _APPROVAL_ROLES
     )
 
+    # ICTU Staff only validate attendance corrections (Missed Log
+    # Justification Form, BDH-ADM-AO-01F10), so they get just that queue.
+    is_ictu_staff = acting_employee is not None and acting_employee.has_role(RoleAssignment.ICTU_STAFF)
+
     return {
         "can_list_employees": _can_list_employees(acting_employee),
         "has_approval_role": has_approval_role,
+        "is_ictu_staff": is_ictu_staff,
     }

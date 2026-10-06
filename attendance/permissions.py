@@ -1,8 +1,9 @@
 """
-Attendance Correction routing reuses the same Supervisor/HR/AO role checks
-as leave/CTO/exchange, plus HR Processor vs HR Administrator distinctions
-that §3 draws specifically for this module ("HR Administrator ...
-authorizes HR data corrections").
+Attendance Correction routing. FORMAL requests follow the Missed Log
+Justification Form (BDH-ADM-AO-01F10, owner decision 2026-10-06): ICTU
+Staff or HR validates depending on the reason, then the AO approves. MINOR
+requests keep the HR Processor -> HR Administrator path (§3: "HR
+Administrator ... authorizes HR data corrections").
 """
 
 from accounts.models import RoleAssignment
@@ -24,12 +25,26 @@ def is_hr_administrator(acting_employee):
     return acting_employee is not None and acting_employee.has_role(RoleAssignment.HR_ADMINISTRATOR)
 
 
+def is_ictu_staff(acting_employee):
+    return acting_employee is not None and acting_employee.has_role(RoleAssignment.ICTU_STAFF)
+
+
+def is_validator_for(acting_employee, correction_request):
+    """FORMAL corrections (BDH-ADM-AO-01F10): ICTU Staff validate the
+    biometric/system reasons, HR validates the rest."""
+    if correction_request.validated_by_ictu:
+        return is_ictu_staff(acting_employee)
+    return is_hr(acting_employee)
+
+
 def can_view_correction_request(acting_employee, correction_request):
     if acting_employee is None:
         return False
     if acting_employee.pk == correction_request.employee_id:
         return True
     if is_hr(acting_employee) or is_administrative_officer(acting_employee):
+        return True
+    if correction_request.validated_by_ictu and is_ictu_staff(acting_employee):
         return True
     return is_supervisor_of(acting_employee, correction_request.employee)
 
@@ -46,23 +61,20 @@ def visible_correction_requests_for(acting_employee):
             correction_type=AttendanceCorrectionRequest.MINOR, status=AttendanceCorrectionRequest.SUBMITTED
         )
 
+    formal = AttendanceCorrectionRequest.objects.filter(correction_type=AttendanceCorrectionRequest.FORMAL)
+    ictu_reasons = AttendanceCorrectionRequest.ICTU_VALIDATED_REASONS
+
+    if is_ictu_staff(acting_employee):
+        qs = qs | formal.filter(status=AttendanceCorrectionRequest.SUBMITTED, reason_category__in=ictu_reasons)
+
     if is_hr(acting_employee):
-        qs = qs | AttendanceCorrectionRequest.objects.filter(
-            correction_type=AttendanceCorrectionRequest.FORMAL,
-            status=AttendanceCorrectionRequest.ENDORSED_BY_SUPERVISOR,
-        )
+        qs = qs | formal.filter(status=AttendanceCorrectionRequest.SUBMITTED).exclude(reason_category__in=ictu_reasons)
+        # Old Supervisor -> HR -> AO chain: let requests already endorsed finish.
+        qs = qs | formal.filter(status=AttendanceCorrectionRequest.ENDORSED_BY_SUPERVISOR)
 
     if is_administrative_officer(acting_employee):
-        qs = qs | AttendanceCorrectionRequest.objects.filter(
-            correction_type=AttendanceCorrectionRequest.FORMAL, status=AttendanceCorrectionRequest.PROCESSED_BY_HR
+        qs = qs | formal.filter(
+            status__in=[AttendanceCorrectionRequest.VALIDATED, AttendanceCorrectionRequest.PROCESSED_BY_HR]
         )
-
-    supervisor_candidates = AttendanceCorrectionRequest.objects.filter(
-        correction_type=AttendanceCorrectionRequest.FORMAL, status=AttendanceCorrectionRequest.SUBMITTED
-    ).select_related("employee")
-    supervisor_ids = [
-        req.pk for req in supervisor_candidates if is_supervisor_of(acting_employee, req.employee)
-    ]
-    qs = qs | AttendanceCorrectionRequest.objects.filter(pk__in=supervisor_ids)
 
     return qs.distinct()

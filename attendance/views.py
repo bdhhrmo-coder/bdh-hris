@@ -3,18 +3,21 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 
+from printouts.http import pdf_response
+
 from .deductions import sync_undertime_deduction
 from .forms import BiometricImportForm, FormalCorrectionForm, MinorCorrectionForm
 from .importer import import_biometric_file
 from .models import AttendanceCorrectionRequest, AttendanceCorrectionRequestAction, AttendanceRecord, BiometricColumnMapping
 from .notifications import notify_status_change
 from .permissions import (
+    can_view_correction_request,
     get_acting_employee,
     is_administrative_officer,
     is_hr,
     is_hr_administrator,
     is_hr_processor,
-    is_supervisor_of,
+    is_validator_for,
     visible_correction_requests_for,
 )
 
@@ -183,16 +186,29 @@ def correction_action(request, pk):
                 allowed = True
                 apply_transition(AttendanceCorrectionRequest.REJECTED, "reject")
     else:
-        if status == AttendanceCorrectionRequest.SUBMITTED and is_supervisor_of(acting_employee, correction.employee):
-            if action == "endorse":
+        stop = lambda: apply_transition(  # noqa: E731
+            AttendanceCorrectionRequest.REJECTED if action == "reject" else AttendanceCorrectionRequest.RETURNED,
+            action,
+        )
+        if status == AttendanceCorrectionRequest.SUBMITTED and is_validator_for(acting_employee, correction):
+            # ICTU Staff (Offline / Failed Attempt / Wrong Button) or HR
+            # (Attended activity / Others) - BDH-ADM-AO-01F10.
+            if action == "validate":
                 allowed = True
-                apply_transition(AttendanceCorrectionRequest.ENDORSED_BY_SUPERVISOR, "endorse")
+                apply_transition(AttendanceCorrectionRequest.VALIDATED, "validate")
             elif action in ("reject", "return"):
                 allowed = True
-                apply_transition(
-                    AttendanceCorrectionRequest.REJECTED if action == "reject" else AttendanceCorrectionRequest.RETURNED,
-                    action,
-                )
+                stop()
+        elif status == AttendanceCorrectionRequest.VALIDATED and is_administrative_officer(acting_employee):
+            if action == "approve":
+                _finalize_correction(correction, request.user)
+                allowed = True
+                apply_transition(AttendanceCorrectionRequest.APPROVED, "approve")
+            elif action in ("reject", "return"):
+                allowed = True
+                stop()
+        # Old Supervisor -> HR -> AO chain, only for requests already endorsed
+        # before 2026-10-06 (nothing new reaches these statuses).
         elif status == AttendanceCorrectionRequest.ENDORSED_BY_SUPERVISOR and is_hr(acting_employee):
             if action == "process":
                 allowed = True
@@ -221,3 +237,20 @@ def correction_action(request, pk):
         raise PermissionDenied("You are not authorized to take this action on this request.")
 
     return redirect("attendance:correction_queue")
+
+
+@login_required
+def print_correction_form(request, pk):
+    """Missed Log Justification Form, BDH-ADM-AO-01F10 Rev. 2 (see
+    attendance/correction_form.py). FORMAL corrections only - MINOR ones
+    are HR's internal record fixes and have no employee form."""
+    from .correction_form import render_pdf
+
+    acting_employee = get_acting_employee(request.user)
+    correction = get_object_or_404(AttendanceCorrectionRequest, pk=pk, correction_type=AttendanceCorrectionRequest.FORMAL)
+    if not can_view_correction_request(acting_employee, correction):
+        raise PermissionDenied("You are not authorized to view this correction request.")
+    return pdf_response(
+        request, lambda: render_pdf(correction, printed_by=request.user),
+        f"Missed-Log-Justification_{correction.employee.surname}_{correction.pk}.pdf", "attendance:my_attendance",
+    )

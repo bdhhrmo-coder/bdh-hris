@@ -11,4 +11,5 @@ urlpatterns = [
     path("correction/minor/new/", views.minor_correction_create, name="minor_correction_create"),
     path("correction/queue/", views.correction_queue, name="correction_queue"),
     path("correction/<int:pk>/action/", views.correction_action, name="correction_action"),
+    path("correction/<int:pk>/print/", views.print_correction_form, name="print_correction_form"),
 ]

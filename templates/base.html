@@ -54,6 +54,9 @@
           <a href="{% url 'exchange:exchange_queue' %}">Exchange Queue</a>
           <a href="{% url 'attendance:correction_queue' %}">Attendance Correction Queue</a>
           <a href="{% url 'official_requests:request_queue' %}">Requests Queue</a>
+          {% elif is_ictu_staff %}
+          <p class="nav-section-label">Approvals</p>
+          <a href="{% url 'attendance:correction_queue' %}">Attendance Correction Queue</a>
           {% endif %}
 
           {% if can_view_audit_log %}

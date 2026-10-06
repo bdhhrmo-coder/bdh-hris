@@ -25,15 +25,28 @@ class MinorCorrectionForm(forms.ModelForm):
             "requested_time_out": forms.TimeInput(attrs={"type": "time"}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["reason"].required = True
+        self.fields["reason"].label = "Reason"
+
 
 class FormalCorrectionForm(forms.ModelForm):
     """Employee-initiated correction — always for the filer's own record."""
 
     class Meta:
         model = AttendanceCorrectionRequest
-        fields = ["date", "requested_time_in", "requested_time_out", "requested_is_absent", "reason"]
+        fields = [
+            "date", "requested_time_in", "requested_time_out", "requested_is_absent", "reason_category", "reason",
+        ]
         widgets = {
             "date": forms.DateInput(attrs={"type": "date"}),
             "requested_time_in": forms.TimeInput(attrs={"type": "time"}),
             "requested_time_out": forms.TimeInput(attrs={"type": "time"}),
+            "reason_category": forms.RadioSelect,
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.is_bound and not self.instance.pk:
+            self.initial["reason_category"] = None  # make the employee pick one; it decides the validator

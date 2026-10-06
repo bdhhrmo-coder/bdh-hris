@@ -52,6 +52,7 @@ Implemented as a **custom `Role` model tied to Employee** (not Django's built-in
 | **Administrative Officer (AO)** | Reviews HR-processed requests for policy/documentation compliance; may return for clarification; issues recommendation to COH | — |
 | **Chief of Hospital (COH)** | Final approving authority for personnel time/attendance requests within delegated authority | — |
 | **System Administrator** | Technical/infra admin: accounts, auth, permissions, backups, monitoring, security | Routine HR transaction processing/approval (only touches HR data when technically necessary and authorized) |
+| **ICTU Staff** | Validates formal attendance corrections whose reason is a biometric/system problem (Offline, Failed Attempt, Wrong Button/Invalid Entry), per the Missed Log Justification Form (added 2026-10-06) | Any other approval or HR data change |
 
 **OIC coverage:** Ad-hoc delegation triggered by the Supervisor themself (not pre-scheduled by HR Admin). One Supervisor can be designated OIC across multiple sections.
 
@@ -142,7 +143,7 @@ Implemented as a **custom `Role` model tied to Employee** (not Django's built-in
 | **Regular Leave** (VL/SL/etc.) | **Data entry and monitoring only** — approval authority is external, at the Provincial Capitol/PHRMO. Do NOT route through internal approval chain. |
 | **CTO Application** (regular & COSP) | Employee → Supervisor → HR → AO → COH |
 | **Exchange of Duty** | Employee A/B → Supervisor → HR → AO → COH |
-| **Attendance Correction (formal)** | Employee → Supervisor → HR → AO |
+| **Attendance Correction (formal)** | Employee → **one validator by reason** → AO. ICTU Staff validate Offline / Failed Attempt / Wrong Button-Invalid Entry; HR validates Attended meeting-activity-training / Others. No Supervisor step. (Changed 2026-10-06 by the project owner to follow the Missed Log Justification Form, BDH-ADM-AO-01F10; previously Employee → Supervisor → HR → AO.) |
 | **Attendance Correction (minor administrative)** | HR Processor → HR Admin (no formal approval chain needed) |
 | **Official Business** | Employee → Supervisor → HR → AO → COH |
 | **Official Time** | Employee → HR → AO → COH (no Supervisor step) |
@@ -152,8 +153,16 @@ Implemented as a **custom `Role` model tied to Employee** (not Django's built-in
 **⚠️ Critical:** Regular Leave must NOT be routed through the internal approval workflow engine — it's data-entry/monitoring only. Building this into the same generic workflow as other request types risks incorrectly implying internal approval authority that doesn't exist.
 
 ### 6.3 Output Forms
-- COSP Leave: custom BDH-branded form
-- Other leave types: CSC Form No. 6 layout
+- COSP Leave: custom BDH-branded form, **Form No. BDH-ADM-HR-01F04-A**
+- Other leave types: CSC Form No. 6 layout — official CSC form, left as is (no BDH code, no digital stamp, because regular leave is approved outside BDH)
+- CTO application: **BDH-ADM-HR-01F04-B**
+- Exchange of Duty application: **BDH-ADM-HR-01F04-C**
+- Attendance Correction (formal): Missed Log Justification Form **BDH-ADM-AO-01F10, Revision 2**
+
+### 6.3.1 Paperless Processing (settled 2026-10-06)
+- The HRIS is meant to be paperless; printing is incidental, on request.
+- BDH forms (01F04-A/B/C, F10) print a **"digitally processed/approved" stamp** for each routing step — the person's name, position, date and time from the request's action log — **instead of signature lines**. Steps not yet reached print as PENDING; a returned/rejected request prints a red banner with the remarks.
+- Whether these stamps are accepted in place of wet signatures by the Capitol, COA or CSC is a BDH policy matter (e.g. an Office Order), not something the system decides.
 
 ### 6.4 Self-Service Restrictions
 Employee profile edits are self-service only for: contact information, address, civil status — and all such edits require Administrator approval before taking effect.

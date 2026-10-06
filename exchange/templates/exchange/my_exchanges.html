@@ -32,7 +32,7 @@
 <div class="card">
   <h2 style="margin-top:0;">All my exchange requests</h2>
   <table>
-    <tr><th>Employee A</th><th>Date A</th><th>Employee B</th><th>Date B</th><th>Status</th><th>Filed</th><th>Documents</th></tr>
+    <tr><th>Employee A</th><th>Date A</th><th>Employee B</th><th>Date B</th><th>Status</th><th>Filed</th><th>Documents</th><th>Form</th></tr>
     {% for r in requests %}
     <tr>
       <td>{{ r.employee_a.full_name }}</td>
@@ -42,9 +42,10 @@
       <td>{% status_badge r.status r.get_status_display %}</td>
       <td>{{ r.filed_at|date:"Y-m-d" }}</td>
       <td><a href="{% documents_url r %}">Documents</a></td>
+      <td><a href="{% url 'exchange:print_exchange_form' r.pk %}" target="_blank">Print</a></td>
     </tr>
     {% empty %}
-    <tr><td colspan="7" class="empty-note">No exchange requests yet.</td></tr>
+    <tr><td colspan="8" class="empty-note">No exchange requests yet.</td></tr>
     {% endfor %}
   </table>
 </div>

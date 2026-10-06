@@ -15,6 +15,7 @@
     <td>{% if r.is_emergency %}Yes — {{ r.emergency_justification }}{% else %}No{% endif %}</td>
     <td>{% status_badge r.status r.get_status_display %}</td>
     <td class="row-actions">
+      <a href="{% url 'exchange:print_exchange_form' r.pk %}" target="_blank">Print form</a>
       <form method="post" action="{% url 'exchange:exchange_action' r.pk %}">
         {% csrf_token %}
         {% if r.status == "SUBMITTED" %}

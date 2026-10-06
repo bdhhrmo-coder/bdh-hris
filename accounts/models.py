@@ -21,6 +21,11 @@ class RoleAssignment(models.Model):
     ADMINISTRATIVE_OFFICER = "ADMINISTRATIVE_OFFICER"
     CHIEF_OF_HOSPITAL = "CHIEF_OF_HOSPITAL"
     SYSTEM_ADMINISTRATOR = "SYSTEM_ADMINISTRATOR"
+    # ICTU Staff (2026-10-06, project owner): validates attendance
+    # corrections whose reason is a biometric/system problem (Offline,
+    # Failed Attempt, Wrong Button/Invalid Entry), as on the Missed Log
+    # Justification Form, BDH-ADM-AO-01F10. No other approval authority.
+    ICTU_STAFF = "ICTU_STAFF"
 
     ROLE_CHOICES = [
         (EMPLOYEE, "Employee"),
@@ -30,6 +35,7 @@ class RoleAssignment(models.Model):
         (ADMINISTRATIVE_OFFICER, "Administrative Officer (AO)"),
         (CHIEF_OF_HOSPITAL, "Chief of Hospital (COH)"),
         (SYSTEM_ADMINISTRATOR, "System Administrator"),
+        (ICTU_STAFF, "ICTU Staff"),
     ]
 
     # Roles that can hold ad-hoc OIC delegation, per CLAUDE.md / confirmed

@@ -3,10 +3,13 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 
+from printouts.http import pdf_response
+
 from .forms import DutyExchangeRequestForm
 from .models import DutyExchangeRequest, DutyExchangeRequestAction
 from .notifications import notify_status_change
 from .permissions import (
+    can_view_exchange_request,
     get_acting_employee,
     is_administrative_officer,
     is_chief_of_hospital,
@@ -177,3 +180,18 @@ def exchange_action(request, pk):
         raise PermissionDenied("You are not authorized to take this action on this request.")
 
     return redirect("exchange:exchange_queue")
+
+
+@login_required
+def print_exchange_form(request, pk):
+    """Form No. BDH-ADM-HR-01F04-C (see exchange/exchange_form.py)."""
+    from .exchange_form import render_pdf
+
+    acting_employee = get_acting_employee(request.user)
+    req = get_object_or_404(DutyExchangeRequest, pk=pk)
+    if not can_view_exchange_request(acting_employee, req):
+        raise PermissionDenied("You are not authorized to view this exchange request.")
+    return pdf_response(
+        request, lambda: render_pdf(req, printed_by=request.user),
+        f"Exchange-of-Duty_{req.employee_a.surname}_{req.pk}.pdf", "exchange:my_exchanges",
+    )
