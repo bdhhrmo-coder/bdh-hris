@@ -280,7 +280,7 @@ open items the project owner already flagged:
 ## 11. Before calling this "live" - a short QC pass
 
 - [ ] Logged in as a test account for each role (Employee, Supervisor, HR
-      Processor, HR Administrator, AO, COH, System Administrator) and
+      Processor, HR Administrator, AO, COH, ICTU Staff, System Administrator) and
       confirmed each sees only what CLAUDE.md §3 says they should
 - [ ] Submitted one of each request type end-to-end (Leave, CTO, Exchange
       of Duty, Attendance Correction, Official Business/Time/Travel/OT) and
@@ -296,3 +296,63 @@ open items the project owner already flagged:
       ~2:00 AM backup ran on its own
 - [ ] Rebooted the server once and confirmed the BDH-HRIS service comes
       back up on its own, with no one needing to log in and start it
+- [ ] Set the server's power plan to **never sleep**
+- [ ] Deleted every test account (`test.*`) and any sample data before
+      loading real employees
+
+---
+
+## 12. Go-live: loading the real data (HR Tools -> Data Import)
+
+Owner decisions (2026-10-06): in-app notifications only at go-live (email
+added once GovMail SMTP is confirmed); **pilot one section first**, then
+everyone.
+
+Do these in order, on the real server, after the §11 QC pass:
+
+1. **Back up** the database (§9).
+2. **HR Tools -> Data Import -> Download template.** One Excel file with
+   instructions, an Employees sheet, an Opening Balances sheet and the exact
+   Section/Unit names.
+3. **Employees sheet.** One row per employee. An HR Administrator should run
+   this import if roles (Supervisor, HR, AO, COH, ICTU) are filled in - an
+   HR Processor may import employees but not roles. Upload -> read the
+   preview -> fix every red row -> upload again -> **Confirm and save**.
+   Nothing is saved while any row has an error.
+4. **Print the password slips** shown after the import and hand each one
+   to the person personally. Then click "clear slips" - they cannot be
+   shown again. (If a slip is lost, the System Administrator sets a new
+   password in the admin and ticks "must change password" on the employee.)
+5. **Download the template again** (its Opening Balances sheet now lists
+   everyone) and fill in each balance **from the leave card, as of one
+   cut-over date** - e.g. the last day of the month already credited.
+   Upload -> check the preview ("balance now -> leave card") -> Confirm.
+6. **Spot-check about 10% of employees**: open their leave balances and
+   compare with the paper leave card. HRMO signs off before go-live.
+7. **Pilot:** one section uses the HRIS for 2-4 weeks, with paper kept as
+   backup. Fix what they find. Then go live for everyone on an announced
+   date.
+
+Leave balances are kept to 2 decimal places.
+
+## 13. Yearly task: CTO forfeiture (first working day of January)
+
+CLAUDE.md §7: CTO must be used within the calendar year earned; unused CTO
+is forfeited unless the Chief of Hospital grants a documented exception.
+This is deliberately run by a person, not automatically, so the COH's
+exceptions stay a human decision.
+
+1. Get the COH's list of approved exceptions (Employee IDs and reason).
+2. Back up the database (§9).
+3. Preview first - this changes nothing:
+   ```powershell
+   cd C:\BDH-HRIS
+   .venv\Scripts\python manage.py forfeit_expired_cto --year 2026 --actor-username <hr-admin-username> --dry-run
+   ```
+4. Run it for real, adding one `--exempt` per approved exception:
+   ```powershell
+   .venv\Scripts\python manage.py forfeit_expired_cto --year 2026 --actor-username <hr-admin-username> --exempt EMP-0007 --exempt-reason "COH memo dated ..."
+   ```
+5. Keep the COH's exception memo on file. Running it twice for the same
+   year does no harm. **Do not skip a year** - the calculation assumes it
+   runs every year.

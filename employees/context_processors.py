@@ -50,4 +50,10 @@ def nav_links(request):
         "can_list_employees": _can_list_employees(acting_employee),
         "has_approval_role": has_approval_role,
         "is_ictu_staff": is_ictu_staff,
+        # Employee and opening-balance imports: HR Administrator and HR
+        # Processor (owner decision, 2026-10-06).
+        "can_import_data": acting_employee is not None and (
+            acting_employee.has_role(RoleAssignment.HR_ADMINISTRATOR)
+            or acting_employee.has_role(RoleAssignment.HR_PROCESSOR)
+        ),
     }

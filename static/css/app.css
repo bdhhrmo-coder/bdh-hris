@@ -455,6 +455,7 @@ button:active, .btn:active { transform: scale(0.98); }
 /* Log out must POST (Django's LogoutView rejects GET), so it's a form, not
    a plain link — style it to still read as inline text in the topbar. */
 .logout-form { display: inline; }
+.topbar-link { color: #fff; text-decoration: underline; }
 .link-button {
   display: inline;
   background: none;

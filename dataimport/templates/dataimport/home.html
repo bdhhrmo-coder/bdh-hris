@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Data Import — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Data Import</h1>
+<p style="color:var(--gray-600);">For go-live: load the employee list, then each employee's opening leave and CTO balances. Every upload is checked first and shown as a preview — nothing is saved until you click <strong>Confirm</strong>.</p>
+
+{% if slip_count %}
+<div class="card" style="border:2px solid var(--navy-800);">
+  <h2 style="margin-top:0;">Password slips ready: {{ slip_count }} new login(s)</h2>
+  <p>Print these and hand each slip to the person personally. Each person must set their own password at first login. Clear the slips once printed — they cannot be shown again.</p>
+  <p>
+    <a class="btn" href="{% url 'dataimport:password_slips' 'pdf' %}" target="_blank">Print slips (PDF)</a>
+    <a href="{% url 'dataimport:password_slips' 'xlsx' %}">or download as Excel</a>
+  </p>
+  <form method="post" action="{% url 'dataimport:clear_slips' %}">{% csrf_token %}<button type="submit">I have printed them — clear slips</button></form>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2 style="margin-top:0;">Step 1 — Download the template</h2>
+  <p>One Excel file with an <em>Instructions</em> sheet, an <em>Employees</em> sheet, an <em>Opening Balances</em> sheet (already listing every employee in the system), and the exact <em>Sections and Units</em> names.</p>
+  <a class="btn" href="{% url 'dataimport:download_template' %}">Download template (.xlsx)</a>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Step 2 — Import the employee list</h2>
+  <form method="post" action="{% url 'dataimport:upload' 'employees' %}" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="file" name="file" accept=".xlsx" required>
+    <div class="field-block"><button type="submit">Upload and check</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Step 3 — Import opening balances</h2>
+  <p class="field-help">Do this after the employees are in. Download the template again so the Opening Balances sheet lists the newly added employees.</p>
+  <form method="post" action="{% url 'dataimport:upload' 'balances' %}" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="file" name="file" accept=".xlsx" required>
+    <div class="field-block"><button type="submit">Upload and check</button></div>
+  </form>
+</div>
+{% endblock %}

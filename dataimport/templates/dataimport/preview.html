@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Check import — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Check before saving: {{ title }}</h1>
+<p style="color:var(--gray-600);">File: {{ file_name }} — nothing has been saved yet.</p>
+
+<div class="card">
+  {% if error_rows %}
+    <div class="msg error"><strong>{{ error_rows }} row(s) have errors.</strong> Nothing can be saved until they are fixed. Correct the file and upload it again.</div>
+  {% else %}
+    <div class="msg info">No errors. {% if kind == "employees" %}{{ new_count }} new, {{ update_count }} to update, {{ same_count }} unchanged.{% else %}{{ update_count }} employee(s) will get an opening-balance adjustment, {{ same_count }} already match.{% endif %}</div>
+    <form method="post" action="{% url 'dataimport:confirm' kind %}" style="display:inline;">
+      {% csrf_token %}
+      <button type="submit">Confirm and save</button>
+    </form>
+  {% endif %}
+  <a href="{% url 'dataimport:home' %}" style="margin-left:1rem;">Cancel</a>
+</div>
+
+<div class="card">
+<table>
+  <tr><th>Row</th><th>Employee ID</th><th>Name</th><th>Action</th><th>{% if kind == "employees" %}What changes{% else %}Balance now &rarr; leave card{% endif %}</th><th>Problems</th></tr>
+  {% for p in plans %}
+  <tr{% if p.errors %} style="background:#fdecea;"{% endif %}>
+    <td>{{ p.row }}</td>
+    <td>{{ p.employee_id }}</td>
+    <td>{{ p.name }}</td>
+    <td>{% if p.errors %}<strong style="color:#b71c1c;">Error</strong>{% else %}{{ p.action|capfirst }}{% endif %}</td>
+    <td>{{ p.changes|join:"; " }}</td>
+    <td style="color:#b71c1c;">{{ p.errors|join:" " }}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="6" class="empty-note">The sheet has no rows.</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

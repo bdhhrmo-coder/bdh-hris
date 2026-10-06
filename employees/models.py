@@ -121,6 +121,12 @@ class Employee(models.Model):
         "suspension) — the System Administrator enters the actual separation date on record.",
     )
 
+    must_change_password = models.BooleanField(
+        default=False,
+        help_text="Set when the account gets a temporary password (e.g. from the employee import). "
+        "The person must choose a new password at their next login before using the system.",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -25,6 +25,8 @@
         <div class="user-chip">
           {% if user.employee %}{{ user.employee.first_name }} {{ user.employee.surname }}{% else %}{{ user.username }}{% endif %}
           &middot;
+          <a href="{% url 'password_change' %}" class="topbar-link">Change password</a>
+          &middot;
           <form method="post" action="{% url 'logout' %}" class="logout-form">
             {% csrf_token %}
             <button type="submit" class="link-button">Log out</button>
@@ -57,6 +59,11 @@
           {% elif is_ictu_staff %}
           <p class="nav-section-label">Approvals</p>
           <a href="{% url 'attendance:correction_queue' %}">Attendance Correction Queue</a>
+          {% endif %}
+
+          {% if can_import_data %}
+          <p class="nav-section-label">HR Tools</p>
+          <a href="{% url 'dataimport:home' %}">Data Import</a>
           {% endif %}
 
           {% if can_view_audit_log %}

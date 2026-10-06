@@ -17,10 +17,11 @@ Including another URLconf
 
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
+from django.contrib.auth.decorators import login_required
 from django.urls import include, path
 from django.views.generic import RedirectView
 
-from accounts.views import BDHLoginView
+from accounts.views import BDHLoginView, BDHPasswordChangeView
 
 urlpatterns = [
     # The site had no "/" page at all, so a visitor who just opened
@@ -44,4 +45,6 @@ urlpatterns = [
     path("audit-log/", include("auditlog.urls")),
     path("login/", BDHLoginView.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+    path("password/change/", login_required(BDHPasswordChangeView.as_view()), name="password_change"),
+    path("data-import/", include("dataimport.urls")),
 ]
