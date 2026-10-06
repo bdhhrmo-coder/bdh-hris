@@ -76,6 +76,28 @@ class LoginLogoutTests(TestCase):
         response = self.login()
         self.assertRedirects(response, reverse("notifications:notification_list"))
 
+    def test_employee_id_logs_in_like_a_username(self):
+        response = self.login(username="E-10")
+        self.assertRedirects(response, reverse("notifications:notification_list"))
+
+    def test_employee_id_is_case_insensitive(self):
+        self.assertRedirects(self.login(username="e-10"), reverse("notifications:notification_list"))
+
+    def test_employee_id_with_wrong_password_gets_the_generic_message(self):
+        response = self.login(username="E-10", password="nope")
+        self.assertContains(response, "Invalid username or password.")
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_deactivated_account_cannot_log_in_by_employee_id(self):
+        User.objects.filter(username="nurse").update(is_active=False)
+        self.login(username="E-10")
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_employee_without_login_account_cannot_log_in(self):
+        Employee.objects.create(employee_id="E-11", surname="Nologin", first_name="Test")
+        self.login(username="E-11")
+        self.assertNotIn("_auth_user_id", self.client.session)
+
     def test_wrong_password_and_unknown_user_get_the_same_message(self):
         wrong = self.login(password="nope")
         unknown = self.login(username="ghost")
