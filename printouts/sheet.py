@@ -170,18 +170,18 @@ class FormBuilder:
     def _stamp_block(self, top, cols, stamp):
         c1, c2 = cols
         ws = self.ws
-        if stamp.state == "done":
-            color, headline = DONE_COLOR, f"✔ {stamp.text}"
-        else:
-            color, headline = PENDING_COLOR, stamp.text
+        color = DONE_COLOR if stamp.state == "done" else PENDING_COLOR
+        headline = stamp.text
         merge_set(ws, f"{c1}{top}:{c2}{top}", stamp.role_label.upper(), bold=True, size=8, align="center", color="333333")
         for c in ws[f"{c1}{top}:{c2}{top}"][0]:
             c.fill = SECTION_FILL
         merge_set(ws, f"{c1}{top + 1}:{c2}{top + 1}", headline, bold=stamp.state == "done",
                   italic=stamp.state != "done", size=10, align="center", color=color)
-        merge_set(ws, f"{c1}{top + 2}:{c2}{top + 2}", stamp.name or "—", bold=True, size=10, align="center")
-        merge_set(ws, f"{c1}{top + 3}:{c2}{top + 3}", stamp.position, italic=True, size=8, align="center")
-        merge_set(ws, f"{c1}{top + 4}:{c2}{top + 4}", stamp.when, size=9, align="center")
+        # Date and time come right after "DIGITALLY APPROVED" (owner, 2026-10-06).
+        merge_set(ws, f"{c1}{top + 2}:{c2}{top + 2}", stamp.when, bold=stamp.state == "done", size=9,
+                  align="center", color=color)
+        merge_set(ws, f"{c1}{top + 3}:{c2}{top + 3}", stamp.name or "—", bold=True, size=10, align="center")
+        merge_set(ws, f"{c1}{top + 4}:{c2}{top + 4}", stamp.position, italic=True, size=8, align="center")
         box_outline(ws, top, top + 4, c1, c2, color=color if stamp.state == "done" else "999999",
                     style="medium" if stamp.state == "done" else "thin")
 

@@ -383,6 +383,50 @@ input:focus, select:focus, textarea:focus {
 }
 input:disabled, select:disabled, textarea:disabled { background: var(--gray-50); color: var(--gray-400); }
 
+/* Tick boxes and round (radio) buttons must NOT stretch to full width like
+   text boxes do - that pushed them away from their words. Keep them small,
+   beside their label. */
+input[type="checkbox"], input[type="radio"] {
+  width: 1.15rem;
+  height: 1.15rem;
+  padding: 0;
+  margin: 0;
+  flex-shrink: 0;
+  vertical-align: middle;
+  accent-color: var(--navy-800);
+  cursor: pointer;
+  box-shadow: none;
+}
+
+/* "Choice rows": each option is one bordered row - the box on the left, its
+   words right next to it - and the whole row is clickable. The chosen row
+   is highlighted so it is obvious what was ticked. */
+.choice-list { display: grid; gap: 0.45rem; margin-top: 0.35rem; }
+.choice-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0.65rem 0.8rem;
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--gray-900);
+  font-weight: 500;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+.choice-row:hover { border-color: var(--navy-700); }
+.choice-row:has(input:checked) { border-color: var(--navy-800); background: var(--navy-100); font-weight: 600; }
+.choice-row .choice-hint { margin-left: auto; font-size: 0.75rem; font-weight: 500; color: var(--gray-600); white-space: nowrap; }
+.field-block { margin-top: 1rem; }
+.field-block > .field-title { display: block; font-weight: 600; color: var(--gray-900); font-size: 0.9rem; }
+.field-block > .field-help { margin: 0.15rem 0 0; font-size: 0.8rem; color: var(--gray-600); }
+.field-error { color: #b71c1c; font-size: 0.82rem; margin-top: 0.25rem; }
+.time-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
+@media (max-width: 600px) { .time-row { grid-template-columns: 1fr; } .choice-row .choice-hint { display: none; } }
+
 button, .btn, input[type="submit"] {
   display: inline-block;
   background: var(--navy-800);

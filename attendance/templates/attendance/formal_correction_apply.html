@@ -4,10 +4,64 @@
 <h1>Request an attendance correction</h1>
 <p style="color:var(--gray-600);">Missed Log Justification (Form BDH-ADM-AO-01F10). Offline, Failed Attempt and Wrong Button/Invalid Entry are validated by ICTU; meetings, activities, trainings and other reasons are validated by HR. The Administrative Officer gives final approval.</p>
 <div class="card">
-  <form method="post">
+  <form method="post" novalidate>
     {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Submit</button>
+    {% if form.non_field_errors %}<div class="msg error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+
+    <div class="field-block">
+      <label class="field-title" for="{{ form.date.id_for_label }}">1. Date to correct</label>
+      {{ form.date }}
+      {% for e in form.date.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+    </div>
+
+    <div class="field-block">
+      <span class="field-title">2. Correct log times</span>
+      <p class="field-help">Enter the time you actually came in and left. If you were absent that day, tick the box below instead.</p>
+      <div class="time-row">
+        <div>
+          <label for="{{ form.requested_time_in.id_for_label }}">Time IN</label>
+          {{ form.requested_time_in }}
+          {% for e in form.requested_time_in.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+        </div>
+        <div>
+          <label for="{{ form.requested_time_out.id_for_label }}">Time OUT</label>
+          {{ form.requested_time_out }}
+          {% for e in form.requested_time_out.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+        </div>
+      </div>
+      <div class="choice-list">
+        <label class="choice-row" for="{{ form.requested_is_absent.id_for_label }}">
+          {{ form.requested_is_absent }}
+          <span>I was absent on this date (mark as Absent, no times)</span>
+        </label>
+      </div>
+      {% for e in form.requested_is_absent.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+    </div>
+
+    <div class="field-block">
+      <span class="field-title">3. Reason — tick one</span>
+      <div class="choice-list">
+        {% for radio in form.reason_category %}
+        <label class="choice-row" for="{{ radio.id_for_label }}">
+          {{ radio.tag }}
+          <span>{{ radio.choice_label }}</span>
+          <span class="choice-hint">{% if radio.data.value in ictu_reasons %}Validated by ICTU{% else %}Validated by HR{% endif %}</span>
+        </label>
+        {% endfor %}
+      </div>
+      {% for e in form.reason_category.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+    </div>
+
+    <div class="field-block">
+      <label class="field-title" for="{{ form.reason.id_for_label }}">4. Details</label>
+      <p class="field-help">Required if you chose "Attended meeting / activity / training" or "Others": say what it was.</p>
+      {{ form.reason }}
+      {% for e in form.reason.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+    </div>
+
+    <div class="field-block">
+      <button type="submit">Submit</button>
+    </div>
   </form>
 </div>
 {% endblock %}

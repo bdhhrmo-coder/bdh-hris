@@ -82,7 +82,9 @@ def formal_correction_apply(request):
     else:
         form = FormalCorrectionForm()
 
-    return render(request, "attendance/formal_correction_apply.html", {"form": form})
+    return render(request, "attendance/formal_correction_apply.html", {
+        "form": form, "ictu_reasons": AttendanceCorrectionRequest.ICTU_VALIDATED_REASONS,
+    })
 
 
 def _finalize_correction(correction, actor_user):
