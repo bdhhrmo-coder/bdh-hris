@@ -54,7 +54,7 @@ def audit_log_view(request):
             "row_count": len(rows),
             "truncated": len(rows) > 500,
             "modules": MODULE_CHOICES,
-            "employees": Employee.objects.order_by("surname", "first_name"),
+            "employees": Employee.objects.all(),  # default ordering: Surname, First Name, Middle Name
             "selected_employee_id": employee_id,
             "selected_module": module,
             "date_from": request.GET.get("date_from", ""),

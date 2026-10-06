@@ -195,7 +195,7 @@ def leave_balance_rows(section=None):
     )
 
     rows = []
-    for employee in employees_qs.distinct().order_by("surname", "first_name"):
+    for employee in employees_qs.distinct().order_by("surname", "first_name", "middle_name", "employee_id"):
         balances = []
         for lt in leave_types:
             if lt.applicable_to in (LeaveType.APPLICABLE_BOTH, employee.employment_status):

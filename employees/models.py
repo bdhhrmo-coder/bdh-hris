@@ -131,7 +131,12 @@ class Employee(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["surname", "first_name"]
+        # Every employee list, dropdown and report is alphabetical by name:
+        # Surname, First Name, then Middle Name; Employee ID breaks exact ties
+        # so two people with the same name always appear in the same order.
+        # Applied by the database on every query, so new and edited records
+        # fall into place automatically (owner request, 2026-10-06).
+        ordering = ["surname", "first_name", "middle_name", "employee_id"]
 
     def __str__(self):
         full = f"{self.surname}, {self.first_name}"

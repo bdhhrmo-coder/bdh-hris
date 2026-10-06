@@ -93,7 +93,7 @@ def build_template():
     # Opening balances, pre-listed with every active employee already in the system
     ws = wb.create_sheet(balance_import.SHEET)
     _header(ws, balance_import.COLUMNS, {"employee_id", "as_of"})
-    for r, emp in enumerate(Employee.objects.filter(is_active=True).order_by("surname", "first_name"), start=2):
+    for r, emp in enumerate(Employee.objects.filter(is_active=True), start=2):
         ws.cell(row=r, column=1, value=emp.employee_id).number_format = "@"
         ws.cell(row=r, column=2, value=emp.full_name)
     for r in range(2, 1001):
@@ -126,6 +126,7 @@ def build_password_slips(credentials, login_url):
     box = Border(top=Side(style="dashed"), bottom=Side(style="dashed"), left=Side(style="dashed"),
                  right=Side(style="dashed"))
     row = 1
+    credentials = sorted(credentials, key=lambda c: c["name"].lower())  # alphabetical, for handing out
     for i, c in enumerate(credentials):
         lines = [
             ("BDH HRIS — YOUR LOGIN (CONFIDENTIAL)", ""),

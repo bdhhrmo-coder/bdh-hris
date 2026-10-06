@@ -453,3 +453,56 @@ class Phase3SelfServiceTests(TestCase):
         self.hr_admin_a.refresh_from_db()
         self.assertEqual(req.status, EmployeeProfileEditRequest.APPROVED)
         self.assertEqual(self.hr_admin_a.email, "me@example.com")
+
+
+class AlphabeticalOrderTests(TestCase):
+    """Owner request (2026-10-06): employee lists, dropdowns and reports are
+    alphabetical by Surname, First Name - and stay that way as records are
+    added or edited, because the database sorts on every query."""
+
+    def setUp(self):
+        self.hr = make_employee("zz_order_hr", "EMP-ORD-0", role=RoleAssignment.HR_ADMINISTRATOR)
+        Employee.objects.filter(pk=self.hr.pk).update(surname="Zamora", first_name="Hr")
+        for eid, surname, first, middle in [
+            ("EMP-ORD-3", "Santos", "Maria", "B"), ("EMP-ORD-1", "Abad", "Jose", ""),
+            ("EMP-ORD-2", "Santos", "Maria", "A"), ("EMP-ORD-4", "Santos", "Ana", ""),
+            ("EMP-ORD-5", "Dela Cruz", "Juan", ""),
+        ]:
+            Employee.objects.create(employee_id=eid, surname=surname, first_name=first, middle_name=middle)
+        self.expected = ["EMP-ORD-1", "EMP-ORD-5", "EMP-ORD-4", "EMP-ORD-2", "EMP-ORD-3", "EMP-ORD-0"]
+
+    def ids(self, qs):
+        return [e.employee_id for e in qs if e.employee_id.startswith("EMP-ORD")]
+
+    def test_default_order_is_surname_first_middle(self):
+        self.assertEqual(self.ids(Employee.objects.all()), self.expected)
+
+    def test_new_and_renamed_records_fall_into_place(self):
+        Employee.objects.create(employee_id="EMP-ORD-6", surname="Bautista", first_name="Lea")
+        Employee.objects.filter(employee_id="EMP-ORD-1").update(surname="Yap")  # Abad renamed to Yap
+        self.assertEqual(
+            self.ids(Employee.objects.all()),
+            ["EMP-ORD-6", "EMP-ORD-5", "EMP-ORD-4", "EMP-ORD-2", "EMP-ORD-3", "EMP-ORD-1", "EMP-ORD-0"],
+        )
+
+    def test_employee_list_screen_is_alphabetical(self):
+        client = Client()
+        client.force_login(self.hr.user)
+        employees = client.get(reverse("employees:employee_list")).context["employees"]
+        self.assertEqual(self.ids(employees), self.expected)
+
+    def test_employee_dropdowns_are_alphabetical(self):
+        from exchange.forms import DutyExchangeRequestForm
+
+        form = DutyExchangeRequestForm(employee_a=self.hr)
+        self.assertEqual(self.ids(form.fields["employee_b"].queryset), self.expected[:-1])
+
+    def test_password_slips_are_alphabetical(self):
+        from dataimport.template import build_password_slips
+
+        creds = [{"name": n, "employee_id": n, "username": n, "password": "x", "position": "", "sections": ""}
+                 for n in ("Santos, Ana", "Abad, Jose", "dela Cruz, Juan")]
+        ws = build_password_slips(creds, "http://x/login/").active
+        names = [ws.cell(row=r, column=2).value for r in range(1, ws.max_row + 1)
+                 if ws.cell(row=r, column=1).value == "Name:"]
+        self.assertEqual(names, ["Abad, Jose", "dela Cruz, Juan", "Santos, Ana"])
