@@ -48,7 +48,7 @@ def my_requests(request):
 @login_required
 def request_queue(request):
     acting_employee = get_acting_employee(request.user)
-    requests = list(visible_requests_for(acting_employee).select_related("employee"))
+    requests = list(visible_requests_for(acting_employee).select_related("employee").order_by("submitted_at", "pk"))  # oldest first: first filed, first acted on (owner, 2026-10-06)
     for r in requests:
         r.next_action = action_name_for(next_status(r.request_type, r.status))
     return render(request, "official_requests/request_queue.html", {"requests": requests})

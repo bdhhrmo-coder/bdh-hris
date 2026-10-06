@@ -72,7 +72,8 @@ def claims_home(request):
         raise PermissionDenied("Only HR may file CTO claims.")
     return render(request, "cto/claims_home.html", {
         "ot_requests": claimable_ot_requests(),
-        "drafts": CTOCreditEntry.objects.filter(status=CTOCreditEntry.DRAFT).select_related("employee", "ot_request"),
+        "drafts": CTOCreditEntry.objects.filter(status=CTOCreditEntry.DRAFT).select_related("employee", "ot_request")
+        .order_by("work_date", "pk"),  # oldest first: first filed, first acted on (owner, 2026-10-06)
         "recent_credited": CTOCreditEntry.objects.filter(status=CTOCreditEntry.CREDITED)
         .select_related("employee", "ot_request").order_by("-credited_at")[:20],
         "can_file_exception": acting_employee.is_hr_administrator(),
@@ -248,7 +249,7 @@ def cto_apply(request):
 @login_required
 def cto_queue(request):
     acting_employee = get_acting_employee(request.user)
-    applications = visible_cto_applications_for(acting_employee).select_related("employee")
+    applications = visible_cto_applications_for(acting_employee).select_related("employee").order_by("submitted_at", "pk")  # oldest first: first filed, first acted on (owner, 2026-10-06)
     return render(request, "cto/cto_queue.html", {"applications": applications, "is_hr": is_hr(acting_employee)})
 
 

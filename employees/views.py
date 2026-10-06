@@ -255,7 +255,7 @@ def profile_edit_request_queue(request):
 
     requests_qs = EmployeeProfileEditRequest.objects.filter(
         status=EmployeeProfileEditRequest.PENDING
-    ).select_related("employee")
+    ).select_related("employee").order_by("requested_at", "pk")  # oldest first: first filed, first acted on (owner, 2026-10-06)
     return render(
         request,
         "employees/profile_edit_request_queue.html",

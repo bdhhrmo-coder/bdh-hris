@@ -408,3 +408,26 @@ class PrintCospLeaveFormTests(TestCase):
         self.client.login(username="cospformvl1", password="testpass123")
         response = self.client.get(reverse("leave:print_cosp_leave_form", args=[application.pk]))
         self.assertEqual(response.status_code, 403)
+
+
+class QueueOrderTests(TestCase):
+    """Owner decision (2026-10-06): approval queues list the OLDEST request
+    first - first filed, first acted on."""
+
+    def test_leave_queue_is_oldest_first(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        hr = make_employee("queue_hr", "EMP-Q-0", role=RoleAssignment.HR_PROCESSOR)
+        vl = LeaveType.objects.get(code="VL")
+        made = []
+        for i, name in enumerate(["queue_zed", "queue_amy", "queue_bob"]):
+            emp = make_employee(name, f"EMP-Q-{i + 1}", date_hired=date(2020, 1, 1))
+            app = LeaveApplication.objects.create(employee=emp, leave_type=vl, start_date=date(2026, 11, 2),
+                                                  end_date=date(2026, 11, 2), number_of_days=Decimal("1"))
+            LeaveApplication.objects.filter(pk=app.pk).update(submitted_at=timezone.now() - timedelta(days=10 - i))
+            made.append(app.pk)
+        self.client.force_login(hr.user)
+        listed = [a.pk for a in self.client.get(reverse("leave:leave_queue")).context["applications"]]
+        self.assertEqual(listed, made)  # filed 10, 9, 8 days ago -> shown in that order, not by name

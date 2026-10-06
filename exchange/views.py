@@ -106,7 +106,9 @@ def exchange_consent(request, pk):
 @login_required
 def exchange_queue(request):
     acting_employee = get_acting_employee(request.user)
-    requests = visible_exchange_requests_for(acting_employee).select_related("employee_a", "employee_b")
+    requests = visible_exchange_requests_for(acting_employee).select_related("employee_a", "employee_b").order_by(
+        "filed_at", "pk"
+    )  # oldest first: first filed, first acted on (owner, 2026-10-06)
     return render(request, "exchange/exchange_queue.html", {"requests": requests})
 
 

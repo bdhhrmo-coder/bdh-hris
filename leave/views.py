@@ -69,7 +69,9 @@ def my_applications(request):
 @login_required
 def leave_queue(request):
     acting_employee = get_acting_employee(request.user)
-    applications = visible_applications_for(acting_employee).select_related("employee", "leave_type")
+    applications = visible_applications_for(acting_employee).select_related("employee", "leave_type").order_by(
+        "submitted_at", "pk"
+    )  # oldest first: first filed, first acted on (owner, 2026-10-06)
     return render(request, "leave/leave_queue.html", {"applications": applications})
 
 

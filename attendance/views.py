@@ -149,7 +149,7 @@ def minor_correction_create(request):
 @login_required
 def correction_queue(request):
     acting_employee = get_acting_employee(request.user)
-    requests = visible_correction_requests_for(acting_employee).select_related("employee")
+    requests = visible_correction_requests_for(acting_employee).select_related("employee").order_by("submitted_at", "pk")  # oldest first: first filed, first acted on (owner, 2026-10-06)
     return render(request, "attendance/correction_queue.html", {"requests": requests})
 
 
