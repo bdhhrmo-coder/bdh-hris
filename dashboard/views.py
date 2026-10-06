@@ -5,7 +5,7 @@ from django.shortcuts import render
 from employees.permissions import get_acting_employee
 from orgstructure.models import Section
 
-from . import charts, exports, stats
+from . import charts, exports, stats, workforce
 from .period import resolve_period
 from .permissions import can_view_dashboard
 
@@ -35,7 +35,30 @@ def dashboard_home(request):
     department_rows = stats.department_statistics(start_date, end_date)
     trend = stats.monthly_trend(end_date)
 
+    absenteeism_rows = workforce.per_section(workforce.absenteeism, start_date, end_date)
+    utilization_rows = workforce.per_section(workforce.leave_utilization, start_date, end_date)
+    sex_rows = workforce.sex_distribution(section=section)
+    age_rows = workforce.age_distribution(section=section)
+    education_rows, education_total = workforce.education_by_section()
     context = {
+        "workforce": workforce.workforce_counts(start_date, end_date, section=section),
+        "absenteeism": workforce.absenteeism(start_date, end_date, section=section),
+        "absenteeism_target": workforce.ABSENTEEISM_TARGET,
+        "absenteeism_rows": absenteeism_rows,
+        "absenteeism_chart": charts.section_rate_chart(
+            absenteeism_rows, "Absenteeism rate by section", target=workforce.ABSENTEEISM_TARGET),
+        "utilization": workforce.leave_utilization(start_date, end_date, section=section),
+        "utilization_rows": utilization_rows,
+        "utilization_chart": charts.section_rate_chart(utilization_rows, "Leave utilization rate by section"),
+        "sex_rows": sex_rows,
+        "sex_chart": charts.count_pie_chart(sex_rows, "Sex"),
+        "sex_labels": [label for _, label in workforce.SEX_LABELS],
+        "sex_by_section": workforce.sex_by_section(),
+        "age_rows": age_rows,
+        "age_chart": charts.count_bar_chart(age_rows, "Age distribution", xlabel="Age"),
+        "education_columns": workforce.EDUCATION_COLUMNS,
+        "education_rows": education_rows,
+        "education_total": education_total,
         "headcount": stats.headcount(section=section),
         "on_leave_today": stats.on_leave_today(section=section),
         "on_cto_today": stats.on_cto_today(section=section),

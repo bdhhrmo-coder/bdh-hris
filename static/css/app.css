@@ -530,3 +530,8 @@ button:active, .btn:active { transform: scale(0.98); }
 }
 
 [x-cloak] { display: none !important; }
+
+/* Dashboard (2026-10-06) */
+.section-title { font-size: 1.05rem; color: var(--navy-900); margin: 1.4rem 0 0.4rem; }
+.split-row { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center; }
+.table-scroll { overflow-x: auto; }

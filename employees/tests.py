@@ -288,7 +288,7 @@ class Phase2Tests(TestCase):
                 "education_history-INITIAL_FORMS": "0",
                 "education_history-MIN_NUM_FORMS": "0",
                 "education_history-MAX_NUM_FORMS": "1000",
-                "education_history-0-education_level": "College",
+                "education_history-0-education_level": "COLLEGE",  # fixed levels since 2026-10-06
                 "education_history-0-school": "Palawan State University",
                 "education_history-0-degree_course": "BS Nursing",
                 "education_history-0-units_earned": "",
@@ -312,7 +312,7 @@ class Phase2Tests(TestCase):
                 "education_history-INITIAL_FORMS": "0",
                 "education_history-MIN_NUM_FORMS": "0",
                 "education_history-MAX_NUM_FORMS": "1000",
-                "education_history-0-education_level": "College",
+                "education_history-0-education_level": "COLLEGE",  # fixed levels since 2026-10-06
                 "education_history-0-school": "Should Not Save University",
                 "education_history-0-degree_course": "",
                 "education_history-0-units_earned": "",

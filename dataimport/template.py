@@ -29,6 +29,7 @@ INSTRUCTIONS = [
     ("   Allowed: Supervisor; HR Processor; HR Administrator; Administrative Officer; Chief of Hospital; ICTU Staff.", False),
     ("   Everyone automatically gets the Employee role. A Supervisor supervises the section(s) on their row.", False),
     ("   System Administrator cannot be given by import. Imports only ADD roles; they never remove one.", False),
+    ("• COSP Under: PGP or LGU - for COSP employees only (used on the dashboard).", False),
     ("• Username: leave blank to use the Employee ID. Staff can log in with either.", False),
     ("• New login accounts get a temporary password. After the import, print the password slips and hand", False),
     ("   them out personally. Each person must set their own password at first login.", False),
@@ -79,6 +80,7 @@ def build_template():
     _header(ws, cols, {k for k, _, req in employee_import.COLUMNS if req})
     letters = {k: openpyxl.utils.get_column_letter(i) for i, (k, _) in enumerate(cols, start=1)}
     _list_validation(ws, letters["employment_status"], ["Regular", "COSP"])
+    _list_validation(ws, letters["cosp_under"], ["PGP", "LGU"])
     _list_validation(ws, letters["sex_at_birth"], ["Male", "Female"])
     _list_validation(ws, letters["civil_status"], [label for _, label in Employee.CIVIL_STATUS_CHOICES])
     _list_validation(ws, letters["shift_hours"], ["8", "12"])

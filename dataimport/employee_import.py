@@ -49,6 +49,7 @@ COLUMNS = [
     ("middle_name", "Middle Name", False),
     ("name_extension", "Name Extension", False),
     ("employment_status", "Employment Status*", True),
+    ("cosp_under", "COSP Under (PGP/LGU)", False),
     ("date_hired", "Date Hired*", True),
     ("sections", "Section(s)*", True),
     ("units", "Unit(s)", False),
@@ -84,6 +85,7 @@ CHOICE_FIELDS = {
     "employment_status": Employee.EMPLOYMENT_STATUS_CHOICES,
     "sex_at_birth": Employee.SEX_CHOICES,
     "civil_status": Employee.CIVIL_STATUS_CHOICES,
+    "cosp_under": Employee.COSP_UNDER_CHOICES,
 }
 LABELS = {key: header.replace("*", "") for key, header, _ in COLUMNS}
 
@@ -192,6 +194,10 @@ def build_plan(uploaded_file, actor_employee):
                 p.errors.append(f'Shift Hours must be 8 or 12, not "{shift}".')
             else:
                 p.values["shift_hours"] = int(shift)
+
+        if p.values.get("cosp_under") and p.values.get("employment_status", getattr(existing, "employment_status", "")) \
+                != Employee.EMPLOYMENT_STATUS_COSP:
+            p.errors.append("COSP Under (PGP/LGU) is only for COSP employees.")
 
         # -- required for a new employee ---------------------------------
         if p.action == "new":

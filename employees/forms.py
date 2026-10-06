@@ -75,6 +75,7 @@ class EmployeeForm(forms.ModelForm):
             "salary_grade",
             "appointment_type",
             "employment_status",
+            "cosp_under",
             "date_of_appointment",
             "date_hired",
             "original_appointment_date",

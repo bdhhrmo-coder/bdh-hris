@@ -80,6 +80,17 @@ class Employee(models.Model):
     employment_status = models.CharField(
         max_length=10, choices=EMPLOYMENT_STATUS_CHOICES, default=EMPLOYMENT_STATUS_REGULAR
     )
+    # Who funds a COSP contract (dashboard, 2026-10-06). Blank for regular staff.
+    COSP_UNDER_PGP = "PGP"
+    COSP_UNDER_LGU = "LGU"
+    COSP_UNDER_CHOICES = [
+        (COSP_UNDER_PGP, "PGP (Provincial Government of Palawan)"),
+        (COSP_UNDER_LGU, "LGU (Local Government Unit)"),
+    ]
+    cosp_under = models.CharField(
+        "COSP under", max_length=3, choices=COSP_UNDER_CHOICES, blank=True,
+        help_text="For COSP employees only: whether the contract is under the PGP or the LGU.",
+    )
     date_of_appointment = models.DateField(null=True, blank=True)
     date_hired = models.DateField(null=True, blank=True)
     original_appointment_date = models.DateField(null=True, blank=True)
@@ -173,7 +184,26 @@ class EducationHistory(models.Model):
     employee = models.ForeignKey(
         Employee, on_delete=models.CASCADE, related_name="education_history"
     )
-    education_level = models.CharField(max_length=100)
+    # Fixed levels (CS Form 212 / PDS, with Graduate Studies split into
+    # Master's and Doctorate - owner decision 2026-10-06) so "highest
+    # educational attainment" can be ranked. Listed lowest to highest.
+    ELEMENTARY = "ELEMENTARY"
+    SECONDARY = "SECONDARY"
+    VOCATIONAL = "VOCATIONAL"
+    COLLEGE = "COLLEGE"
+    MASTERS = "MASTERS"
+    DOCTORATE = "DOCTORATE"
+    LEVEL_CHOICES = [
+        (ELEMENTARY, "Elementary"),
+        (SECONDARY, "Secondary"),
+        (VOCATIONAL, "Vocational/Trade Course"),
+        (COLLEGE, "College"),
+        (MASTERS, "Graduate Studies - Master's"),
+        (DOCTORATE, "Graduate Studies - Doctorate"),
+    ]
+    LEVEL_RANK = {code: rank for rank, (code, _) in enumerate(LEVEL_CHOICES)}
+
+    education_level = models.CharField(max_length=100, choices=LEVEL_CHOICES)
     school = models.CharField(max_length=200)
     degree_course = models.CharField(max_length=200, blank=True)
     units_earned = models.CharField(max_length=100, blank=True)
