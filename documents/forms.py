@@ -14,3 +14,7 @@ class DocumentUploadForm(forms.Form):
         super().__init__(*args, **kwargs)
         if requirement_queryset is not None:
             self.fields["requirement"].queryset = requirement_queryset
+        # Staff only need the document's name ("Allowed to Work form"), not
+        # the model/sub-type prefix that DocumentRequirement.__str__ adds for
+        # the admin screens.
+        self.fields["requirement"].label_from_instance = lambda req: req.label

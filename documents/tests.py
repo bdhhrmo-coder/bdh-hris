@@ -274,3 +274,18 @@ class ReplaceViewTests(TestCase):
             {"file": SimpleUploadedFile("v3.pdf", PDF_BYTES, content_type="application/pdf")},
         )
         self.assertEqual(response.status_code, 403)
+
+
+class UploadFormLabelTests(TestCase):
+    def test_requirement_dropdown_shows_plain_document_names(self):
+        from cto.models import CTOCreditEntry
+
+        from .forms import DocumentUploadForm
+
+        ct = ContentType.objects.get_for_model(CTOCreditEntry)
+        qs = DocumentRequirement.objects.filter(content_type=ct)
+        self.assertTrue(qs.exists())  # seeded by documents/migrations/0002
+        labels = [label for value, label in DocumentUploadForm(requirement_queryset=qs).fields["requirement"].choices if value]
+        self.assertIn("Allowed to Work form", labels)
+        for label in labels:
+            self.assertNotIn("ctocreditentry", label)
