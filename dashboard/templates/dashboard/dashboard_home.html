@@ -99,7 +99,7 @@
 <div class="card chart-card">
   <h2 style="margin-top:0;">Absenteeism rate by section ({{ period_label }})</h2>
   <p class="field-help">Unplanned absence days &divide; scheduled workdays &times; 100. Target: {{ absenteeism_target }}% or lower (red bars are above target). Scheduled workdays = days with an attendance record; absences covered by approved leave, CTO, Official Business/Time or Travel are not counted as unplanned.</p>
-  <img class="chart-anim chart-bars" src="{{ absenteeism_chart }}" alt="Absenteeism rate by section bar chart">
+  <div class="svg-chart-wrap">{{ absenteeism_chart }}</div>
   <table>
     <tr><th>Section</th><th>Unplanned absence days</th><th>Scheduled workdays</th><th>Rate</th></tr>
     {% for r in absenteeism_rows %}
@@ -115,7 +115,7 @@
 <div class="card chart-card">
   <h2 style="margin-top:0;">Leave utilization rate by section ({{ period_label }})</h2>
   <p class="field-help">Leave days used &divide; leave days earned &times; 100, for VL, SL, COSP Leave and Wellness Leave. Earned = each employee's yearly entitlement pro-rated to the period.</p>
-  <img class="chart-anim chart-bars" src="{{ utilization_chart }}" alt="Leave utilization rate by section bar chart">
+  <div class="svg-chart-wrap">{{ utilization_chart }}</div>
   <table>
     <tr><th>Section</th><th>Days used</th><th>Days earned</th><th>Rate</th></tr>
     {% for r in utilization_rows %}
@@ -128,7 +128,7 @@
 <div class="card chart-card">
   <h2 style="margin-top:0;">Sex distribution (active employees)</h2>
   <div class="split-row">
-    <img class="chart-anim chart-pie" src="{{ sex_chart }}" alt="Sex distribution pie chart" style="max-width:300px;">
+    <div class="svg-chart-wrap" style="max-width:380px;">{{ sex_chart }}</div>
     <table style="max-width:320px;">
       <tr><th>Sex</th><th>Employees</th></tr>
       {% for r in sex_rows %}<tr><td>{{ r.label }}</td><td>{{ r.count }}</td></tr>{% endfor %}
@@ -145,7 +145,7 @@
 
 <div class="card chart-card">
   <h2 style="margin-top:0;">Age distribution (active employees)</h2>
-  <img class="chart-anim chart-bars" src="{{ age_chart }}" alt="Age distribution bar chart">
+  <div class="svg-chart-wrap">{{ age_chart }}</div>
   <table>
     <tr>{% for r in age_rows %}<th>{{ r.label }}</th>{% endfor %}</tr>
     <tr>{% for r in age_rows %}<td>{{ r.count }}</td>{% endfor %}</tr>
@@ -168,12 +168,12 @@
 
 <div class="card chart-card">
   <h2 style="margin-top:0;">Applications by status</h2>
-  <img class="chart-anim chart-pie" src="{{ pie_chart }}" alt="Applications by status pie chart" style="max-width: 320px;">
+  <div class="svg-chart-wrap" style="max-width: 380px;">{{ pie_chart }}</div>
 </div>
 
 <div class="card chart-card">
   <h2 style="margin-top:0;">Monthly trend</h2>
-  <img class="chart-anim chart-line" src="{{ trend_chart }}" alt="Applications filed per month trend graph">
+  <div class="svg-chart-wrap">{{ trend_chart }}</div>
 </div>
 
 <div class="card">

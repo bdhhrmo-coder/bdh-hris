@@ -201,22 +201,40 @@ button.is-busy::after {
 @keyframes snack-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
 /* --- Dashboard charts (Batch 3 Item 4) ---------------------------------
-   The charts are pictures drawn on the server, so the whole picture is
-   revealed (owner decision 2026-10-07): bar charts rise from the baseline,
-   the trend line draws left to right, pie charts sweep round. Under 1 s;
-   the numbers are not touched. Replays whenever the page/filters reload. */
-.chart-anim { animation-duration: 800ms; animation-timing-function: cubic-bezier(.2, .7, .2, 1); animation-fill-mode: both; }
-.chart-bars { animation-name: chart-rise; }
-.chart-line { animation-name: chart-draw; }
-.chart-pie  { animation-name: chart-sweep; }
-@keyframes chart-rise { from { clip-path: inset(100% 0 0 0); } to { clip-path: inset(0 0 0 0); } }
-@keyframes chart-draw { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
-@property --sweep { syntax: "<angle>"; inherits: false; initial-value: 360deg; }
-@keyframes chart-sweep { from { --sweep: 0deg; } to { --sweep: 360deg; } }
-.chart-pie {
-  -webkit-mask-image: conic-gradient(#000 var(--sweep), transparent 0);
-          mask-image: conic-gradient(#000 var(--sweep), transparent 0);
-}
+   The charts are inline SVG (dashboard/charts.py, owner decision
+   2026-10-07), so each part animates on its own: bars grow from the
+   baseline one after another, the trend line draws left to right, pie
+   slices sweep round. About 0.8 s in all; numbers are never changed.
+   Plays when the dashboard opens and after every filter change (the page
+   reloads with the new data). */
+.svg-chart-wrap { max-width: 100%; flex: 1 1 320px; min-width: 0; }
+.svg-chart { display: block; width: 100%; height: auto; font-family: inherit; overflow: visible; }
+.svg-chart .chart-title { font-size: 13px; font-weight: 700; fill: #123a63; }
+.svg-chart .chart-label { font-size: 11px; fill: #1f2937; }
+.svg-chart .chart-axis { font-size: 10px; fill: #5b6570; }
+.svg-chart .chart-value { font-size: 10px; fill: #5b6570; }
+.svg-chart .chart-empty { font-size: 13px; fill: #5b6570; }
+.svg-chart .chart-grid { stroke: #e3e8ee; stroke-width: 1; }
+.svg-chart .chart-baseline { stroke: #9aa5b1; stroke-width: 1; }
+.svg-chart .chart-target { stroke-width: 1.5; stroke-dasharray: 5 4; }
+.svg-chart .chart-legend text { font-size: 12px; fill: #1f2937; }
+.svg-chart .chart-area { opacity: 0.07; }
+
+.svg-chart .bar { transform-box: fill-box; }
+.svg-chart .bar-h { transform-origin: left center; animation: bar-grow-x 600ms cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(var(--i, 0) * 25ms); }
+.svg-chart .bar-v { transform-origin: center bottom; animation: bar-grow-y 600ms cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(var(--i, 0) * 40ms); }
+.svg-chart .chart-value { animation: chart-fade 300ms ease-out both; animation-delay: calc(450ms + var(--i, 0) * 25ms); }
+.svg-chart .chart-line-path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: line-draw 800ms ease-out forwards; }
+.svg-chart .chart-dot { animation: chart-fade 250ms ease-out both; animation-delay: calc(var(--i, 0) * 50ms + 150ms); }
+.svg-chart .chart-area { animation: area-fade 800ms ease-out both; }
+.svg-chart .pie-sweep { stroke-dashoffset: 0; animation: pie-sweep 800ms cubic-bezier(.3,.6,.2,1) both; }
+.svg-chart .chart-legend { animation: chart-fade 300ms ease-out both; animation-delay: calc(300ms + var(--i, 0) * 80ms); }
+@keyframes bar-grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes bar-grow-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes line-draw { to { stroke-dashoffset: 0; } }
+@keyframes chart-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes area-fade { from { opacity: 0; } to { opacity: 0.07; } }
+@keyframes pie-sweep { from { stroke-dashoffset: 163.363; } to { stroke-dashoffset: 0; } }
 
 /* --- Search results fade (Batch 3 Item 7) ----------------------------- */
 .results-fade { animation: results-in 200ms ease-out; }
@@ -297,7 +315,9 @@ body > .working-panel { position: fixed; right: 16px; bottom: 16px; z-index: 900
   .signout-spinner { animation: none; border-right-color: rgba(255, 255, 255, 0.85); }
   .working-bar span { animation: none; left: 0; width: 100%; opacity: 0.55; }   /* still bar, no sliding */
   .snackbar-timer span { transition: none !important; transform: none !important; }  /* no shrinking bar */
-  .chart-anim { animation: none !important; clip-path: none; -webkit-mask-image: none; mask-image: none; }
+  .svg-chart .bar, .svg-chart .chart-value, .svg-chart .chart-dot, .svg-chart .chart-legend,
+  .svg-chart .chart-area, .svg-chart .pie-sweep { animation: none !important; }
+  .svg-chart .chart-line-path { animation: none !important; stroke-dashoffset: 0; }
   .confirm-icon.is-shaking { animation: none; }
 }
 
