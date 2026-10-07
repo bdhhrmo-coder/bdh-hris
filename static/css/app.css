@@ -244,6 +244,7 @@ h2 { font-size: 1.15rem; margin-top: 1.6em; }
 }
 .msg.success { background: var(--green-100); color: var(--green-700); border-color: #bfe3cb; }
 .msg.info    { background: var(--navy-100); color: var(--navy-800); border-color: #c7d8ea; }
+.msg.warning { background: #fff6dc; color: #7a5a00; border-color: #f0dc9c; }
 .msg.error   { background: var(--red-100); color: var(--red-700); border-color: #f0c6c3; }
 
 .locked-note {

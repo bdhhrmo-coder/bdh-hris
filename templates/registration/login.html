@@ -6,6 +6,8 @@
   <link rel="stylesheet" href="{% static 'css/login.css' %}">
 {% endblock %}
 
+{% block messages %}{% endblock %}{# shown inside the card below #}
+
 {% block content %}
 <div class="login-blob login-blob-a" aria-hidden="true"></div>
 <div class="login-blob login-blob-b" aria-hidden="true"></div>
@@ -17,6 +19,10 @@
     <h1>BDH Human Resource<br>Information System</h1>
     <p>Personnel, Attendance &amp; Leave Management</p>
   </div>
+
+  {% for message in messages %}
+    <div class="msg {{ message.tags }}" role="status">{{ message }}</div>
+  {% endfor %}
 
   {% if form.non_field_errors %}
     <div class="msg error" role="alert" aria-live="polite">

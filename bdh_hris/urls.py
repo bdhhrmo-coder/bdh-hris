@@ -21,17 +21,17 @@ from django.contrib.auth.decorators import login_required
 from django.urls import include, path
 from django.views.generic import RedirectView
 
-from accounts.views import BDHLoginView, BDHPasswordChangeView
+from accounts.views import BDHLoginView, BDHPasswordChangeView, home
 
 urlpatterns = [
-    # The site had no "/" page at all, so a visitor who just opened
-    # http://<server>/ with nothing after it had nowhere to go — the only
-    # other URL people instinctively try is /admin/, which is Django's own
-    # administration panel (a different, staff-only login), not this app.
-    # Point "/" at the real login page instead: BDHLoginView already
-    # forwards an already-signed-in visitor on to LOGIN_REDIRECT_URL, so
-    # this covers both "just opened the site" and "already logged in".
-    path("", RedirectView.as_view(pattern_name="login", permanent=False), name="home"),
+    # Batch 2, Item 1: one permanent login link, /hris/login/. "/" , "/hris/"
+    # and the old "/login/" all lead there (or, if already signed in, to
+    # the person's landing page). The old /login/ keeps any ?next= so
+    # existing bookmarks still work.
+    path("", home, name="home"),
+    path("hris/", home),
+    path("hris/login/", BDHLoginView.as_view(), name="login"),
+    path("login/", RedirectView.as_view(pattern_name="login", permanent=False, query_string=True)),
     path("admin/", admin.site.urls),
     path("employees/", include("employees.urls")),
     path("leave/", include("leave.urls")),
@@ -43,7 +43,6 @@ urlpatterns = [
     path("notifications/", include("notifications.urls")),
     path("dashboard/", include("dashboard.urls")),
     path("audit-log/", include("auditlog.urls")),
-    path("login/", BDHLoginView.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("password/change/", login_required(BDHPasswordChangeView.as_view()), name="password_change"),
     path("data-import/", include("dataimport.urls")),

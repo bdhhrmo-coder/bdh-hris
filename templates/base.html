@@ -76,11 +76,13 @@
   {% else %}
     <main class="guest-main">
   {% endif %}
+        {% block messages %}
         {% if messages %}
           {% for message in messages %}
             <div class="msg {{ message.tags }}">{{ message }}</div>
           {% endfor %}
         {% endif %}
+        {% endblock %}
         {% block content %}{% endblock %}
       </main>
   {% if user.is_authenticated %}

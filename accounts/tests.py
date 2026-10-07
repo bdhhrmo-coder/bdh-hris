@@ -138,6 +138,72 @@ class LoginLogoutTests(TestCase):
         self.assertContains(page, 'method="post" action="/logout/"')
 
 
+class PermanentLoginLinkTests(TestCase):
+    """Batch 2, Item 1: /hris/login/ always loads."""
+
+    def setUp(self):
+        make_employee("staff", "E-30", RoleAssignment.EMPLOYEE)
+        make_employee("hrboss", "E-31", RoleAssignment.HR_ADMINISTRATOR)
+
+    def test_login_lives_at_hris_login(self):
+        self.assertEqual(reverse("login"), "/hris/login/")
+        page = self.client.get("/hris/login/")
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "Sign In")
+
+    def test_old_links_lead_to_the_new_login(self):
+        for url in ("/", "/hris/", "/login/"):
+            self.assertRedirects(self.client.get(url), "/hris/login/", fetch_redirect_response=False)
+
+    def test_old_login_link_keeps_next(self):
+        response = self.client.get("/login/?next=/leave/")
+        self.assertRedirects(response, "/hris/login/?next=/leave/", fetch_redirect_response=False)
+
+    def test_signed_in_staff_goes_to_notifications_and_hr_to_dashboard(self):
+        self.client.login(username="staff", password=PASSWORD)
+        for url in ("/hris/login/", "/", "/login/"):
+            self.assertRedirects(self.client.get(url, follow=True), reverse("notifications:notification_list"))
+        hr = Client()
+        hr.login(username="hrboss", password=PASSWORD)
+        self.assertRedirects(hr.get("/hris/login/"), reverse("dashboard:dashboard_home"))
+        self.assertRedirects(hr.post("/hris/login/", {"username": "hrboss", "password": PASSWORD}),
+                             reverse("dashboard:dashboard_home"))
+
+    def test_inner_page_bookmark_logs_in_then_returns_there(self):
+        response = self.client.get(reverse("leave:my_applications"))
+        self.assertRedirects(response, "/hris/login/?next=/leave/mine/", fetch_redirect_response=False)
+        page = self.client.get(response.url)
+        self.assertContains(page, "Please log in to continue.")
+        after = self.client.post(response.url, {"username": "staff", "password": PASSWORD,
+                                                "next": reverse("leave:my_applications")})
+        self.assertRedirects(after, reverse("leave:my_applications"), fetch_redirect_response=False)
+
+    def test_next_pointing_at_login_or_logout_does_not_loop(self):
+        for bad in ("/hris/login/", "/logout/", "/login/", "/admin/"):
+            client = Client()
+            r = client.post(f"/hris/login/?next={bad}", {"username": "staff", "password": PASSWORD, "next": bad})
+            self.assertRedirects(r, reverse("notifications:notification_list"), fetch_redirect_response=False)
+            self.assertEqual(client.get(f"/hris/login/?next={bad}").status_code, 302)  # signed in: no loop
+
+    def test_expired_login_form_shows_message_not_403(self):
+        client = Client(enforce_csrf_checks=True)
+        r = client.post("/hris/login/", {"username": "staff", "password": PASSWORD, "csrfmiddlewaretoken": "old"},
+                        follow=True)
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, "Session expired. Please log in again.")
+        self.assertContains(r, "Sign In")
+
+    def test_timed_out_session_says_session_expired(self):
+        self.client.cookies["sessionid"] = "no-longer-valid"
+        page = self.client.get("/hris/login/?next=/leave/")
+        self.assertContains(page, "Session expired. Please log in again.")
+
+    def test_fresh_visit_shows_no_message(self):
+        page = self.client.get("/hris/login/")
+        self.assertNotContains(page, "Session expired")
+        self.assertNotContains(page, "Please log in to continue")
+
+
 class SidebarByRoleTests(TestCase):
     """What each role sees in the sidebar (CLAUDE.md Section 3)."""
 

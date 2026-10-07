@@ -234,6 +234,14 @@ LOGIN_URL = "login"
 # part of deployment prep — flagging it here since it changes what a person
 # sees right after signing in, even though it touches no permission logic.
 LOGIN_REDIRECT_URL = "notifications:notification_list"
+# (Batch 2, Item 1) accounts.views.BDHLoginView now picks the landing page
+# per person - Dashboard for the roles that can see it, Notifications for
+# everyone else; LOGIN_REDIRECT_URL above is only the fallback.
+
+# An expired login form (old tab, browser history, Back button) used to
+# show Django's "403 CSRF verification failed" page. This shows the login
+# page with "Session expired. Please log in again." instead.
+CSRF_FAILURE_VIEW = "accounts.views.csrf_failure"
 # Without this, Django shows its own built-in "Logged out" page (the Django
 # administration one), whose "Log in again" link goes to /admin/login/ - a
 # staff-only login that rejects normal accounts. Send people straight back to

@@ -1,8 +1,56 @@
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.views import LoginView, PasswordChangeView
-from django.urls import reverse_lazy
+from django.shortcuts import redirect
+from django.urls import reverse, reverse_lazy
+from django.utils.http import url_has_allowed_host_and_scheme
 
 from .forms import BDHAuthenticationForm
+
+SESSION_EXPIRED_MESSAGE = "Session expired. Please log in again."
+
+# ?next= targets that must never be used after login: going "next" to the
+# login page itself is a redirect loop, /logout/ only accepts POST (a GET
+# shows an error page), and /admin/ is Django's staff-only panel.
+_BAD_NEXT_PREFIXES = ("/hris/login", "/login", "/logout", "/admin")
+
+
+def landing_url(user):
+    """Where a signed-in person starts (Batch 2, Item 1c): the Dashboard for
+    the roles that can see it, Notifications for everyone else (the only
+    page every role has - see the note on LOGIN_REDIRECT_URL in settings)."""
+    from dashboard.permissions import can_view_dashboard
+    from employees.permissions import get_acting_employee
+
+    if can_view_dashboard(get_acting_employee(user)):
+        return reverse("dashboard:dashboard_home")
+    return reverse("notifications:notification_list")
+
+
+def home(request):
+    """'/' (and /hris/): signed in -> your landing page, otherwise the login page."""
+    if request.user.is_authenticated:
+        return redirect(landing_url(request.user))
+    return redirect("login")
+
+
+def csrf_failure(request, reason=""):
+    """
+    Replaces Django's "403 Forbidden - CSRF verification failed" page
+    (CSRF_FAILURE_VIEW). That page appeared when someone submitted a login
+    form loaded long ago (from browser history, the Back button, or a tab
+    left open) whose security token had expired. Now they simply get a
+    fresh login page with a short message, or, if they are still signed
+    in, are sent back to the page they came from.
+    """
+    if request.user.is_authenticated:
+        messages.warning(request, "This page had expired. Please try again.")
+        back = request.META.get("HTTP_REFERER", "")
+        if back and url_has_allowed_host_and_scheme(back, allowed_hosts={request.get_host()}):
+            return redirect(back)
+        return redirect(landing_url(request.user))
+    messages.warning(request, SESSION_EXPIRED_MESSAGE)
+    return redirect("login")
 
 
 class BDHLoginView(LoginView):
@@ -18,6 +66,27 @@ class BDHLoginView(LoginView):
     redirect_authenticated_user = True
 
     REMEMBER_ME_SECONDS = 60 * 60 * 24 * 14  # 2 weeks
+
+    def get_redirect_url(self):
+        """The ?next= page, unless it would loop or break (see _BAD_NEXT_PREFIXES)."""
+        url = super().get_redirect_url()
+        if url and url.lower().startswith(_BAD_NEXT_PREFIXES):
+            return ""
+        return url
+
+    def get_default_redirect_url(self):
+        return landing_url(self.request.user)
+
+    def get(self, request, *args, **kwargs):
+        # Say why the login page is showing. A leftover session cookie with
+        # no signed-in user means the session timed out (a normal logout
+        # deletes the cookie); a ?next= alone means an inner-page bookmark.
+        if not request.user.is_authenticated:
+            if request.COOKIES.get(settings.SESSION_COOKIE_NAME):
+                messages.warning(request, SESSION_EXPIRED_MESSAGE)
+            elif request.GET.get("next"):
+                messages.info(request, "Please log in to continue.")
+        return super().get(request, *args, **kwargs)
 
     def form_valid(self, form):
         response = super().form_valid(form)

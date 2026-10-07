@@ -104,7 +104,7 @@ and role assignments from inside the app afterward.
 
 You should see `BDH HRIS: serving on http://0.0.0.0:8000 (4 threads)`.
 From another machine on the same network, browse to
-`http://<server-hostname-or-ip>:8000/login/` and confirm the login page
+`http://<server-hostname-or-ip>:8000/hris/login/` and confirm the login page
 loads with the BDH logo and styling (not a plain, unstyled page - if it
 looks unstyled, `collectstatic` didn't run, or `BDH_HRIS_DEBUG` is still
 on and Waitress/WhiteNoise isn't the one serving static files yet).
@@ -162,6 +162,37 @@ New-NetFirewallRule -DisplayName "BDH HRIS" -Direction Inbound -Protocol TCP -Lo
 ```
 
 Adjust the port number if you changed `BDH_HRIS_PORT` in `.env`.
+
+### The login link to give staff
+
+The one permanent login link is:
+
+```
+http://<server-name-or-IP>:8000/hris/login/
+```
+
+for example `http://192.168.1.25:8000/hris/login/`. Older links (`/`,
+`/login/`) still work and lead to it. If someone is already signed in, the
+link takes them straight to their start page (Dashboard for HR/AO/COH/System
+Administrator, Notifications for everyone else).
+
+**Friendly name (optional), e.g. `http://bdh-hris/hris/login/`:**
+
+1. Give the server a fixed IP address (ask whoever manages the network/router).
+2. Make the name point to that IP, using one of these:
+   - **Best:** add a DNS "A record" `bdh-hris -> <server IP>` on the hospital's
+     DNS server or router, if it has one; or
+   - **No DNS server:** on *each* staff PC add this line to
+     `C:\Windows\System32\drivers\etc\hosts` (edit as Administrator):
+     `<server IP>   bdh-hris`
+3. In `.env`, add the name to `BDH_HRIS_ALLOWED_HOSTS`, keeping the IP:
+   `BDH_HRIS_ALLOWED_HOSTS=bdh-hris,192.168.1.25,localhost`
+4. To drop the `:8000` from the link, set `BDH_HRIS_PORT=80` in `.env`, open
+   port 80 in the firewall (command above with `-LocalPort 80`), and make sure
+   nothing else on the server (IIS, Skype, etc.) uses port 80.
+5. Restart the service (`nssm restart BDH-HRIS`).
+
+The link then becomes `http://bdh-hris/hris/login/`.
 
 ## 8. Set up the nightly backup
 
