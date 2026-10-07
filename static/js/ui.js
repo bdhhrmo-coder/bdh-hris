@@ -239,4 +239,81 @@
         BDH.toast("Could not sign out — the server did not answer. Check the network connection and try again.", "error");
       });
   }, true);
+
+  // ---------------------------------------------------------------------
+  // Confirmation dialog (Item 6). Any form with data-confirm="message"
+  // asks first. Optional attributes:
+  //   data-confirm-title="Archive this record?"
+  //   data-confirm-ok="Archive"            (the red button's label)
+  //   data-confirm-reason="Reason"         (adds a required reason box; its
+  //                                          text is sent as field "reason")
+  // Cancel has the focus, so Enter/Esc never does the destructive action by
+  // accident. The server still checks everything.
+  // ---------------------------------------------------------------------
+  var dialog = null, pending = null;
+
+  function buildDialog() {
+    dialog = document.createElement("dialog");
+    dialog.className = "confirm-dialog";
+    dialog.setAttribute("aria-labelledby", "confirm-title");
+    dialog.setAttribute("aria-describedby", "confirm-text");
+    dialog.innerHTML =
+      '<div class="confirm-icon" aria-hidden="true">!</div>' +
+      '<h2 id="confirm-title"></h2>' +
+      '<p id="confirm-text"></p>' +
+      '<label class="confirm-reason"><span></span><textarea rows="2" maxlength="255"></textarea></label>' +
+      '<div class="confirm-actions">' +
+      '<button type="button" class="btn-secondary confirm-cancel">Cancel</button>' +
+      '<button type="button" class="btn-danger confirm-ok"></button></div>';
+    document.body.appendChild(dialog);
+    var reason = dialog.querySelector("textarea"), ok = dialog.querySelector(".confirm-ok");
+    reason.addEventListener("input", function () { ok.disabled = !reason.value.trim(); });
+    dialog.querySelector(".confirm-cancel").addEventListener("click", function () { dialog.close(); });
+    dialog.addEventListener("close", function () { pending = null; });
+    ok.addEventListener("click", function () {
+      if (!pending) return;
+      var form = pending.form, submitter = pending.submitter;
+      if (form.hasAttribute("data-confirm-reason")) {
+        var field = form.querySelector("input[name=reason][data-from-dialog]");
+        if (!field) {
+          field = document.createElement("input");
+          field.type = "hidden"; field.name = "reason"; field.setAttribute("data-from-dialog", "");
+          form.appendChild(field);
+        }
+        field.value = reason.value.trim();
+      }
+      form.setAttribute("data-confirmed", "");
+      dialog.close();
+      if (form.requestSubmit) form.requestSubmit(submitter || undefined); else form.submit();
+    });
+  }
+
+  BDH.confirm = function (form, submitter) {
+    if (!dialog) buildDialog();
+    pending = { form: form, submitter: submitter };
+    dialog.querySelector("#confirm-title").textContent = form.getAttribute("data-confirm-title") || "Are you sure?";
+    dialog.querySelector("#confirm-text").textContent = form.getAttribute("data-confirm");
+    var ok = dialog.querySelector(".confirm-ok"), box = dialog.querySelector(".confirm-reason");
+    var reason = box.querySelector("textarea");
+    ok.textContent = form.getAttribute("data-confirm-ok") || "Confirm";
+    var needsReason = form.hasAttribute("data-confirm-reason");
+    box.hidden = !needsReason;
+    box.querySelector("span").textContent = form.getAttribute("data-confirm-reason") || "Reason";
+    reason.value = ""; reason.required = needsReason;
+    ok.disabled = needsReason;
+    var icon = dialog.querySelector(".confirm-icon");
+    icon.classList.remove("is-shaking"); void icon.offsetWidth; icon.classList.add("is-shaking");  // once
+    dialog.showModal();
+    dialog.querySelector(needsReason ? "textarea" : ".confirm-cancel").focus();
+  };
+
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (!form.hasAttribute || !form.hasAttribute("data-confirm")) return;
+    if (form.hasAttribute("data-confirmed")) { form.removeAttribute("data-confirmed"); return; }
+    if (!window.HTMLDialogElement) return;  // very old browser: plain submit, server still checks
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    BDH.confirm(form, e.submitter);
+  }, true);
 })();

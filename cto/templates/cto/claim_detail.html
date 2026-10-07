@@ -50,9 +50,11 @@
     <button type="submit" {% if submission_errors %}disabled{% endif %}>Submit and credit CTO</button>
   </form>
   {% if can_discard %}
-  <form method="post" action="{% url 'cto:claim_discard' entry.pk %}" style="display:inline;">
+  <form method="post" action="{% url 'cto:claim_discard' entry.pk %}" style="display:inline;"
+        data-confirm="This draft claim will be permanently deleted. This cannot be undone."
+        data-confirm-title="Discard this draft claim?" data-confirm-ok="Discard draft">
     {% csrf_token %}
-    <button type="submit">Discard draft</button>
+    <button type="submit" class="btn-danger">Discard draft</button>
   </form>
   {% endif %}
 </div>

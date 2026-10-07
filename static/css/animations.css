@@ -147,6 +147,37 @@ button.is-busy::after {
   animation: btn-spin 700ms linear infinite;
 }
 
+/* --- Confirmation dialog (Batch 3 Item 6) ----------------------------- */
+.confirm-dialog {
+  border: none; border-radius: 14px; padding: 1.4rem 1.5rem 1.2rem;
+  width: min(420px, calc(100vw - 32px));
+  box-shadow: 0 24px 60px rgba(6, 24, 44, 0.35);
+  text-align: center;
+}
+.confirm-dialog[open] { animation: dialog-in 200ms ease-out; }
+.confirm-dialog::backdrop { background: rgba(11, 44, 77, 0.45); }
+.confirm-dialog h2 { margin: 0.6rem 0 0.35rem; font-size: 1.1rem; }
+.confirm-dialog p { margin: 0 0 0.9rem; color: var(--gray-600, #5b6570); font-size: 0.92rem; }
+.confirm-icon {
+  width: 2.6rem; height: 2.6rem; margin: 0 auto; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: #fde8e6; color: #c62828; font-weight: 800; font-size: 1.35rem;
+}
+.confirm-icon.is-shaking { animation: icon-shake 420ms ease-in-out 1; }  /* one time only */
+.confirm-reason { display: grid; gap: 0.3rem; text-align: left; font-size: 0.82rem; font-weight: 600; margin-bottom: 0.9rem; }
+.confirm-reason[hidden] { display: none; }
+.confirm-actions { display: flex; gap: 0.6rem; justify-content: center; flex-wrap: wrap; }
+.confirm-actions button { min-width: 7.5rem; min-height: 2.6rem; }
+.btn-danger, button.btn-danger { background: #c62828; color: #fff; border-color: #c62828; }
+.btn-danger:hover, button.btn-danger:hover { background: #a61f1f; }
+.btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+@keyframes dialog-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes icon-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); } 40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); } 80% { transform: translateX(2px); }
+}
+
 /* ===== (new component styles go above this line) ===== */
 
 /* Reduce motion: no movement anywhere. The loading bar stays as a still
