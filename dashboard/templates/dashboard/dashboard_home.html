@@ -212,14 +212,14 @@
   <p class="btn-link-group" style="margin:0 0 0.4rem;">
     <strong>Leave Balance Report</strong> &mdash;
     <a href="{% url 'dashboard:leave_balance_report' %}{% if selected_section %}?section={{ selected_section.pk }}{% endif %}">View</a>
-    <a href="{% url 'dashboard:leave_balance_report' %}?format=xlsx{% if selected_section %}&section={{ selected_section.pk }}{% endif %}">Excel</a>
-    <a href="{% url 'dashboard:leave_balance_report' %}?format=pdf{% if selected_section %}&section={{ selected_section.pk }}{% endif %}">PDF</a>
+    <a href="{% url 'dashboard:leave_balance_report' %}?format=xlsx{% if selected_section %}&section={{ selected_section.pk }}{% endif %}" data-download="Preparing the report…">Excel</a>
+    <a href="{% url 'dashboard:leave_balance_report' %}?format=pdf{% if selected_section %}&section={{ selected_section.pk }}{% endif %}" data-download="Preparing the report…">PDF</a>
   </p>
   <p class="btn-link-group" style="margin:0;">
     <strong>Application Summary Report ({{ period_label }})</strong> &mdash;
     <a href="{% url 'dashboard:application_summary_report' %}?{{ get_params.urlencode }}">View</a>
-    <a href="{% url 'dashboard:application_summary_report' %}?{{ get_params.urlencode }}&format=xlsx">Excel</a>
-    <a href="{% url 'dashboard:application_summary_report' %}?{{ get_params.urlencode }}&format=pdf">PDF</a>
+    <a href="{% url 'dashboard:application_summary_report' %}?{{ get_params.urlencode }}&format=xlsx" data-download="Preparing the report…">Excel</a>
+    <a href="{% url 'dashboard:application_summary_report' %}?{{ get_params.urlencode }}&format=pdf" data-download="Preparing the report…">PDF</a>
   </p>
 </div>
 {% endblock %}

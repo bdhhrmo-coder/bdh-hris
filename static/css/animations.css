@@ -245,6 +245,20 @@ button.is-busy::after {
 .upload-retry { grid-column: 1 / -1; justify-self: start; }
 @keyframes check-pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
+/* --- Working... progress (Batch 3 Item 9) ----------------------------- */
+.working-panel {
+  display: grid; gap: 0.4rem; margin: 0.75rem 0; padding: 0.65rem 0.85rem; max-width: 460px;
+  border: 1px solid #c7d8ea; border-radius: 10px; background: #f3f8fc;
+  font-size: 0.88rem; font-weight: 600; color: var(--navy-800, #12385f);
+  animation: results-in 200ms ease-out;
+}
+body > .working-panel { position: fixed; right: 16px; bottom: 16px; z-index: 900; }
+.working-bar { height: 6px; border-radius: 999px; background: #dde7f1; overflow: hidden; position: relative; }
+.working-bar span { position: absolute; top: 0; bottom: 0; width: 35%; border-radius: 999px; background: var(--navy-700, #1a4b7a); animation: working-slide 1.1s ease-in-out infinite; }
+.working-panel.is-done { border-color: #bfe3cb; background: #f2faf5; color: #1f6b40; }
+.working-panel.is-done .working-bar span { width: 100%; left: 0; animation: none; background: #2e8b57; }
+@keyframes working-slide { from { left: -35%; } to { left: 100%; } }
+
 /* ===== (new component styles go above this line) ===== */
 
 /* Reduce motion: no movement anywhere. The loading bar stays as a still

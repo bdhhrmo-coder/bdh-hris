@@ -477,4 +477,75 @@
   document.addEventListener("DOMContentLoaded", function () {
     document.querySelectorAll("form[data-upload]").forEach(uploadForm);
   });
+
+  // ---------------------------------------------------------------------
+  // Progress (Item 9). The imports and reports finish in one step on the
+  // server and can't report a real percentage, so we show an honest
+  // "Working..." bar (no made-up numbers, owner decision 2026-10-07).
+  //   form[data-working="Text..."]  - shown while the form is processed;
+  //                                   the next page shows the summary.
+  //   a[data-download="Text..."]    - fetches the file, shows Working...,
+  //                                   then saves it; on a problem shows the
+  //                                   server's message instead of a stuck bar.
+  // ---------------------------------------------------------------------
+  BDH.working = function (text, anchor) {
+    var panel = document.createElement("div");
+    panel.className = "working-panel";
+    panel.setAttribute("role", "status");
+    panel.innerHTML = '<span class="working-text"></span><span class="working-bar" aria-hidden="true"><span></span></span>';
+    panel.querySelector(".working-text").textContent = text + " Working…";
+    if (anchor) anchor.insertAdjacentElement("afterend", panel); else document.body.appendChild(panel);
+    return {
+      done: function (msg) { panel.classList.add("is-done"); panel.querySelector(".working-text").textContent = msg || "100% Complete"; setTimeout(function () { panel.remove(); }, 1500); },
+      fail: function () { panel.remove(); },
+    };
+  };
+
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (e.defaultPrevented || !form.hasAttribute || !form.hasAttribute("data-working")) return;
+    if (form.querySelector(".working-panel")) return;
+    var w = BDH.working(form.getAttribute("data-working"), form.lastElementChild || form);
+    window.addEventListener("pageshow", function () { w.fail(); }, { once: true });  // came back with Back
+  });
+
+  function filenameFrom(r, url) {
+    var cd = r.headers.get("content-disposition") || "", m = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(cd);
+    return m ? decodeURIComponent(m[1]) : url.split("/").pop().split("?")[0] || "download";
+  }
+
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest && e.target.closest("a[data-download]");
+    if (!a || e.button !== 0 || e.metaKey || e.ctrlKey || !window.fetch) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (a.getAttribute("aria-busy") === "true") return;
+    a.setAttribute("aria-busy", "true");
+    var w = BDH.working(a.getAttribute("data-download"), a);
+    fetch(a.href, { credentials: "same-origin" })
+      .then(function (r) {
+        var type = r.headers.get("content-type") || "";
+        if (!r.ok || type.indexOf("text/html") === 0) {
+          // The server sent a page instead of the file: show its message.
+          return r.text().then(function (html) {
+            var doc = new DOMParser().parseFromString(html, "text/html");
+            var msg = doc.querySelector(".msg.error, .msg.warning, .msg");
+            throw new Error(msg ? msg.textContent.trim() : "The file could not be prepared.");
+          });
+        }
+        return r.blob().then(function (blob) {
+          var link = document.createElement("a");
+          link.href = URL.createObjectURL(blob);
+          link.download = filenameFrom(r, a.href);
+          document.body.appendChild(link); link.click(); link.remove();
+          setTimeout(function () { URL.revokeObjectURL(link.href); }, 10000);
+          w.done("100% Complete — " + link.download + " saved.");
+        });
+      })
+      .catch(function (err) {
+        w.fail();
+        BDH.toast(err && err.message && err.message !== "Failed to fetch" ? err.message : "Network error — the file could not be downloaded.", "error");
+      })
+      .then(function () { a.removeAttribute("aria-busy"); });
+  }, true);
 })();

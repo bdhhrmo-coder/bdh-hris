@@ -9,7 +9,7 @@
     <div class="msg error"><strong>{{ error_rows }} row(s) have errors.</strong> Nothing can be saved until they are fixed. Correct the file and upload it again.</div>
   {% else %}
     <div class="msg info">No errors. {% if kind == "employees" %}{{ new_count }} new, {{ update_count }} to update, {{ same_count }} unchanged.{% else %}{{ update_count }} employee(s) will get an opening-balance adjustment, {{ same_count }} already match.{% endif %}</div>
-    <form method="post" action="{% url 'dataimport:confirm' kind %}" style="display:inline;">
+    <form method="post" action="{% url 'dataimport:confirm' kind %}" style="display:inline;" data-working="Saving{% if kind == 'employees' %} employees{% else %} opening balances{% endif %}…">
       {% csrf_token %}
       <button type="submit">Confirm and save</button>
     </form>
