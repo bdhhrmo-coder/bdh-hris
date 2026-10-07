@@ -283,3 +283,11 @@ class BatchTests(TestCase):
         self.assertEqual(self.client.get(reverse("official_requests:batch_detail", args=[batch.pk])).status_code, 200)
         self.client.force_login(self.outsider.user)
         self.assertEqual(self.client.get(reverse("official_requests:batch_detail", args=[batch.pk])).status_code, 403)
+
+    def test_file_for_a_group_link_sits_under_my_requests(self):
+        self.client.force_login(self.sup.user)
+        html = self.client.get(reverse("official_requests:my_requests")).content.decode()
+        mine, link, approvals = html.index("My Requests"), html.index("File for a Group"), html.index("Approvals")
+        self.assertTrue(mine < link < approvals)
+        self.client.force_login(self.a.user)  # plain employee: no link
+        self.assertNotIn("File for a Group", self.client.get(reverse("official_requests:my_requests")).content.decode())

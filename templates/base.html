@@ -61,6 +61,7 @@
           <a href="{% url 'exchange:my_exchanges' %}">Exchange of Duty</a>
           <a href="{% url 'attendance:my_attendance' %}">Attendance</a>
           <a href="{% url 'official_requests:my_requests' %}">Official Business/Time/Travel/OT</a>
+          {% if can_file_batch %}<a href="{% url 'official_requests:batch_file' %}">File for a Group</a>{% endif %}
 
           {% if has_approval_role %}
           <p class="nav-section-label">Approvals</p>
@@ -69,7 +70,6 @@
           <a href="{% url 'exchange:exchange_queue' %}">Exchange Queue</a>
           <a href="{% url 'attendance:correction_queue' %}">Attendance Correction Queue</a>
           <a href="{% url 'official_requests:request_queue' %}">Requests Queue</a>
-          {% if can_file_batch %}<a href="{% url 'official_requests:batch_file' %}">File for a Group</a>{% endif %}
           {% elif is_ictu_staff %}
           <p class="nav-section-label">Approvals</p>
           <a href="{% url 'attendance:correction_queue' %}">Attendance Correction Queue</a>
