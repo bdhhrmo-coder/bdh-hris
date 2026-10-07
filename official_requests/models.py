@@ -14,6 +14,11 @@ ROUTING_CONFIG):
   - Travel:                   Employee -> Supervisor -> AO -> COH (no HR step)
   - Authorized OT/restday/holiday work: Employee -> Supervisor -> HR -> AO -> COH
 
+Batch filing (Batch 2, Item 7, 2026-10-07): a Supervisor or HR may file
+Travel, Official Business or OT/rest-day/holiday work for several
+employees and dates as one OfficialRequestBatch; each employee-date is an
+OfficialRequest line of it. See batch.py.
+
 Settled 2026-09-28 (CLAUDE.md §7): approving an OT_RESTDAY_HOLIDAY request
 does NOT create CTO credit. HR files a separate CTO claim per workday from
 the approved request (cto.CTOCreditEntry.ot_request links back here), and
@@ -82,6 +87,14 @@ class OfficialRequest(models.Model):
     submitted_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Set when this request is one employee-date line of a group (batch)
+    # request filed by a Supervisor or HR (Batch 2, Item 7). Its status
+    # follows the batch's; it is acted on only through the batch.
+    batch = models.ForeignKey(
+        "OfficialRequestBatch", on_delete=models.PROTECT, null=True, blank=True, related_name="lines",
+    )
+    line_note = models.CharField(max_length=255, blank=True, help_text="Optional note for this line of a batch.")
+
     class Meta:
         ordering = ["-submitted_at"]
 
@@ -116,3 +129,81 @@ class OfficialRequestAction(models.Model):
 
     def __str__(self):
         return f"{self.request} — {self.action} @ {self.acted_at:%Y-%m-%d %H:%M}"
+
+
+class OfficialRequestBatch(models.Model):
+    """
+    One group request filed by a Supervisor or HR for several employees and
+    dates at once (Batch 2, Item 7; owner decisions 2026-10-07). Each
+    employee-date is saved as its own OfficialRequest line (batch=this), so
+    the CTO claim, dashboard and the employee's own list work unchanged.
+
+    Approval is for the whole batch. The filer's own step counts as done,
+    so the route depends on the type and the filer's role - see
+    official_requests/batch.py ROUTES. A regular employee filing their own
+    request still uses the normal single-request form and route.
+    """
+
+    WORK_OT = "OT"
+    WORK_REST_DAY = "REST_DAY"
+    WORK_HOLIDAY = "HOLIDAY"
+    WORK_KIND_CHOICES = [(WORK_OT, "Authorized overtime"), (WORK_REST_DAY, "Rest-day work"), (WORK_HOLIDAY, "Holiday work")]
+
+    FILER_SUPERVISOR = "SUPERVISOR"
+    FILER_HR_PROCESSOR = "HR_PROCESSOR"
+    FILER_HR_ADMINISTRATOR = "HR_ADMINISTRATOR"
+    FILER_ROLE_CHOICES = [
+        (FILER_SUPERVISOR, "Supervisor"),
+        (FILER_HR_PROCESSOR, "HR Processor"),
+        (FILER_HR_ADMINISTRATOR, "HR Administrator"),
+    ]
+
+    request_type = models.CharField(max_length=25, choices=OfficialRequest.REQUEST_TYPE_CHOICES)
+    work_kind = models.CharField(max_length=10, choices=WORK_KIND_CHOICES, blank=True,
+                                 help_text="OT/rest-day/holiday batches only.")
+    purpose = models.TextField(help_text="One shared purpose/reason for the whole batch.")
+    destination = models.CharField(max_length=255, blank=True, help_text="Travel only.")
+    filed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    filer_role = models.CharField(max_length=20, choices=FILER_ROLE_CHOICES,
+                                  help_text="The role the batch was filed under; decides the route.")
+    status = models.CharField(max_length=25, choices=OfficialRequest.STATUS_CHOICES, default=OfficialRequest.SUBMITTED)
+    filed_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-filed_at"]
+
+    def __str__(self):
+        return f"Batch #{self.pk} {self.type_label} ({self.status})"
+
+    @property
+    def type_label(self):
+        if self.request_type == OfficialRequest.OT_RESTDAY_HOLIDAY and self.work_kind:
+            return self.get_work_kind_display()
+        return self.get_request_type_display()
+
+    def active_lines(self):
+        return self.lines.exclude(status=OfficialRequest.CANCELLED).select_related("employee").order_by(
+            "employee__surname", "employee__first_name", "start_date", "time_from")
+
+    def is_terminal(self):
+        return self.status in OfficialRequest.TERMINAL_STATUSES
+
+
+class OfficialRequestBatchAction(models.Model):
+    """The batch's own history (filing, each approval/return with its
+    remark, resubmission). The same entries are also written to every
+    line's OfficialRequestAction, so the Audit Log shows them per employee."""
+
+    batch = models.ForeignKey(OfficialRequestBatch, on_delete=models.CASCADE, related_name="actions")
+    action = models.CharField(max_length=30)
+    resulting_status = models.CharField(max_length=25, choices=OfficialRequest.STATUS_CHOICES)
+    notes = models.CharField(max_length=500, blank=True)
+    acted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    acted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["acted_at", "pk"]
+
+    def __str__(self):
+        return f"{self.batch} — {self.action} @ {self.acted_at:%Y-%m-%d %H:%M}"

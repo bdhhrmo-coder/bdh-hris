@@ -9,8 +9,8 @@
   <tr><th>Type</th><th>Dates</th><th>Purpose</th><th>Status</th><th>Submitted</th><th>Documents</th></tr>
   {% for r in requests %}
   <tr>
-    <td>{{ r.get_request_type_display }}</td>
-    <td>{{ r.start_date }} to {{ r.end_date }}</td>
+    <td>{{ r.get_request_type_display }}{% if r.batch_id %}<br><small><a href="{% url 'official_requests:batch_detail' r.batch_id %}">Group request #{{ r.batch_id }}</a></small>{% endif %}</td>
+    <td>{{ r.start_date }}{% if r.end_date != r.start_date %} to {{ r.end_date }}{% endif %}{% if r.time_from %}<br><small>{{ r.time_from|time:"h:i A" }}{% if r.time_to %} – {{ r.time_to|time:"h:i A" }}{% endif %}</small>{% endif %}</td>
     <td>{{ r.purpose|truncatechars:60 }}</td>
     <td>{% status_badge r.status r.get_status_display %}</td>
     <td>{{ r.submitted_at|date:"Y-m-d" }}</td>

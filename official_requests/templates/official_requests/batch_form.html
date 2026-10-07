@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}{% if batch %}Edit group request #{{ batch.pk }}{% else %}File for a group{% endif %} — BDH HRIS{% endblock %}
+{% block content %}
+<h1>{% if batch %}Edit and resubmit group request #{{ batch.pk }}{% else %}File for a group{% endif %}</h1>
+<p style="color:var(--gray-600);">Travel, Official Business, or Authorized OT / rest-day / holiday work for several employees and dates at once. It is saved as one group request; each approver approves or returns the whole group.{% if batch %} After you resubmit, it starts again from the first approval step.{% endif %}</p>
+
+{% if latest_return %}
+<div class="msg warning" role="status">
+  <strong>Returned by {{ latest_return.acted_by.employee.full_name|default:latest_return.acted_by.username }}</strong>
+  on {{ latest_return.acted_at|date:"M d, Y h:i A" }}:<br>{{ latest_return.notes }}
+</div>
+{% endif %}
+
+{{ editor|json_script:"batch-editor" }}
+<script>
+  document.addEventListener("alpine:init", function () {
+    Alpine.data("batchEditor", function () {
+      var cfg = JSON.parse(document.getElementById("batch-editor").textContent);
+      var key = 0;
+      cfg.rows.forEach(function (r) { r.key = ++key; });
+      return {
+        employees: cfg.employees, sections: cfg.sections, selected: cfg.selected, rows: cfg.rows,
+        applySame: cfg.applySame, kind: cfg.kind, maxLines: cfg.maxLines, search: "", section: "",
+        get workKind() { return {{ work_kinds|safe }}.includes(this.kind); },
+        get filtered() {
+          var q = this.search.trim().toLowerCase();
+          return this.employees.filter(function (e) { return !q || e.name.toLowerCase().indexOf(q) !== -1; });
+        },
+        get chosen() {
+          var sel = this.selected;
+          return this.employees.filter(function (e) { return sel.indexOf(String(e.id)) !== -1; });
+        },
+        selectSection: function () {
+          var sid = parseInt(this.section, 10), sel = this.selected;
+          this.employees.forEach(function (e) {
+            if (e.sections.indexOf(sid) !== -1 && sel.indexOf(String(e.id)) === -1) sel.push(String(e.id));
+          });
+        },
+        selectShown: function () {
+          var sel = this.selected;
+          this.filtered.forEach(function (e) { if (sel.indexOf(String(e.id)) === -1) sel.push(String(e.id)); });
+        },
+        clearAll: function () { this.selected.splice(0); },
+        add: function () {
+          if (this.rows.length >= this.maxLines && this.applySame) return;
+          var last = this.rows[this.rows.length - 1] || {};
+          this.rows.push({ key: ++key, date: "", time_from: last.time_from || "", time_to: last.time_to || "",
+                           employee: "", note: "" });
+        },
+        remove: function (i) { if (this.rows.length > 1) this.rows.splice(i, 1); },
+        get pairCount() { return this.applySame ? this.rows.length * this.selected.length : this.rows.length; },
+      };
+    });
+  });
+</script>
+
+<form method="post" novalidate x-data="batchEditor()">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="msg error" role="alert">{% for e in form.non_field_errors %}{{ e }}<br>{% endfor %}</div>{% endif %}
+  {% if form.line_formset.non_form_errors %}<div class="msg error" role="alert">{% for e in form.line_formset.non_form_errors %}{{ e }} {% endfor %}</div>{% endif %}
+
+  {% if conflicts %}
+  <div class="card conflict-card">
+    <h2 style="margin-top:0;">Conflicts found ({{ conflicts|length }})</h2>
+    <p class="field-help" style="margin-top:0;">These employees already have something on that date. The ticked lines will be removed when you click <strong>Remove ticked and file</strong>. Untick a line only if you have fixed it some other way &mdash; it will be checked again.</p>
+    <div class="table-scroll">
+    <table>
+      <tr><th>Remove</th><th>Employee</th><th>Date</th><th>Conflict</th></tr>
+      {% for c in conflicts %}
+      <tr>
+        <td><input type="checkbox" name="skip" value="{{ c.key }}" checked aria-label="Remove {{ c.employee }} on {{ c.date }}"></td>
+        <td>{{ c.employee }}</td>
+        <td>{{ c.date|date:"D, M d, Y" }}</td>
+        <td>{{ c.reasons|join:"; " }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    </div>
+    <button type="submit">Remove ticked and {% if batch %}resubmit{% else %}file{% endif %}</button>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <h2 style="margin-top:0;">1. Type and purpose</h2>
+    <div class="batch-header-grid">
+      <label>Type
+        <select name="kind" x-model="kind" {% if batch %}disabled{% endif %}>
+          <option value="">— choose —</option>
+          {% for value, label in form.fields.kind.choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+        </select>
+        {% if batch %}<input type="hidden" name="kind" :value="kind">{% endif %}
+        {% for e in form.kind.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+      </label>
+      <label x-show="kind === 'TRAVEL'">Destination
+        <input type="text" name="destination" maxlength="255" value="{{ form.destination.value|default:'' }}">
+        {% for e in form.destination.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+      </label>
+      <label class="span-all">Purpose / reason (shared by every line)
+        <textarea name="purpose" rows="2">{{ form.purpose.value|default:'' }}</textarea>
+        {% for e in form.purpose.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+      </label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">2. Employees <span class="field-help" x-text="'(' + selected.length + ' selected)'"></span></h2>
+    {% for e in form.employees.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+    <div class="picker-tools">
+      <input type="search" x-model="search" placeholder="Search name…" aria-label="Search employees">
+      <button type="button" class="btn-secondary btn-sm" @click="selectShown()">Select all shown</button>
+      <template x-if="sections.length">
+        <span class="picker-section">
+          <select x-model="section" aria-label="Section">
+            <option value="">Select all in section…</option>
+            <template x-for="s in sections" :key="s.id"><option :value="s.id" x-text="s.name"></option></template>
+          </select>
+          <button type="button" class="btn-secondary btn-sm" @click="selectSection()" :disabled="!section">Add</button>
+        </span>
+      </template>
+      <button type="button" class="btn-secondary btn-sm" @click="clearAll()">Clear</button>
+    </div>
+    <div class="picker-list" role="group" aria-label="Employees">
+      <template x-for="e in filtered" :key="e.id">
+        <label class="picker-row"><input type="checkbox" name="employees" :value="e.id" x-model="selected"> <span x-text="e.name"></span></label>
+      </template>
+      <p class="empty-note" x-show="!filtered.length">No one matches.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">3. Dates and times</h2>
+    <label class="inline-check"><input type="checkbox" name="apply_same" x-model="applySame"> Apply the same schedule to all selected employees</label>
+    <p class="field-help" x-show="!applySame">Each line is for one employee &mdash; choose who on each line.</p>
+    <p class="field-help" x-show="workKind">Time start and time end are required for OT / rest-day / holiday work. An end time earlier than the start means the next day.</p>
+
+    <input type="hidden" name="lines-TOTAL_FORMS" :value="rows.length">
+    <input type="hidden" name="lines-INITIAL_FORMS" value="0">
+    <input type="hidden" name="lines-MIN_NUM_FORMS" value="1">
+    <input type="hidden" name="lines-MAX_NUM_FORMS" value="1000">
+    <div class="table-scroll">
+    <table class="batch-lines">
+      <tr><th x-show="!applySame">Employee</th><th>Date</th><th>Time start</th><th>Time end</th><th>Note (optional)</th><th></th></tr>
+      <template x-for="(row, i) in rows" :key="row.key">
+        <tr>
+          <td x-show="!applySame">
+            <select :name="'lines-' + i + '-employee'" x-model="row.employee" :disabled="applySame" aria-label="Employee">
+              <option value="">— choose —</option>
+              <template x-for="e in chosen" :key="e.id"><option :value="e.id" x-text="e.name" :selected="String(e.id) === String(row.employee)"></option></template>
+            </select>
+          </td>
+          <td><input type="date" :name="'lines-' + i + '-date'" x-model="row.date" aria-label="Date"></td>
+          <td><input type="time" :name="'lines-' + i + '-time_from'" x-model="row.time_from" aria-label="Time start"></td>
+          <td><input type="time" :name="'lines-' + i + '-time_to'" x-model="row.time_to" aria-label="Time end"></td>
+          <td><input type="text" maxlength="255" :name="'lines-' + i + '-note'" x-model="row.note" aria-label="Note"></td>
+          <td><button type="button" class="line-remove" x-show="rows.length > 1" @click="remove(i)">Remove</button></td>
+        </tr>
+      </template>
+    </table>
+    </div>
+    <button type="button" class="btn btn-secondary" @click="add()">+ Add a line</button>
+    <span class="field-help" x-text="'This will file ' + pairCount + ' employee-date line(s).'"></span>
+  </div>
+
+  {% if batch %}
+  <div class="card">
+    <label class="field-title" for="resubmit_note">Note to the approver (optional)</label>
+    <input type="text" id="resubmit_note" name="resubmit_note" maxlength="255">
+  </div>
+  {% endif %}
+
+  <p>
+    <button type="submit">{% if batch %}Resubmit group request{% else %}Check and file{% endif %}</button>
+    {% if batch %}<a href="{% url 'official_requests:batch_detail' batch.pk %}" class="btn btn-secondary">Cancel</a>{% endif %}
+  </p>
+</form>
+
+{% if my_batches and not batch %}
+<div class="card">
+  <h2 style="margin-top:0;">Group requests I filed</h2>
+  <table>
+    <tr><th>#</th><th>Type</th><th>Filed</th><th>Status</th></tr>
+    {% for b in my_batches %}
+    <tr>
+      <td><a href="{% url 'official_requests:batch_detail' b.pk %}">#{{ b.pk }}</a></td>
+      <td>{{ b.type_label }}</td>
+      <td>{{ b.filed_at|date:"Y-m-d" }}</td>
+      <td>{{ b.get_status_display }}{% if b.status == "RETURNED" %} &middot; <a href="{% url 'official_requests:batch_edit' b.pk %}">Edit &amp; resubmit</a>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+{% endblock %}

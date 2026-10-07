@@ -2,8 +2,36 @@
 {% load badges %}
 {% block title %}Requests queue — BDH HRIS{% endblock %}
 {% block content %}
-<h1>Requests awaiting my action</h1>
+<div class="split-row">
+  <h1>Requests awaiting my action</h1>
+  {% if can_file_batch %}<a href="{% url 'official_requests:batch_file' %}" class="btn">+ File for a group</a>{% endif %}
+</div>
+
+{% if batches %}
 <div class="card">
+<h2 style="margin-top:0;">Group requests</h2>
+<p class="field-help" style="margin-top:0;">Approve or return the whole group. Open one to see every employee and date.</p>
+<div class="table-scroll">
+<table>
+  <tr><th>#</th><th>Type</th><th>Filed by</th><th>Lines</th><th>Purpose</th><th>Status</th><th></th></tr>
+  {% for b in batches %}
+  <tr>
+    <td>{{ b.pk }}</td>
+    <td>{{ b.type_label }}</td>
+    <td>{{ b.filed_by.employee.full_name|default:b.filed_by.username }}<br><small>{{ b.get_filer_role_display }}</small></td>
+    <td>{{ b.active_lines.count }}</td>
+    <td>{{ b.purpose|truncatechars:60 }}</td>
+    <td>{% status_badge b.status b.get_status_display %}</td>
+    <td class="row-actions"><a href="{% url 'official_requests:batch_detail' b.pk %}" class="btn btn-sm">Review</a></td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+</div>
+{% endif %}
+
+<div class="card">
+<h2 style="margin-top:0;">Individual requests</h2>
 <table>
   <tr><th>Employee</th><th>Type</th><th>Dates</th><th>Purpose</th><th>Status</th><th>Action</th></tr>
   {% for r in requests %}

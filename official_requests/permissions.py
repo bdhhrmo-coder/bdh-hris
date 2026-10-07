@@ -26,6 +26,8 @@ def can_view_request(acting_employee, official_request):
 def actor_may_advance(acting_employee, official_request):
     """True if acting_employee is the right role to take the next routing
     step on this request, whatever that step turns out to be."""
+    if official_request.batch_id is not None:
+        return False  # acted on through its group (batch) request
     target_status = next_status(official_request.request_type, official_request.status)
     if target_status is None:
         return False
@@ -45,8 +47,8 @@ def visible_requests_for(acting_employee):
     if acting_employee is None:
         return OfficialRequest.objects.none()
 
-    candidates = OfficialRequest.objects.exclude(status__in=OfficialRequest.TERMINAL_STATUSES).select_related(
-        "employee"
-    )
+    # Lines of a group (batch) request are acted on through the batch only.
+    candidates = OfficialRequest.objects.exclude(status__in=OfficialRequest.TERMINAL_STATUSES).filter(
+        batch__isnull=True).select_related("employee")
     matching_ids = [req.pk for req in candidates if actor_may_advance(acting_employee, req)]
     return OfficialRequest.objects.filter(pk__in=matching_ids)

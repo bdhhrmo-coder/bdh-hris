@@ -41,7 +41,7 @@ def my_requests(request):
     acting_employee = get_acting_employee(request.user)
     if acting_employee is None:
         raise PermissionDenied("No employee record is linked to your account.")
-    requests = acting_employee.official_requests.all()
+    requests = acting_employee.official_requests.exclude(status=OfficialRequest.CANCELLED, batch__isnull=False)
     return render(request, "official_requests/my_requests.html", {"requests": requests})
 
 
@@ -51,7 +51,12 @@ def request_queue(request):
     requests = list(visible_requests_for(acting_employee).select_related("employee").order_by("submitted_at", "pk"))  # oldest first: first filed, first acted on (owner, 2026-10-06)
     for r in requests:
         r.next_action = action_name_for(next_status(r.request_type, r.status))
-    return render(request, "official_requests/request_queue.html", {"requests": requests})
+    from . import batch as batch_rules
+
+    batches = batch_rules.batches_awaiting(acting_employee, request.user)
+    return render(request, "official_requests/request_queue.html", {
+        "requests": requests, "batches": batches, "can_file_batch": bool(batch_rules.filer_roles(acting_employee)),
+    })
 
 
 @login_required

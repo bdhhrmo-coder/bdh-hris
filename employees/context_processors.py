@@ -50,6 +50,11 @@ def nav_links(request):
         "can_list_employees": _can_list_employees(acting_employee),
         "has_approval_role": has_approval_role,
         "is_ictu_staff": is_ictu_staff,
+        # Group filing of Travel / OB / OT (Batch 2, Item 7): Supervisors and HR.
+        "can_file_batch": acting_employee is not None and any(
+            acting_employee.has_role(role) for role in
+            (RoleAssignment.SUPERVISOR, RoleAssignment.HR_PROCESSOR, RoleAssignment.HR_ADMINISTRATOR)
+        ),
         # Employee and opening-balance imports: HR Administrator and HR
         # Processor (owner decision, 2026-10-06).
         "can_import_data": acting_employee is not None and (

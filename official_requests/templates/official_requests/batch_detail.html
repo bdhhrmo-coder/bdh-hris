@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% load badges %}
+{% block title %}Group request #{{ batch.pk }} — BDH HRIS{% endblock %}
+{% block content %}
+<div class="split-row">
+  <h1>Group request #{{ batch.pk }} &middot; {{ batch.type_label }}</h1>
+  {% status_badge batch.status batch.get_status_display %}
+</div>
+<p style="color:var(--gray-600); margin-top:0;">
+  Filed by {{ batch.filed_by.employee.full_name|default:batch.filed_by.username }} ({{ batch.get_filer_role_display }})
+  on {{ batch.filed_at|date:"M d, Y h:i A" }}.<br>
+  Route: {{ route|join:" → " }}{% if next_step %} &middot; <strong>Next: {{ next_step }}</strong>{% endif %}<br>
+  <small>Skipped: {{ skipped }} (filed on behalf by {{ batch.get_filer_role_display }}).</small>
+</p>
+
+{% if is_filer and batch.status == "RETURNED" %}
+<div class="msg warning" role="status">This group request was returned. Read the remark in the history below, then
+  <a href="{% url 'official_requests:batch_edit' batch.pk %}"><strong>edit and resubmit it</strong></a>.</div>
+{% endif %}
+
+<div class="card">
+  <p style="margin-top:0;"><strong>Purpose:</strong> {{ batch.purpose|linebreaksbr }}</p>
+  {% if batch.destination %}<p><strong>Destination:</strong> {{ batch.destination }}</p>{% endif %}
+  <h2>Lines ({{ lines|length }})</h2>
+  <div class="table-scroll">
+  <table>
+    <tr><th>Employee</th><th>Date</th><th>Time</th>{% if batch.request_type == "OT_RESTDAY_HOLIDAY" %}<th>Hours</th>{% endif %}<th>Note</th></tr>
+    {% for l in lines %}
+    <tr>
+      <td>{{ l.employee.full_name }}</td>
+      <td>{{ l.start_date|date:"D, M d, Y" }}</td>
+      <td>{% if l.time_from %}{{ l.time_from|time:"h:i A" }} – {{ l.time_to|time:"h:i A"|default:"—" }}{% else %}Whole day{% endif %}</td>
+      {% if batch.request_type == "OT_RESTDAY_HOLIDAY" %}<td>{{ l.hours_requested|default:"—" }}</td>{% endif %}
+      <td>{{ l.line_note|default:"" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  </div>
+  {% if removed %}<p class="field-help">Removed by the filer after a return: {% for r in removed %}{{ r.employee.full_name }} ({{ r.start_date|date:"M d" }}){% if not forloop.last %}; {% endif %}{% endfor %}</p>{% endif %}
+  {% if batch.request_type == "OT_RESTDAY_HOLIDAY" %}<p class="field-help">Approval does not add CTO. HR files each CTO claim from the approved line, with the required documents.</p>{% endif %}
+</div>
+
+{% if actions %}
+<div class="card">
+  <h2 style="margin-top:0;">Your action (applies to the whole group)</h2>
+  <form method="post" action="{% url 'official_requests:batch_action' batch.pk %}" x-data="{ remark: '' }">
+    {% csrf_token %}
+    <label class="field-title" for="id_notes">Remark <span class="field-help">&mdash; required to return, optional otherwise</span></label>
+    <textarea id="id_notes" name="notes" maxlength="255" rows="2" x-model="remark"></textarea>
+    <div class="row-actions" style="margin-top:0.6rem;">
+      {% for code, label in actions %}
+        {% if code == "return" %}
+        <button type="submit" name="action" value="return" class="btn-secondary" :disabled="!remark.trim()">Return</button>
+        {% elif code == "reject" %}
+        <button type="submit" name="action" value="reject" class="btn-secondary">Reject</button>
+        {% else %}
+        <button type="submit" name="action" value="{{ code }}">{{ label }}</button>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </form>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2 style="margin-top:0;">History</h2>
+  <table>
+    <tr><th>When</th><th>Action</th><th>By</th><th>Remark</th></tr>
+    {% for a in history %}
+    <tr{% if a.action == "return" %} class="history-return"{% endif %}>
+      <td>{{ a.acted_at|date:"M d, Y h:i A" }}</td>
+      <td>{{ a.action|capfirst }}</td>
+      <td>{{ a.acted_by.employee.full_name|default:a.acted_by.username }}</td>
+      <td>{{ a.notes|default:"—" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}
