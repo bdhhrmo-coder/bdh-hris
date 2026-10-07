@@ -4,7 +4,10 @@
 <h1>Employees</h1>
 
 <div class="card">
-  <form method="get" class="filter-bar" data-live-results="#employee-results">
+  {# Batch 3 Item 7: HTMX fetches the results box only; the old results stay until the new ones arrive. #}
+  <form method="get" class="filter-bar" hx-get="{% url 'employees:employee_list' %}"
+        hx-trigger="submit, change, input changed delay:300ms from:#q" hx-target="#employee-results"
+        hx-select="#employee-results" hx-swap="outerHTML" hx-push-url="true" hx-sync="this:replace">
     <label for="q">Search
       <input type="text" id="q" name="q" value="{{ query }}" placeholder="Name or Employee ID">
     </label>

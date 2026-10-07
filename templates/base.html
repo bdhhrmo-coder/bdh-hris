@@ -136,6 +136,7 @@
     });
   </script>
   {% endif %}
+  <script src="{% static 'vendor/htmx.min.js' %}"></script>{# local copy, no CDN (HTMX 1.9) #}
   <script src="{% static 'js/ui.js' %}"></script>
   <script src="{% static 'vendor/alpine.min.js' %}" defer></script>
   {% block extra_scripts %}{% endblock %}

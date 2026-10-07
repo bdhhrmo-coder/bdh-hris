@@ -94,3 +94,22 @@ class ArchiveTests(TestCase):
         self.assertIn("Archive record", page)
         own = self.client.get(reverse("employees:employee_detail", args=[self.hradmin.pk])).content.decode()
         self.assertNotIn("Archive record", own)
+
+
+class DirectorySearchTests(TestCase):
+    """Batch 3 Item 7: the search form uses HTMX (local file) to swap in the results only."""
+
+    def test_search_form_uses_htmx_and_page_loads_local_htmx(self):
+        from django.contrib.auth.models import User
+        from accounts.models import RoleAssignment
+        from employees.models import Employee
+
+        user = User.objects.create_user("dirhr", password="x")
+        emp = Employee.objects.create(user=user, employee_id="D-1", surname="Dir", first_name="T")
+        RoleAssignment.objects.create(employee=emp, role=RoleAssignment.HR_ADMINISTRATOR)
+        self.client.force_login(user)
+        page = self.client.get("/employees/?q=zzz").content.decode()
+        self.assertIn('hx-target="#employee-results"', page)
+        self.assertIn("vendor/htmx.min.js", page)
+        self.assertNotIn("unpkg.com", page)
+        self.assertIn("No results found.", page)
