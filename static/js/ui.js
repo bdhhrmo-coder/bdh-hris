@@ -448,9 +448,10 @@
   });
 
   // ---------------------------------------------------------------------
-  // Progress (Item 9). The imports and reports finish in one step on the
-  // server and can't report a real percentage, so we show an honest
-  // "Working..." bar (no made-up numbers, owner decision 2026-10-07).
+  // Progress (Item 9). Owner decision 2026-10-07: show the REAL upload
+  // percentage for file imports (bytes sent), then an honest "Working..."
+  // while the server checks the rows (it can't report rows processed
+  // without a background job). Never a made-up number.
   //   form[data-working="Text..."]  - shown while the form is processed;
   //                                   the next page shows the summary.
   //   a[data-download="Text..."]    - fetches the file, shows Working...,
@@ -470,10 +471,69 @@
     };
   };
 
+  // A form with a chosen file: send it with XMLHttpRequest so the bar shows
+  // the REAL upload percentage (bytes sent / file size). When the file has
+  // arrived the server still has to check the rows, which it can't report,
+  // so the panel switches to "Working..." until its answer (the preview or
+  // summary page) comes back and is shown.
+  function uploadWithProgress(form, text) {
+    var upText = form.getAttribute("data-upload-text") || "Uploading";
+    var panel = document.createElement("div");
+    panel.className = "working-panel is-measured";
+    panel.setAttribute("role", "status");
+    panel.innerHTML = '<span class="working-text"></span>' +
+      '<span class="working-bar measured" role="progressbar" aria-valuemin="0" aria-valuemax="100"><span></span></span>';
+    (form.lastElementChild || form).insertAdjacentElement("afterend", panel);
+    var label = panel.querySelector(".working-text"), bar = panel.querySelector(".working-bar"), fill = bar.querySelector("span");
+    var buttons = form.querySelectorAll("button[type=submit]");
+    function stop(message) {
+      panel.remove();
+      hideBar();
+      buttons.forEach(function (b) { b.disabled = false; b.classList.remove("is-busy"); });
+      if (message && BDH.toast) BDH.toast(message, "error");
+    }
+    label.textContent = upText + "… 0%";
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", form.action || location.href);
+    xhr.upload.onprogress = function (ev) {
+      if (!ev.lengthComputable) return;
+      var pct = Math.round(ev.loaded / ev.total * 100);
+      fill.style.width = pct + "%";
+      bar.setAttribute("aria-valuenow", pct);
+      label.textContent = upText + "… " + pct + "%";
+    };
+    xhr.upload.onload = function () {
+      // Upload finished: from here only the server knows how far it is.
+      label.textContent = "Upload 100% complete. " + text + " Working…";
+      panel.classList.remove("is-measured");
+      bar.classList.remove("measured");
+      bar.removeAttribute("aria-valuenow");
+      fill.style.width = "";
+    };
+    xhr.onload = function () {
+      if (xhr.status >= 500) { stop("The server could not finish this (error " + xhr.status + "). Nothing was saved. Please try again or tell the System Administrator."); return; }
+      if (xhr.status === 403) { stop("The page expired or you are not allowed to do this. Reload the page and try again."); return; }
+      panel.classList.add("is-done");
+      label.textContent = "100% Complete";
+      // Show the server's answer (preview / summary) as the new page.
+      var target = xhr.responseURL || location.href;
+      if (target.split("#")[0] !== (form.action || location.href).split("#")[0]) { location.href = target; return; }
+      document.open(); document.write(xhr.responseText); document.close();
+    };
+    xhr.onerror = function () { stop("Network error — the file did not reach the server. Check the connection and try again."); };
+    xhr.send(new FormData(form));
+  }
+
   document.addEventListener("submit", function (e) {
     var form = e.target;
     if (e.defaultPrevented || !form.hasAttribute || !form.hasAttribute("data-working")) return;
     if (form.querySelector(".working-panel")) return;
+    var file = form.querySelector("input[type=file]");
+    if (file && file.files && file.files.length && window.XMLHttpRequest && window.FormData) {
+      e.preventDefault();
+      uploadWithProgress(form, form.getAttribute("data-working"));
+      return;
+    }
     var w = BDH.working(form.getAttribute("data-working"), form.lastElementChild || form);
     window.addEventListener("pageshow", function () { w.fail(); }, { once: true });  // came back with Back
   });

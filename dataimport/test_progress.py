@@ -21,6 +21,7 @@ class ProgressMarkupTests(TestCase):
         home = self.client.get(reverse("dataimport:home")).content.decode()
         self.assertEqual(home.count("data-working="), 2)
         self.assertNotIn("%", home.split("data-working=")[1][:60])
+        self.assertIn('data-upload-text="Uploading employees"', home)  # real upload %, then Working...
         bio = self.client.get(reverse("attendance:biometric_import")).content.decode()
         self.assertIn('data-working="Importing biometric records', bio)
 

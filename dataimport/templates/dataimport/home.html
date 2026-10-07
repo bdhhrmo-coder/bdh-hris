@@ -24,7 +24,7 @@
 
 <div class="card">
   <h2 style="margin-top:0;">Step 2 — Import the employee list</h2>
-  <form method="post" action="{% url 'dataimport:upload' 'employees' %}" enctype="multipart/form-data" data-working="Checking the employee file…">
+  <form method="post" action="{% url 'dataimport:upload' 'employees' %}" enctype="multipart/form-data" data-upload-text="Uploading employees" data-working="Checking the employee file…">
     {% csrf_token %}
     <input type="file" name="file" accept=".xlsx" required>
     <div class="field-block"><button type="submit">Upload and check</button></div>
@@ -34,7 +34,7 @@
 <div class="card">
   <h2 style="margin-top:0;">Step 3 — Import opening balances</h2>
   <p class="field-help">Do this after the employees are in. Download the template again so the Opening Balances sheet lists the newly added employees.</p>
-  <form method="post" action="{% url 'dataimport:upload' 'balances' %}" enctype="multipart/form-data" data-working="Checking the opening balances file…">
+  <form method="post" action="{% url 'dataimport:upload' 'balances' %}" enctype="multipart/form-data" data-upload-text="Uploading opening balances" data-working="Checking the opening balances file…">
     {% csrf_token %}
     <input type="file" name="file" accept=".xlsx" required>
     <div class="field-block"><button type="submit">Upload and check</button></div>

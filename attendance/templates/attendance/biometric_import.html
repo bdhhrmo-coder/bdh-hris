@@ -10,7 +10,7 @@
   <div class="msg error">No active column mapping configured. Ask an HR Administrator to set one up in Admin.</div>
   {% endif %}
 
-  <form method="post" enctype="multipart/form-data" data-working="Importing biometric records…">
+  <form method="post" enctype="multipart/form-data" data-upload-text="Uploading biometric file" data-working="Importing biometric records…">
     {% csrf_token %}
     {{ form.as_p }}
     <button type="submit">Import</button>

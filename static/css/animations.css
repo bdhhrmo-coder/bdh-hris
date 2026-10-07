@@ -255,6 +255,7 @@ button.is-busy::after {
 body > .working-panel { position: fixed; right: 16px; bottom: 16px; z-index: 900; }
 .working-bar { height: 6px; border-radius: 999px; background: #dde7f1; overflow: hidden; position: relative; }
 .working-bar span { position: absolute; top: 0; bottom: 0; width: 35%; border-radius: 999px; background: var(--navy-700, #1a4b7a); animation: working-slide 1.1s ease-in-out infinite; }
+.working-bar.measured span { left: 0; width: 0; animation: none; transition: width 150ms linear; }
 .working-panel.is-done { border-color: #bfe3cb; background: #f2faf5; color: #1f6b40; }
 .working-panel.is-done .working-bar span { width: 100%; left: 0; animation: none; background: #2e8b57; }
 @keyframes working-slide { from { left: -35%; } to { left: 100%; } }
