@@ -336,4 +336,41 @@
       }, secs * 1000);
     });
   });
+
+  // ---------------------------------------------------------------------
+  // Live results (Item 7). A GET filter form with data-live-results="#id"
+  // fetches the same page in the background when the user searches or
+  // changes a filter, then swaps in just the results box with a fade. The
+  // old results stay on screen until the new ones arrive (no blank flash).
+  // Without scripts it is an ordinary search form.
+  // ---------------------------------------------------------------------
+  function liveResults(form) {
+    var sel = form.getAttribute("data-live-results"), seq = 0, timer = null;
+    function run() {
+      var url = form.action.split("?")[0] + "?" + new URLSearchParams(new FormData(form)).toString();
+      var mine = ++seq;
+      fetch(url, { credentials: "same-origin", headers: { "X-Requested-With": "fetch" } })
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
+        .then(function (html) {
+          if (mine !== seq) return;  // an older search finished late: ignore it
+          var fresh = new DOMParser().parseFromString(html, "text/html").querySelector(sel);
+          var old = document.querySelector(sel);
+          if (!fresh || !old) { location.href = url; return; }
+          fresh.classList.add("results-fade");
+          old.replaceWith(fresh);
+          history.replaceState(null, "", url);
+        })
+        .catch(function () { location.href = url; });
+    }
+    form.addEventListener("submit", function (e) { e.preventDefault(); e.stopImmediatePropagation(); clearTimeout(timer); run(); }, true);
+    form.addEventListener("change", function () { clearTimeout(timer); run(); });
+    form.addEventListener("input", function (e) {
+      if (e.target.type !== "text" && e.target.type !== "search") return;
+      clearTimeout(timer); timer = setTimeout(run, 300);
+    });
+  }
+  document.addEventListener("DOMContentLoaded", function () {
+    if (!window.fetch || !window.DOMParser) return;
+    document.querySelectorAll("form[data-live-results]").forEach(liveResults);
+  });
 })();

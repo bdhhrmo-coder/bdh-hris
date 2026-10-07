@@ -4,7 +4,7 @@
 <h1>Employees</h1>
 
 <div class="card">
-  <form method="get" class="filter-bar">
+  <form method="get" class="filter-bar" data-live-results="#employee-results">
     <label for="q">Search
       <input type="text" id="q" name="q" value="{{ query }}" placeholder="Name or Employee ID">
     </label>
@@ -32,7 +32,7 @@
 <p><a href="{% url 'employees:employee_create' %}" class="btn">+ New employee record</a></p>
 {% endif %}
 
-<div class="card">
+<div class="card results-fade" id="employee-results" aria-live="polite">
 <table>
   <tr><th>Employee ID</th><th>Name</th><th>Position</th><th>Status</th><th>Active</th></tr>
   {% for e in employees %}
@@ -44,7 +44,7 @@
     <td>{% if e.archived_at %}<span class="badge badge-not-approved">Archived</span>{% elif e.is_active %}<span class="badge badge-approved">Active</span>{% else %}<span class="badge badge-not-approved">Inactive</span>{% endif %}</td>
   </tr>
   {% empty %}
-  <tr><td colspan="5" class="empty-note">No employees found.</td></tr>
+  <tr><td colspan="5" class="empty-note">No results found.</td></tr>
   {% endfor %}
 </table>
 </div>

@@ -218,6 +218,10 @@ button.is-busy::after {
           mask-image: conic-gradient(#000 var(--sweep), transparent 0);
 }
 
+/* --- Search results fade (Batch 3 Item 7) ----------------------------- */
+.results-fade { animation: results-in 200ms ease-out; }
+@keyframes results-in { from { opacity: 0.25; } to { opacity: 1; } }
+
 /* ===== (new component styles go above this line) ===== */
 
 /* Reduce motion: no movement anywhere. The loading bar stays as a still
