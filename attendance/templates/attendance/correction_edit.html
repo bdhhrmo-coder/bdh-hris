@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Edit returned correction — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Edit and resubmit</h1>
+<p style="color:var(--gray-600);">{{ correction.get_correction_type_display }} correction for {{ correction.employee.full_name }}. After you resubmit, it starts again from the first approval step.</p>
+{% if latest_return %}
+<div class="msg warning" role="status">
+  <strong>Returned by {{ latest_return.acted_by.employee.full_name|default:latest_return.acted_by.username }}</strong>
+  on {{ latest_return.acted_at|date:"M d, Y h:i A" }}:<br>{{ latest_return.notes }}
+</div>
+{% endif %}
+<div class="card">
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% include "attendance/_line_editor.html" %}
+    <div class="field-block">
+      <label class="field-title" for="resubmit_note">Note to the approver (optional)</label>
+      <input type="text" id="resubmit_note" name="resubmit_note" maxlength="255" placeholder="e.g. Corrected the time out for Oct 2">
+    </div>
+    <div class="field-block">
+      <button type="submit">Resubmit</button>
+      <a href="{% url 'attendance:correction_detail' correction.pk %}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

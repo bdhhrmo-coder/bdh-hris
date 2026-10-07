@@ -1,0 +1,86 @@
+{% comment %}
+Correction lines editor (Batch 2, Item 6). 1 to {{ max_lines }} dates, each
+with its own times and reason. Alpine.js keeps the list; the inputs are a
+normal Django formset ("lines-N-field") so the server validates everything.
+{% endcomment %}
+{% now "Y-m-d" as today %}
+{{ rows|json_script:"line-rows" }}
+<script>
+  document.addEventListener("alpine:init", function () {
+    Alpine.data("lineEditor", function (max) {
+      var start = JSON.parse(document.getElementById("line-rows").textContent);
+      var key = 0;
+      start.forEach(function (r) { r.key = ++key; });
+      return {
+        rows: start,
+        max: max,
+        add: function () {
+          if (this.rows.length >= this.max) return;
+          var last = this.rows[this.rows.length - 1] || {};
+          // the new date starts with the same reason as the previous one
+          this.rows.push({ key: ++key, date: "", time_in: "", time_out: "", overnight: false, is_absent: false,
+                           reason_category: last.reason_category || "", reason: "", errors: [] });
+        },
+        remove: function (i) { if (this.rows.length > 1) this.rows.splice(i, 1); },
+      };
+    });
+  });
+</script>
+
+<div x-data="lineEditor({{ max_lines }})" class="line-editor">
+  <input type="hidden" name="lines-TOTAL_FORMS" :value="rows.length" value="{{ rows|length }}">
+  <input type="hidden" name="lines-INITIAL_FORMS" value="0">
+  <input type="hidden" name="lines-MIN_NUM_FORMS" value="1">
+  <input type="hidden" name="lines-MAX_NUM_FORMS" value="{{ max_lines }}">
+
+  {% if formset.non_form_errors %}
+    <div class="msg error" role="alert">{% for e in formset.non_form_errors %}{{ e }} {% endfor %}</div>
+  {% endif %}
+
+  <template x-for="(row, i) in rows" :key="row.key">
+    <fieldset class="line-card" :class="{ 'has-error': row.errors.length }">
+      <legend>
+        <span x-text="'Date ' + (i + 1)"></span>
+        <button type="button" class="line-remove" x-show="rows.length > 1" @click="remove(i)"
+                :aria-label="'Remove date ' + (i + 1)">Remove</button>
+      </legend>
+      <div class="line-grid">
+        <label>Date
+          <input type="date" :name="'lines-' + i + '-date'" x-model="row.date" max="{{ today }}" required>
+        </label>
+        <label>Correct time IN
+          <input type="time" :name="'lines-' + i + '-time_in'" x-model="row.time_in" :disabled="row.is_absent">
+        </label>
+        <label>Correct time OUT
+          <input type="time" :name="'lines-' + i + '-time_out'" x-model="row.time_out" :disabled="row.is_absent">
+        </label>
+        <div class="line-checks">
+          <label class="inline-check"><input type="checkbox" :name="'lines-' + i + '-overnight'" x-model="row.overnight" :disabled="row.is_absent"> Overnight shift</label>
+          <label class="inline-check"><input type="checkbox" :name="'lines-' + i + '-is_absent'" x-model="row.is_absent"> Absent (no times)</label>
+        </div>
+        {% if formal %}
+        <label class="line-reason">Reason
+          <select :name="'lines-' + i + '-reason_category'" x-model="row.reason_category">
+            <option value="">— choose —</option>
+            {% for code, label in reason_choices %}
+            <option value="{{ code }}">{{ label }}{% if code in ictu_reasons %} (ICTU validates){% else %} (HR validates){% endif %}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="line-reason">Details
+          <input type="text" maxlength="255" :name="'lines-' + i + '-reason'" x-model="row.reason"
+                 :placeholder="{{ detail_reasons|safe }}.includes(row.reason_category) ? 'Required: say what it was' : 'Optional'">
+        </label>
+        {% else %}
+        <label class="line-reason line-reason-wide">Reason
+          <input type="text" maxlength="255" :name="'lines-' + i + '-reason'" x-model="row.reason" placeholder="e.g. biometric misread">
+        </label>
+        {% endif %}
+      </div>
+      <template x-for="e in row.errors"><div class="field-error" x-text="e"></div></template>
+    </fieldset>
+  </template>
+
+  <button type="button" class="btn btn-secondary" @click="add()" :disabled="rows.length >= max">+ Add another date</button>
+  <span class="field-help" x-text="rows.length + ' of ' + max + ' dates'"></span>
+</div>

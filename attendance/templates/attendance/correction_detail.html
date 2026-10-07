@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% load badges documents_tags %}
+{% block title %}Attendance correction — BDH HRIS{% endblock %}
+{% block content %}
+<div class="split-row">
+  <h1>Attendance correction</h1>
+  {% status_badge correction.status correction.get_status_display %}
+</div>
+<p style="color:var(--gray-600); margin-top:0;">
+  {{ correction.employee.full_name }} &middot; {{ correction.get_correction_type_display }}
+  {% if correction.validator %}&middot; Validator: {{ correction.validator_label }}{% endif %}
+  &middot; Filed {{ correction.submitted_at|date:"M d, Y h:i A" }}
+</p>
+
+{% if can_edit %}
+<div class="msg warning" role="status">
+  This request was returned. Read the remark below, then
+  <a href="{% url 'attendance:correction_edit' correction.pk %}"><strong>edit and resubmit it</strong></a>.
+</div>
+{% endif %}
+
+<div class="card">
+  <h2 style="margin-top:0;">Dates ({{ lines|length }})</h2>
+  <div class="table-scroll">
+  <table>
+    <tr><th>Date</th><th>Correct time</th><th>Reason</th></tr>
+    {% for line in lines %}
+    <tr>
+      <td>{{ line.date|date:"D, M d, Y" }}</td>
+      <td>{{ line.times_display }}</td>
+      <td>{% if line.reason_category %}{{ line.get_reason_category_display }}{% if line.reason %}: {% endif %}{% endif %}{{ line.reason }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  </div>
+</div>
+
+{% if actions %}
+<div class="card">
+  <h2 style="margin-top:0;">Your action (applies to all dates)</h2>
+  <form method="post" action="{% url 'attendance:correction_action' correction.pk %}" x-data="{ remark: '' }">
+    {% csrf_token %}
+    <label class="field-title" for="id_notes">Remark <span class="field-help">&mdash; required to return, optional otherwise</span></label>
+    <textarea id="id_notes" name="notes" maxlength="255" rows="2" x-model="remark"></textarea>
+    <div class="row-actions" style="margin-top:0.6rem;">
+      {% for code, label in actions %}
+        {% if code == "return" %}
+        <button type="submit" name="action" value="return" class="btn-secondary" :disabled="!remark.trim()"
+                :title="remark.trim() ? '' : 'Type a remark first'">Return</button>
+        {% elif code == "reject" %}
+        <button type="submit" name="action" value="reject" class="btn-secondary">Reject</button>
+        {% else %}
+        <button type="submit" name="action" value="{{ code }}">{{ label }}</button>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </form>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2 style="margin-top:0;">History</h2>
+  <table>
+    <tr><th>When</th><th>Action</th><th>By</th><th>Remark</th></tr>
+    {% for a in history %}
+    <tr{% if a.action == "return" %} class="history-return"{% endif %}>
+      <td>{{ a.acted_at|date:"M d, Y h:i A" }}</td>
+      <td>{{ a.action|capfirst }}</td>
+      <td>{{ a.acted_by.employee.full_name|default:a.acted_by.username }}</td>
+      <td>{{ a.notes|default:"—" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<p class="btn-link-group">
+  {% if correction.correction_type == "FORMAL" %}<a href="{% url 'attendance:print_correction_form' correction.pk %}" target="_blank">Print form</a>{% endif %}
+  <a href="{% documents_url correction %}">Documents</a>
+</p>
+{% endblock %}

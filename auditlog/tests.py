@@ -111,8 +111,7 @@ class AggregationTests(TestCase):
     def test_attendance_action_appears(self):
         request = AttendanceCorrectionRequest.objects.create(
             correction_type=AttendanceCorrectionRequest.FORMAL, employee=self.employee,
-            date=date(2026, 4, 1), requested_time_in="08:00", reason="Biometric malfunction",
-            filed_by=self.actor,
+            validator="HR", filed_by=self.actor,
         )
         AttendanceCorrectionRequestAction.objects.create(
             request=request, action="SUBMITTED", resulting_status=AttendanceCorrectionRequest.SUBMITTED,

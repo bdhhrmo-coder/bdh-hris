@@ -191,6 +191,25 @@ class BiometricImportTests(TestCase):
         self.assertEqual(record.time_in, time(8, 5))
 
 
+def lines_post(*lines, **extra):
+    """POST data for the correction lines formset. Each line is a dict of
+    date/time_in/time_out/overnight/is_absent/reason_category/reason."""
+    data = {"lines-TOTAL_FORMS": str(len(lines)), "lines-INITIAL_FORMS": "0",
+            "lines-MIN_NUM_FORMS": "1", "lines-MAX_NUM_FORMS": "10"}
+    for i, line in enumerate(lines):
+        for k, v in line.items():
+            if v is True:
+                v = "on"
+            if v not in (False, None):
+                data[f"lines-{i}-{k}"] = v
+    data.update(extra)
+    return data
+
+
+def line(day="2026-05-05", time_in="08:00", time_out="16:00", **kw):
+    return {"date": day, "time_in": time_in, "time_out": time_out, **kw}
+
+
 class MinorCorrectionFlowTests(TestCase):
     """CLAUDE.md §3/§9: HR Processor files -> HR Administrator authorizes;
     an HR Administrator filing it themselves is self-authorizing."""
@@ -201,33 +220,27 @@ class MinorCorrectionFlowTests(TestCase):
         self.admin_hr = make_employee("minoradmin1", "EMP-MINORADMIN1", role=RoleAssignment.HR_ADMINISTRATOR)
         self.client = Client()
 
+    def file(self, who, *lines):
+        self.client.force_login(who.user)
+        lines = lines or (line("2026-05-01", reason="Device misread"),)
+        return self.client.post(reverse("attendance:minor_correction_create"),
+                                lines_post(*lines, employee=self.employee.pk))
+
     def test_processor_filed_correction_awaits_authorization(self):
-        self.client.force_login(self.processor.user)
-        response = self.client.post(reverse("attendance:minor_correction_create"), {
-            "employee": self.employee.pk, "date": "2026-05-01",
-            "requested_time_in": "08:00", "requested_time_out": "16:00", "reason": "Device misread",
-        })
+        self.file(self.processor)
         correction = AttendanceCorrectionRequest.objects.get()
         self.assertEqual(correction.status, AttendanceCorrectionRequest.SUBMITTED)
+        self.assertEqual(correction.validator, "")
         self.assertFalse(AttendanceRecord.objects.filter(employee=self.employee).exists())
 
     def test_hr_administrator_filing_is_self_authorized(self):
-        self.client.force_login(self.admin_hr.user)
-        response = self.client.post(reverse("attendance:minor_correction_create"), {
-            "employee": self.employee.pk, "date": "2026-05-01",
-            "requested_time_in": "08:00", "requested_time_out": "16:00", "reason": "Device misread",
-        })
+        self.file(self.admin_hr, line("2026-05-01", reason="Device misread"), line("2026-05-02", reason="Same"))
         correction = AttendanceCorrectionRequest.objects.get()
         self.assertEqual(correction.status, AttendanceCorrectionRequest.APPROVED)
-        record = AttendanceRecord.objects.get(employee=self.employee, date=date(2026, 5, 1))
-        self.assertEqual(record.source, AttendanceRecord.SOURCE_MANUAL)
+        self.assertEqual(AttendanceRecord.objects.filter(employee=self.employee, source=AttendanceRecord.SOURCE_MANUAL).count(), 2)
 
     def test_hr_administrator_authorizes_pending_minor_request(self):
-        self.client.force_login(self.processor.user)
-        self.client.post(reverse("attendance:minor_correction_create"), {
-            "employee": self.employee.pk, "date": "2026-05-01",
-            "requested_time_in": "08:00", "requested_time_out": "16:00", "reason": "Device misread",
-        })
+        self.file(self.processor)
         correction = AttendanceCorrectionRequest.objects.get()
         self.client.force_login(self.admin_hr.user)
         self.client.post(reverse("attendance:correction_action", args=[correction.pk]), {"action": "approve"})
@@ -236,21 +249,34 @@ class MinorCorrectionFlowTests(TestCase):
         self.assertTrue(AttendanceRecord.objects.filter(employee=self.employee, date=date(2026, 5, 1)).exists())
 
     def test_processor_cannot_self_authorize(self):
-        self.client.force_login(self.processor.user)
-        self.client.post(reverse("attendance:minor_correction_create"), {
-            "employee": self.employee.pk, "date": "2026-05-01",
-            "requested_time_in": "08:00", "requested_time_out": "16:00", "reason": "Device misread",
-        })
+        self.file(self.processor)
         correction = AttendanceCorrectionRequest.objects.get()
         response = self.client.post(reverse("attendance:correction_action", args=[correction.pk]), {"action": "approve"})
         self.assertEqual(response.status_code, 403)
 
+    def test_minor_lines_need_a_reason(self):
+        self.file(self.processor, line("2026-05-01"))
+        self.assertFalse(AttendanceCorrectionRequest.objects.exists())
+
+    def test_returned_minor_is_fixed_by_the_processor_who_filed_it(self):
+        self.file(self.processor)
+        correction = AttendanceCorrectionRequest.objects.get()
+        self.client.force_login(self.admin_hr.user)
+        self.client.post(reverse("attendance:correction_action", args=[correction.pk]),
+                         {"action": "return", "notes": "Wrong date"})
+        correction.refresh_from_db()
+        self.assertEqual(correction.status, AttendanceCorrectionRequest.RETURNED)
+        self.client.force_login(self.employee.user)  # the employee did not file it
+        self.assertEqual(self.client.get(reverse("attendance:correction_edit", args=[correction.pk])).status_code, 403)
+        self.client.force_login(self.processor.user)
+        self.client.post(reverse("attendance:correction_edit", args=[correction.pk]),
+                         lines_post(line("2026-05-03", reason="Device misread")))
+        correction.refresh_from_db()
+        self.assertEqual(correction.status, AttendanceCorrectionRequest.SUBMITTED)
+        self.assertEqual([l.date for l in correction.lines.all()], [date(2026, 5, 3)])
+
     def test_regular_employee_cannot_file_minor_correction(self):
-        self.client.force_login(self.employee.user)
-        response = self.client.post(reverse("attendance:minor_correction_create"), {
-            "employee": self.employee.pk, "date": "2026-05-01",
-            "requested_time_in": "08:00", "requested_time_out": "16:00", "reason": "Device misread",
-        })
+        response = self.file(self.employee)
         self.assertEqual(response.status_code, 403)
 
 
@@ -268,29 +294,28 @@ class FormalCorrectionFlowTests(TestCase):
         self.ao = make_employee("formalao1", "EMP-FORMALAO1", role=RoleAssignment.ADMINISTRATIVE_OFFICER)
         self.client = Client()
 
-    def file(self, category="FAILED_ATTEMPT", reason=""):
-        self.client.force_login(self.employee.user)
-        return self.client.post(reverse("attendance:formal_correction_apply"), {
-            "date": "2026-05-05", "requested_time_in": "08:00", "requested_time_out": "16:00",
-            "reason_category": category, "reason": reason,
-        })
+    def file(self, category="FAILED_ATTEMPT", reason="", day="2026-05-05"):
+        return self.file_lines(line(day, reason_category=category, reason=reason))
 
-    def act(self, who, correction, action):
+    def file_lines(self, *lines):
+        self.client.force_login(self.employee.user)
+        return self.client.post(reverse("attendance:formal_correction_apply"), lines_post(*lines))
+
+    def act(self, who, correction, action, notes=""):
         self.client.force_login(who.user)
-        return self.client.post(reverse("attendance:correction_action", args=[correction.pk]), {"action": action})
+        return self.client.post(reverse("attendance:correction_action", args=[correction.pk]),
+                                {"action": action, "notes": notes})
 
     def test_employee_files_own_formal_correction(self):
         self.file()
         correction = AttendanceCorrectionRequest.objects.get()
         self.assertEqual(correction.correction_type, AttendanceCorrectionRequest.FORMAL)
         self.assertEqual(correction.status, AttendanceCorrectionRequest.SUBMITTED)
-        self.assertEqual(correction.reason_category, "FAILED_ATTEMPT")
+        self.assertEqual(correction.validator, "ICTU")
+        self.assertEqual(correction.lines.get().reason_category, "FAILED_ATTEMPT")
 
     def test_reason_category_must_be_chosen(self):
-        self.client.force_login(self.employee.user)
-        self.client.post(reverse("attendance:formal_correction_apply"), {
-            "date": "2026-05-05", "requested_time_in": "08:00", "requested_time_out": "16:00", "reason": "x",
-        })
+        self.file_lines(line(reason="x"))
         self.assertFalse(AttendanceCorrectionRequest.objects.exists())
 
     def test_attended_activity_and_others_need_details(self):
@@ -337,22 +362,23 @@ class FormalCorrectionFlowTests(TestCase):
         correction = AttendanceCorrectionRequest.objects.get()
         self.assertEqual(self.act(self.ao, correction, "approve").status_code, 403)
 
-    def test_queues_show_each_validator_only_their_reasons(self):
+    def test_queues_show_each_validator_only_their_requests(self):
         from .permissions import visible_correction_requests_for
 
-        self.file(category="OFFLINE")
-        self.file(category="OTHERS", reason="Seminar")
+        self.file(category="OFFLINE", day="2026-05-05")
+        self.file(category="OTHERS", reason="Seminar", day="2026-05-06")
         ictu_queue = visible_correction_requests_for(self.ictu)
         hr_queue = visible_correction_requests_for(self.hr)
-        self.assertEqual([c.reason_category for c in ictu_queue], ["OFFLINE"])
-        self.assertEqual([c.reason_category for c in hr_queue], ["OTHERS"])
+        self.assertEqual([c.validator for c in ictu_queue], ["ICTU"])
+        self.assertEqual([c.validator for c in hr_queue], ["HR"])
         self.assertFalse(visible_correction_requests_for(self.supervisor).exists())
 
     def test_old_chain_requests_can_still_finish(self):
         correction = AttendanceCorrectionRequest.objects.create(
-            correction_type="FORMAL", employee=self.employee, date=date(2026, 5, 6), requested_time_in=time(8, 0),
-            reason="Old request", status=AttendanceCorrectionRequest.ENDORSED_BY_SUPERVISOR, filed_by=self.employee.user,
+            correction_type="FORMAL", employee=self.employee, validator="HR",
+            status=AttendanceCorrectionRequest.ENDORSED_BY_SUPERVISOR, filed_by=self.employee.user,
         )
+        correction.lines.create(date=date(2026, 5, 6), time_in=time(8, 0), reason_category="OTHERS", reason="Old")
         self.act(self.hr, correction, "process")
         self.act(self.ao, correction, "approve")
         correction.refresh_from_db()
@@ -363,3 +389,145 @@ class FormalCorrectionFlowTests(TestCase):
         html = self.client.get(reverse("notifications:notification_list")).content.decode()
         self.assertIn("Attendance Correction Queue", html)
         self.assertNotIn("Leave Queue", html)
+
+
+class MultiDateCorrectionTests(TestCase):
+    """Batch 2, Item 6 (owner decisions 2026-10-07): 1-10 dates in one
+    request, whole-request approval, return with a remark, edit and
+    resubmit from the first step, history kept."""
+
+    def setUp(self):
+        from notifications.models import Notification
+
+        self.Notification = Notification
+        self.employee = make_employee("multi1", "EMP-MULTI1")
+        self.ictu = make_employee("multiictu", "EMP-MULTIICTU", role=RoleAssignment.ICTU_STAFF)
+        self.ao = make_employee("multiao", "EMP-MULTIAO", role=RoleAssignment.ADMINISTRATIVE_OFFICER)
+        self.client = Client()
+
+    def file(self, *lines):
+        self.client.force_login(self.employee.user)
+        return self.client.post(reverse("attendance:formal_correction_apply"), lines_post(*lines))
+
+    def act(self, who, correction, action, notes=""):
+        self.client.force_login(who.user)
+        return self.client.post(reverse("attendance:correction_action", args=[correction.pk]),
+                                {"action": action, "notes": notes})
+
+    def ok_line(self, day, **kw):
+        return line(day, reason_category=kw.pop("reason_category", "OFFLINE"), **kw)
+
+    def test_several_dates_are_one_request_with_lines(self):
+        self.file(self.ok_line("2026-05-04"), self.ok_line("2026-05-05", reason_category="FAILED_ATTEMPT"),
+                  self.ok_line("2026-05-06", time_in="", time_out="17:00"))
+        correction = AttendanceCorrectionRequest.objects.get()
+        self.assertEqual(correction.lines.count(), 3)
+        self.assertEqual(correction.dates_summary, "May 04 – May 06, 2026 (3 dates)")
+
+    def test_whole_request_approval_writes_every_date(self):
+        self.file(self.ok_line("2026-05-04"), self.ok_line("2026-05-05"))
+        correction = AttendanceCorrectionRequest.objects.get()
+        self.act(self.ictu, correction, "validate")
+        self.act(self.ao, correction, "approve")  # remark optional on approval
+        self.assertEqual(AttendanceRecord.objects.filter(employee=self.employee).count(), 2)
+
+    def test_limits_one_to_ten_lines(self):
+        self.file()
+        self.file(*[self.ok_line(f"2026-05-{d:02d}") for d in range(1, 12)])  # 11 lines
+        self.assertFalse(AttendanceCorrectionRequest.objects.exists())
+        self.file(*[self.ok_line(f"2026-05-{d:02d}") for d in range(1, 11)])  # 10 lines
+        self.assertEqual(AttendanceCorrectionRequest.objects.get().lines.count(), 10)
+
+    def test_no_future_dates(self):
+        from datetime import timedelta
+        from django.utils import timezone
+
+        tomorrow = (timezone.localdate() + timedelta(days=1)).isoformat()
+        r = self.file(self.ok_line(tomorrow))
+        self.assertContains(r, "Future dates")
+        self.assertFalse(AttendanceCorrectionRequest.objects.exists())
+
+    def test_no_duplicate_dates_in_one_request(self):
+        r = self.file(self.ok_line("2026-05-04"), self.ok_line("2026-05-04"))
+        self.assertContains(r, "listed more than once")
+        self.assertFalse(AttendanceCorrectionRequest.objects.exists())
+
+    def test_no_date_that_already_has_a_pending_correction(self):
+        self.file(self.ok_line("2026-05-04"))
+        r = self.file(self.ok_line("2026-05-04"), self.ok_line("2026-05-07"))
+        self.assertContains(r, "already have a pending correction")
+        self.assertEqual(AttendanceCorrectionRequest.objects.count(), 1)
+
+    def test_time_out_must_be_after_time_in_unless_overnight(self):
+        r = self.file(self.ok_line("2026-05-04", time_in="19:00", time_out="07:00"))
+        self.assertContains(r, "Time out must be later than time in")
+        self.file(self.ok_line("2026-05-04", time_in="19:00", time_out="07:00", overnight=True))
+        self.assertTrue(AttendanceCorrectionRequest.objects.get().lines.get().overnight)
+
+    def test_ictu_and_hr_reasons_cannot_be_mixed(self):
+        r = self.file(self.ok_line("2026-05-04"), self.ok_line("2026-05-05", reason_category="OTHERS", reason="Seminar"))
+        self.assertContains(r, "separate requests")
+        self.assertFalse(AttendanceCorrectionRequest.objects.exists())
+
+    def test_return_needs_a_remark(self):
+        self.file(self.ok_line("2026-05-04"))
+        correction = AttendanceCorrectionRequest.objects.get()
+        self.act(self.ictu, correction, "return", notes="   ")
+        correction.refresh_from_db()
+        self.assertEqual(correction.status, AttendanceCorrectionRequest.SUBMITTED)
+
+    def test_return_edit_resubmit_starts_over_and_keeps_history(self):
+        self.file(self.ok_line("2026-05-04"), self.ok_line("2026-05-05"))
+        correction = AttendanceCorrectionRequest.objects.get()
+        self.act(self.ictu, correction, "validate")
+        self.act(self.ao, correction, "return", notes="May 5 time out looks wrong")
+        correction.refresh_from_db()
+        self.assertEqual(correction.status, AttendanceCorrectionRequest.RETURNED)
+        note = self.Notification.objects.filter(recipient=self.employee).latest("created_at")
+        self.assertIn("May 5 time out looks wrong", note.message)
+
+        # employee sees the remark, edits (drops one date, fixes another) and resubmits the SAME request
+        self.client.force_login(self.employee.user)
+        page = self.client.get(reverse("attendance:correction_edit", args=[correction.pk]))
+        self.assertContains(page, "May 5 time out looks wrong")
+        self.client.post(reverse("attendance:correction_edit", args=[correction.pk]),
+                         lines_post(self.ok_line("2026-05-05", time_out="17:00")))
+        correction.refresh_from_db()
+        self.assertEqual(AttendanceCorrectionRequest.objects.count(), 1)
+        self.assertEqual(correction.status, AttendanceCorrectionRequest.SUBMITTED)  # back to the first step
+        self.assertEqual([l.date for l in correction.lines.all()], [date(2026, 5, 5)])
+        self.assertEqual(self.act(self.ao, correction, "approve").status_code, 403)  # must be validated again
+        self.act(self.ictu, correction, "validate")
+        self.act(self.ao, correction, "approve")
+        correction.refresh_from_db()
+        self.assertEqual(correction.status, AttendanceCorrectionRequest.APPROVED)
+        self.assertEqual(list(correction.actions.values_list("action", flat=True)),
+                         ["submit", "validate", "return", "resubmit", "validate", "approve"])
+        detail = self.client.get(reverse("attendance:correction_detail", args=[correction.pk]))
+        self.assertContains(detail, "May 5 time out looks wrong")
+        # printed stamps show the current round only
+        self.assertEqual([a.action for a in correction.current_cycle_actions()], ["resubmit", "validate", "approve"])
+
+    def test_only_returned_requests_can_be_edited_and_only_by_the_employee(self):
+        self.file(self.ok_line("2026-05-04"))
+        correction = AttendanceCorrectionRequest.objects.get()
+        self.client.force_login(self.employee.user)
+        r = self.client.post(reverse("attendance:correction_edit", args=[correction.pk]),
+                             lines_post(self.ok_line("2026-05-01")))
+        self.assertRedirects(r, reverse("attendance:correction_detail", args=[correction.pk]),
+                             fetch_redirect_response=False)
+        self.assertEqual(correction.lines.get().date, date(2026, 5, 4))
+        self.client.force_login(self.ictu.user)
+        self.assertEqual(self.client.get(reverse("attendance:correction_edit", args=[correction.pk])).status_code, 403)
+
+    def test_detail_page_shows_lines_and_whole_request_buttons(self):
+        self.file(self.ok_line("2026-05-04"), self.ok_line("2026-05-05"))
+        correction = AttendanceCorrectionRequest.objects.get()
+        self.client.force_login(self.ictu.user)
+        page = self.client.get(reverse("attendance:correction_detail", args=[correction.pk])).content.decode()
+        self.assertIn("Dates (2)", page)
+        self.assertIn('value="validate"', page)
+        self.assertIn('value="return"', page)
+        self.client.force_login(self.ao.user)  # not their turn yet: no buttons
+        page = self.client.get(reverse("attendance:correction_detail", args=[correction.pk])).content.decode()
+        self.assertNotIn('value="approve"', page)

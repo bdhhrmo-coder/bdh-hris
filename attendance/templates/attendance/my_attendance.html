@@ -27,19 +27,18 @@
 <div class="card">
   <h2 style="margin-top:0;">My correction requests</h2>
   <table>
-    <tr><th>Date</th><th>Type</th><th>Requested</th><th>Status</th><th>Filed</th><th>Documents</th><th>Form</th></tr>
+    <tr><th>Date(s)</th><th>Type</th><th>Status</th><th>Filed</th><th>Documents</th><th>Form</th></tr>
     {% for c in corrections %}
     <tr>
-      <td>{{ c.date }}</td>
+      <td><a href="{% url 'attendance:correction_detail' c.pk %}">{{ c.dates_summary }}</a></td>
       <td>{{ c.get_correction_type_display }}</td>
-      <td>{% if c.requested_is_absent %}Mark Absent{% else %}{{ c.requested_time_in }} – {{ c.requested_time_out }}{% endif %}</td>
-      <td>{% status_badge c.status c.get_status_display %}</td>
+      <td>{% status_badge c.status c.get_status_display %}{% if c.status == "RETURNED" and c.correction_type == "FORMAL" %} <a href="{% url 'attendance:correction_edit' c.pk %}">Edit &amp; resubmit</a>{% endif %}</td>
       <td>{{ c.submitted_at|date:"Y-m-d" }}</td>
       <td><a href="{% documents_url c %}">Documents</a></td>
       <td>{% if c.correction_type == "FORMAL" %}<a href="{% url 'attendance:print_correction_form' c.pk %}" target="_blank">Print</a>{% else %}—{% endif %}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="7" class="empty-note">No correction requests yet.</td></tr>
+    <tr><td colspan="6" class="empty-note">No correction requests yet.</td></tr>
     {% endfor %}
   </table>
 </div>

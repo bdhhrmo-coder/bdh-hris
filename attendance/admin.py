@@ -3,6 +3,7 @@ from django.contrib import admin
 from documents.admin import UploadedDocumentInline
 
 from .models import (
+    AttendanceCorrectionLine,
     AttendanceCorrectionRequest,
     AttendanceCorrectionRequestAction,
     AttendanceRecord,
@@ -36,6 +37,11 @@ class AttendanceRecordAdmin(admin.ModelAdmin):
     readonly_fields = ("undertime_minutes",)
 
 
+class AttendanceCorrectionLineInline(admin.TabularInline):
+    model = AttendanceCorrectionLine
+    extra = 0
+
+
 class AttendanceCorrectionRequestActionInline(admin.TabularInline):
     model = AttendanceCorrectionRequestAction
     extra = 0
@@ -50,7 +56,7 @@ class AttendanceCorrectionRequestActionInline(admin.TabularInline):
 
 @admin.register(AttendanceCorrectionRequest)
 class AttendanceCorrectionRequestAdmin(admin.ModelAdmin):
-    list_display = ("employee", "date", "correction_type", "status", "submitted_at")
+    list_display = ("employee", "dates_summary", "correction_type", "status", "submitted_at")
     list_filter = ("correction_type", "status")
     search_fields = ("employee__surname", "employee__employee_id")
-    inlines = [AttendanceCorrectionRequestActionInline, UploadedDocumentInline]
+    inlines = [AttendanceCorrectionLineInline, AttendanceCorrectionRequestActionInline, UploadedDocumentInline]

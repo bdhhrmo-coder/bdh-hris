@@ -691,3 +691,29 @@ button.is-busy::after {
   .page-loading-bar.is-active { width: 100%; animation: none; }
   button.is-busy::after { animation: none; border-right-color: currentColor; }
 }
+
+/* --- Correction lines editor (Batch 2, Item 6) ----------------------- */
+.line-card {
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.85rem 0.75rem;
+  margin: 0 0 0.75rem;
+  background: #fbfcfd;
+}
+.line-card.has-error { border-color: #e3a3a0; background: #fff8f7; }
+.line-card legend { display: flex; align-items: center; gap: 0.75rem; font-weight: 600; font-size: 0.9rem; padding: 0 0.3rem; }
+.line-remove { background: transparent; color: var(--red-700); border: 1px solid #f0c6c3; padding: 0.15rem 0.6rem; font-size: 0.78rem; }
+.line-remove:hover { background: var(--red-100); color: var(--red-700); }
+.line-grid { display: grid; grid-template-columns: 1.1fr 1fr 1fr 1.2fr; gap: 0.6rem 0.75rem; align-items: end; }
+.line-grid > label { font-size: 0.8rem; font-weight: 600; color: var(--gray-600); display: grid; gap: 0.2rem; }
+.line-grid .line-reason { grid-column: span 2; }
+.line-grid .line-reason-wide { grid-column: 1 / -1; }
+.line-checks { display: grid; gap: 0.3rem; font-size: 0.85rem; }
+.inline-check { display: flex; align-items: center; gap: 0.45rem; cursor: pointer; }
+tr.history-return td { background: #fff6dc; }
+@media (max-width: 700px) {
+  .line-grid { grid-template-columns: 1fr 1fr; }
+  .line-grid > label:first-child { grid-column: 1 / -1; }
+  .line-grid .line-reason, .line-checks { grid-column: 1 / -1; }
+  .line-checks { grid-template-columns: 1fr 1fr; }
+}

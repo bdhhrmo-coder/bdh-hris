@@ -62,13 +62,13 @@ def visible_correction_requests_for(acting_employee):
         )
 
     formal = AttendanceCorrectionRequest.objects.filter(correction_type=AttendanceCorrectionRequest.FORMAL)
-    ictu_reasons = AttendanceCorrectionRequest.ICTU_VALIDATED_REASONS
+    ictu = AttendanceCorrectionRequest.VALIDATOR_ICTU
 
     if is_ictu_staff(acting_employee):
-        qs = qs | formal.filter(status=AttendanceCorrectionRequest.SUBMITTED, reason_category__in=ictu_reasons)
+        qs = qs | formal.filter(status=AttendanceCorrectionRequest.SUBMITTED, validator=ictu)
 
     if is_hr(acting_employee):
-        qs = qs | formal.filter(status=AttendanceCorrectionRequest.SUBMITTED).exclude(reason_category__in=ictu_reasons)
+        qs = qs | formal.filter(status=AttendanceCorrectionRequest.SUBMITTED).exclude(validator=ictu)
         # Old Supervisor -> HR -> AO chain: let requests already endorsed finish.
         qs = qs | formal.filter(status=AttendanceCorrectionRequest.ENDORSED_BY_SUPERVISOR)
 
@@ -78,3 +78,27 @@ def visible_correction_requests_for(acting_employee):
         )
 
     return qs.distinct()
+
+
+def available_actions(acting_employee, correction):
+    """[(action, button label)] this person may take on the WHOLE request
+    right now. Return needs a remark (checked in the view's form)."""
+    R = AttendanceCorrectionRequest
+    if acting_employee is None:
+        return []
+    status = correction.status
+    stop = [("return", "Return"), ("reject", "Reject")]
+    if correction.correction_type == R.MINOR:
+        if status == R.SUBMITTED and is_hr_administrator(acting_employee):
+            return [("approve", "Authorize")] + stop
+        return []
+    if status == R.SUBMITTED and is_validator_for(acting_employee, correction):
+        return [("validate", "Validate")] + stop
+    if status == R.VALIDATED and is_administrative_officer(acting_employee):
+        return [("approve", "Approve")] + stop
+    # Old Supervisor -> HR -> AO chain, only for requests endorsed before 2026-10-06.
+    if status == R.ENDORSED_BY_SUPERVISOR and is_hr(acting_employee):
+        return [("process", "Process")] + stop
+    if status == R.PROCESSED_BY_HR and is_administrative_officer(acting_employee):
+        return [("approve", "Approve")] + stop
+    return []

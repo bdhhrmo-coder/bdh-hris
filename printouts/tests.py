@@ -139,9 +139,10 @@ class PrintViewTests(TestCase):
 
     def test_correction_form_f10_rev2_ticks_reason_and_marks_other_validator_na(self):
         c = AttendanceCorrectionRequest.objects.create(
-            correction_type="FORMAL", employee=self.emp, date=date(2026, 10, 5), requested_time_in=time(8, 0),
-            reason_category="OFFLINE", filed_by=self.emp.user,
+            correction_type="FORMAL", employee=self.emp, validator="ICTU", filed_by=self.emp.user,
         )
+        c.lines.create(date=date(2026, 10, 5), time_in=time(8, 0), reason_category="OFFLINE")
+        c.lines.create(date=date(2026, 10, 2), time_out=time(17, 0), reason_category="FAILED_ATTEMPT")
         AttendanceCorrectionRequestAction.objects.create(request=c, action="submit", resulting_status="SUBMITTED",
                                                          acted_by=self.emp.user)
         url = reverse("attendance:print_correction_form", args=[c.pk])
@@ -150,14 +151,16 @@ class PrintViewTests(TestCase):
         self.assertIn("BDH-ADM-AO-01F10", text)
         self.assertIn("Revision: 2", text)
         self.assertIn("☒  Offline*", text)
+        self.assertIn("☒  Failed Attempt*", text)
+        self.assertIn("Oct 02, 2026", text)  # every date is printed
+        self.assertIn("Oct 05, 2026", text)
         self.assertIn("NOT APPLICABLE", text)
+        self.assertNotIn("RETURN HISTORY", text)
         self.assertEqual(self.get(self.stranger.user, url).status_code, 403)
 
     def test_minor_corrections_have_no_form(self):
-        c = AttendanceCorrectionRequest.objects.create(
-            correction_type="MINOR", employee=self.emp, date=date(2026, 10, 5), requested_time_in=time(8, 0),
-            reason="HR fix", filed_by=self.hr.user,
-        )
+        c = AttendanceCorrectionRequest.objects.create(correction_type="MINOR", employee=self.emp, filed_by=self.hr.user)
+        c.lines.create(date=date(2026, 10, 5), time_in=time(8, 0), reason="HR fix")
         self.assertEqual(self.get(self.hr.user, reverse("attendance:print_correction_form", args=[c.pk])).status_code, 404)
 
     def test_missing_converter_shows_message_not_server_error(self):

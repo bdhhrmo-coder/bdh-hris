@@ -24,7 +24,7 @@ from openpyxl.styles import Alignment, Font
 
 from leave.pdf_convert import workbook_to_pdf
 from printouts.sheet import BDH_LOGO, BOTTOM, BOX, FONT, PALAWAN_SEAL, FormBuilder, merge_set
-from printouts.stamps import StepDef, Stamp, compute_stamps
+from printouts.stamps import StepDef, Stamp, actor_name, compute_stamps, format_when
 
 from .models import AttendanceCorrectionRequest
 
@@ -34,7 +34,7 @@ REVISION = 2
 COLUMN_WIDTHS = [11, 11, 22, 14, 10, 10, 10]
 
 ROUTING = [
-    StepDef("Requested (Employee)", "submit", "DIGITALLY REQUESTED"),
+    StepDef("Requested (Employee)", ("submit", "resubmit"), "DIGITALLY REQUESTED"),
     StepDef("Validated* (ICTU Staff)", "validate", "DIGITALLY VALIDATED"),
     # "process" = HR's step on the old Supervisor -> HR -> AO chain, for
     # requests filed before Revision 2.
@@ -89,30 +89,52 @@ def fill_correction_form(correction, printed_by=None):
     merge_set(ws, f"E{r}:G{r}", f"{correction.submitted_at:%m/%d/%Y}", size=11, border=BOTTOM)
     f.row += 2
 
-    if correction.requested_is_absent:
-        time_in = time_out = "Mark as Absent"
-    else:
-        time_in = f"{correction.requested_time_in:%I:%M %p}" if correction.requested_time_in else "—"
-        time_out = f"{correction.requested_time_out:%I:%M %p}" if correction.requested_time_out else "—"
-    f.table(["Date", "IN", "OUT"], [[f"{correction.date:%b %d, %Y}", time_in, time_out]],
-            [("A", "C"), ("D", "E"), ("F", "G")])
-    ws.row_dimensions[f.row - 1].height = 24
+    lines = correction.sorted_lines
+    rows = []
+    for line in lines:
+        if line.is_absent:
+            t_in = t_out = "Absent"
+        else:
+            t_in = f"{line.time_in:%I:%M %p}" if line.time_in else "—"
+            t_out = f"{line.time_out:%I:%M %p}" if line.time_out else "—"
+            if line.overnight:
+                t_out += " (+1 day)"
+        reason = line.get_reason_category_display() if line.reason_category else ""
+        if line.reason:
+            reason = f"{reason}: {line.reason}" if reason else line.reason
+        rows.append([f"{line.date:%b %d, %Y}", t_in, t_out, reason])
+    f.table(["Date", "IN", "OUT", "Reason"], rows, [("A", "B"), ("C", "C"), ("D", "D"), ("E", "G")])
+    for i, line in enumerate(lines):
+        r = f.row - len(lines) + i
+        ws.row_dimensions[r].height = 30 if (len(rows[i][3]) > 28 or line.overnight) else 20
+        ws[f"D{r}"].alignment = Alignment(wrap_text=True, vertical="center", horizontal="center")
+        for col in "EFG":
+            ws[f"{col}{r}"].alignment = Alignment(wrap_text=True, vertical="center", horizontal="left", indent=1)
     f.gap()
 
     ws[f"A{f.row}"] = "Reason/s:"
     ws[f"A{f.row}"].font = Font(bold=True, size=10, name=FONT)
+    chosen = {line.reason_category for line in lines}
     stars = {code: ("*" if code in AttendanceCorrectionRequest.ICTU_VALIDATED_REASONS else "**")
              for code, _ in AttendanceCorrectionRequest.REASON_CATEGORY_CHOICES}
     for code, label in AttendanceCorrectionRequest.REASON_CATEGORY_CHOICES:
-        mark = "☒" if code == correction.reason_category else "☐"
-        merge_set(ws, f"B{f.row}:G{f.row}", f"{mark}  {label}{stars[code]}", size=10,
-                  bold=code == correction.reason_category)
+        mark = "☒" if code in chosen else "☐"
+        merge_set(ws, f"B{f.row}:G{f.row}", f"{mark}  {label}{stars[code]}", size=10, bold=code in chosen)
         f.row += 1
-    _line(f, "Specify:", correction.reason or "")
-    f.note("*  Validated by ICTU Staff        **  Validated by HR Staff", size=8)
+    f.note("*  Validated by ICTU Staff        **  Validated by HR Staff        (details per date in the table above)",
+           size=8)
     f.gap()
 
-    stamps, stopped = compute_stamps(correction.actions.select_related("acted_by__employee"), ROUTING)
+    returns = list(correction.actions.filter(action="return").select_related("acted_by__employee").order_by("acted_at"))
+    if returns:
+        f.section("RETURN HISTORY")
+        f.table(["Returned on", "By", "Remark"],
+                [[format_when(a.acted_at), actor_name(a.acted_by), a.notes] for a in returns],
+                [("A", "B"), ("C", "C"), ("D", "G")])
+        f.gap()
+
+    # Stamps show the current round only (after the latest resubmission).
+    stamps, stopped = compute_stamps(correction.current_cycle_actions(), ROUTING)
     # Only one validator applies, depending on the reason chosen.
     not_applicable = 2 if correction.validated_by_ictu else 1
     stamps[not_applicable] = Stamp(role_label=stamps[not_applicable].role_label, state="pending",

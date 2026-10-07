@@ -1,16 +1,18 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 
 from printouts.http import pdf_response
 
 from .deductions import sync_undertime_deduction
-from .forms import BiometricImportForm, FormalCorrectionForm, MinorCorrectionForm
+from .forms import ActionForm, BiometricImportForm, MinorEmployeeForm, formset_rows, line_formset, save_lines
 from .importer import import_biometric_file
 from .models import AttendanceCorrectionRequest, AttendanceCorrectionRequestAction, AttendanceRecord, BiometricColumnMapping
 from .notifications import notify_status_change
 from .permissions import (
+    available_actions,
     can_view_correction_request,
     get_acting_employee,
     is_administrative_officer,
@@ -54,8 +56,26 @@ def my_attendance(request):
     if acting_employee is None:
         raise PermissionDenied("No employee record is linked to your account.")
     records = acting_employee.attendance_records.all()
-    corrections = acting_employee.attendance_correction_requests.all()
+    corrections = acting_employee.attendance_correction_requests.prefetch_related("lines")
     return render(request, "attendance/my_attendance.html", {"records": records, "corrections": corrections})
+
+
+def _line_editor_context(formset, *, formal):
+    return {
+        "formset": formset,
+        "rows": formset_rows(formset),
+        "formal": formal,
+        "max_lines": AttendanceCorrectionRequest.MAX_LINES,
+        "reason_choices": AttendanceCorrectionRequest.REASON_CATEGORY_CHOICES,
+        "ictu_reasons": sorted(AttendanceCorrectionRequest.ICTU_VALIDATED_REASONS),
+        "detail_reasons": sorted(AttendanceCorrectionRequest.REASONS_NEEDING_DETAILS),
+    }
+
+
+def _log(correction, action, user, notes=""):
+    AttendanceCorrectionRequestAction.objects.create(
+        request=correction, action=action, resulting_status=correction.status, notes=notes, acted_by=user,
+    )
 
 
 @login_required
@@ -64,44 +84,37 @@ def formal_correction_apply(request):
     if acting_employee is None:
         raise PermissionDenied("No employee record is linked to your account.")
 
-    if request.method == "POST":
-        form = FormalCorrectionForm(request.POST)
-        if form.is_valid():
-            correction = form.save(commit=False)
-            correction.employee = acting_employee
-            correction.correction_type = AttendanceCorrectionRequest.FORMAL
-            correction.filed_by = request.user
-            correction.full_clean()
-            correction.save()
-            AttendanceCorrectionRequestAction.objects.create(
-                request=correction, action="submit", resulting_status=correction.status, acted_by=request.user,
+    formset = line_formset(request.POST if request.method == "POST" else None, formal=True, employee=acting_employee)
+    if request.method == "POST" and formset.is_valid():
+        with transaction.atomic():
+            correction = AttendanceCorrectionRequest.objects.create(
+                employee=acting_employee, correction_type=AttendanceCorrectionRequest.FORMAL, filed_by=request.user,
             )
-            notify_status_change(correction)
-            messages.success(request, "Attendance correction request submitted.")
-            return redirect("attendance:my_attendance")
-    else:
-        form = FormalCorrectionForm()
+            save_lines(correction, formset)
+            _log(correction, "submit", request.user)
+        notify_status_change(correction)
+        messages.success(request, "Attendance correction request submitted.")
+        return redirect("attendance:my_attendance")
 
-    return render(request, "attendance/formal_correction_apply.html", {
-        "form": form, "ictu_reasons": AttendanceCorrectionRequest.ICTU_VALIDATED_REASONS,
-    })
+    return render(request, "attendance/formal_correction_apply.html", _line_editor_context(formset, formal=True))
 
 
 def _finalize_correction(correction, actor_user):
     """Single point of commitment: only here does the correction actually
-    write to AttendanceRecord and sync the undertime->VL deduction."""
-    record, _ = AttendanceRecord.objects.get_or_create(
-        employee=correction.employee, date=correction.date,
-        defaults={"recorded_by": actor_user},
-    )
-    record.time_in = correction.requested_time_in
-    record.time_out = correction.requested_time_out
-    record.is_absent = correction.requested_is_absent
-    record.source = AttendanceRecord.SOURCE_MANUAL
-    record.recorded_by = actor_user
-    record.notes = f"Corrected via {correction.get_correction_type_display()} request #{correction.pk}."
-    record.save()
-    sync_undertime_deduction(record, actor_user)
+    write to AttendanceRecord (one per line) and sync the undertime->VL
+    deduction."""
+    for line in correction.lines.all():
+        record, _ = AttendanceRecord.objects.get_or_create(
+            employee=correction.employee, date=line.date, defaults={"recorded_by": actor_user},
+        )
+        record.time_in = None if line.is_absent else line.time_in
+        record.time_out = None if line.is_absent else line.time_out
+        record.is_absent = line.is_absent
+        record.source = AttendanceRecord.SOURCE_MANUAL
+        record.recorded_by = actor_user
+        record.notes = f"Corrected via {correction.get_correction_type_display()} request #{correction.pk}."
+        record.save()
+        sync_undertime_deduction(record, actor_user)
 
 
 @login_required
@@ -111,133 +124,137 @@ def minor_correction_create(request):
         raise PermissionDenied("Only HR may file a minor administrative attendance correction.")
 
     if request.method == "POST":
-        form = MinorCorrectionForm(request.POST)
-        if form.is_valid():
-            correction = form.save(commit=False)
-            correction.correction_type = AttendanceCorrectionRequest.MINOR
-            correction.filed_by = request.user
-            correction.full_clean()
-            correction.save()
-            AttendanceCorrectionRequestAction.objects.create(
-                request=correction, action="submit", resulting_status=correction.status, acted_by=request.user,
-            )
-            if is_hr_administrator(acting_employee):
-                # HR Administrator filing it themselves IS the authorization
-                # (§3) — no point routing it back to the same role. Only
-                # notify once, for the final APPROVED status — the
-                # momentary SUBMITTED status in between never needs anyone
-                # notified about it.
-                _finalize_correction(correction, request.user)
-                correction.status = AttendanceCorrectionRequest.APPROVED
-                correction.save(update_fields=["status", "updated_at"])
-                AttendanceCorrectionRequestAction.objects.create(
-                    request=correction, action="approve", resulting_status=correction.status, acted_by=request.user,
-                    notes="Self-authorized by HR Administrator.",
+        emp_form = MinorEmployeeForm(request.POST)
+        employee = emp_form.cleaned_data["employee"] if emp_form.is_valid() else None
+        formset = line_formset(request.POST, formal=False, employee=employee)
+        if employee is not None and formset.is_valid():
+            with transaction.atomic():
+                correction = AttendanceCorrectionRequest.objects.create(
+                    employee=employee, correction_type=AttendanceCorrectionRequest.MINOR, filed_by=request.user,
                 )
-                notify_status_change(correction)
+                save_lines(correction, formset)
+                _log(correction, "submit", request.user)
+                if is_hr_administrator(acting_employee):
+                    # HR Administrator filing it themselves IS the
+                    # authorization (§3) - no point routing it back to the
+                    # same role. Only the final APPROVED status is notified.
+                    _finalize_correction(correction, request.user)
+                    correction.status = AttendanceCorrectionRequest.APPROVED
+                    correction.save(update_fields=["status", "updated_at"])
+                    _log(correction, "approve", request.user, "Self-authorized by HR Administrator.")
+            notify_status_change(correction)
+            if correction.status == AttendanceCorrectionRequest.APPROVED:
                 messages.success(request, "Correction recorded and authorized.")
             else:
-                notify_status_change(correction)
                 messages.success(request, "Correction filed. Awaiting HR Administrator authorization.")
             return redirect("attendance:correction_queue")
     else:
-        form = MinorCorrectionForm()
+        emp_form = MinorEmployeeForm()
+        formset = line_formset(None, formal=False)
 
-    return render(request, "attendance/minor_correction_create.html", {"form": form})
+    return render(request, "attendance/minor_correction_create.html",
+                  {"emp_form": emp_form, **_line_editor_context(formset, formal=False)})
+
+
+def _is_filer(acting_employee, user, correction):
+    if correction.correction_type == AttendanceCorrectionRequest.FORMAL:
+        return acting_employee is not None and acting_employee.pk == correction.employee_id
+    return correction.filed_by_id == user.pk
+
+
+@login_required
+def correction_edit(request, pk):
+    """The filer fixes a RETURNED request and sends it again. It starts
+    over from the first approval step (owner decision 2026-10-07); the
+    return and its remark stay in the history."""
+    acting_employee = get_acting_employee(request.user)
+    correction = get_object_or_404(AttendanceCorrectionRequest, pk=pk)
+    if not _is_filer(acting_employee, request.user, correction):
+        raise PermissionDenied("Only the person who filed this request can edit it.")
+    if correction.status != AttendanceCorrectionRequest.RETURNED:
+        messages.error(request, "Only a returned request can be edited.")
+        return redirect("attendance:correction_detail", pk=pk)
+
+    formal = correction.correction_type == AttendanceCorrectionRequest.FORMAL
+    formset = line_formset(request.POST if request.method == "POST" else None, formal=formal,
+                           employee=correction.employee, request_obj=correction)
+    if request.method == "POST" and formset.is_valid():
+        with transaction.atomic():
+            save_lines(correction, formset)
+            correction.status = AttendanceCorrectionRequest.SUBMITTED
+            correction.save(update_fields=["status", "updated_at"])
+            _log(correction, "resubmit", request.user, request.POST.get("resubmit_note", "").strip()[:255])
+        notify_status_change(correction)
+        messages.success(request, "Request resubmitted. It starts again from the first approval step.")
+        return redirect("attendance:correction_detail", pk=pk)
+
+    return render(request, "attendance/correction_edit.html", {
+        "correction": correction, "latest_return": correction.latest_return(),
+        **_line_editor_context(formset, formal=formal),
+    })
 
 
 @login_required
 def correction_queue(request):
     acting_employee = get_acting_employee(request.user)
-    requests = visible_correction_requests_for(acting_employee).select_related("employee").order_by("submitted_at", "pk")  # oldest first: first filed, first acted on (owner, 2026-10-06)
+    requests = (visible_correction_requests_for(acting_employee).select_related("employee")
+                .prefetch_related("lines").order_by("submitted_at", "pk"))  # oldest first (owner, 2026-10-06)
     return render(request, "attendance/correction_queue.html", {"requests": requests})
 
 
 @login_required
-def correction_action(request, pk):
-    """Single POST endpoint for every routing step. Which transitions are
-    legal depends on correction_type AND status AND the acting employee's
-    role — mirrors leave.views.leave_action's dual-path branching."""
+def correction_detail(request, pk):
+    """Lines, return history and - for whoever acts next - the
+    Approve/Validate/Return buttons (whole request only)."""
     acting_employee = get_acting_employee(request.user)
-    correction = get_object_or_404(AttendanceCorrectionRequest, pk=pk)
-    action = request.POST.get("action")
-    notes = request.POST.get("notes", "").strip()
+    correction = get_object_or_404(AttendanceCorrectionRequest.objects.select_related("employee"), pk=pk)
+    if not (can_view_correction_request(acting_employee, correction) or _is_filer(acting_employee, request.user, correction)):
+        raise PermissionDenied("You are not authorized to view this correction request.")
+    return render(request, "attendance/correction_detail.html", {
+        "correction": correction,
+        "lines": correction.sorted_lines,
+        "history": correction.actions.select_related("acted_by__employee").order_by("acted_at", "pk"),
+        "actions": available_actions(acting_employee, correction),
+        "can_edit": correction.is_returned and _is_filer(acting_employee, request.user, correction),
+        "action_form": ActionForm(),
+    })
 
+
+_NEXT_STATUS = {
+    "validate": AttendanceCorrectionRequest.VALIDATED,
+    "process": AttendanceCorrectionRequest.PROCESSED_BY_HR,
+    "approve": AttendanceCorrectionRequest.APPROVED,
+    "return": AttendanceCorrectionRequest.RETURNED,
+    "reject": AttendanceCorrectionRequest.REJECTED,
+}
+
+
+@login_required
+def correction_action(request, pk):
+    """Single POST endpoint for every routing step. The whole request is
+    acted on - there is no line-by-line approval (Batch 2, Item 6)."""
+    if request.method != "POST":
+        return redirect("attendance:correction_detail", pk=pk)
+    acting_employee = get_acting_employee(request.user)
     if acting_employee is None:
         raise PermissionDenied("No employee record is linked to your account.")
-
-    status = correction.status
-
-    def apply_transition(new_status, action_name):
-        correction.status = new_status
-        correction.save(update_fields=["status", "updated_at"])
-        AttendanceCorrectionRequestAction.objects.create(
-            request=correction, action=action_name, resulting_status=new_status, notes=notes, acted_by=request.user,
-        )
-        notify_status_change(correction)
-
-    allowed = False
-
-    if correction.correction_type == AttendanceCorrectionRequest.MINOR:
-        if status == AttendanceCorrectionRequest.SUBMITTED and is_hr_administrator(acting_employee):
-            if action == "approve":
-                _finalize_correction(correction, request.user)
-                allowed = True
-                apply_transition(AttendanceCorrectionRequest.APPROVED, "approve")
-            elif action == "reject":
-                allowed = True
-                apply_transition(AttendanceCorrectionRequest.REJECTED, "reject")
-    else:
-        stop = lambda: apply_transition(  # noqa: E731
-            AttendanceCorrectionRequest.REJECTED if action == "reject" else AttendanceCorrectionRequest.RETURNED,
-            action,
-        )
-        if status == AttendanceCorrectionRequest.SUBMITTED and is_validator_for(acting_employee, correction):
-            # ICTU Staff (Offline / Failed Attempt / Wrong Button) or HR
-            # (Attended activity / Others) - BDH-ADM-AO-01F10.
-            if action == "validate":
-                allowed = True
-                apply_transition(AttendanceCorrectionRequest.VALIDATED, "validate")
-            elif action in ("reject", "return"):
-                allowed = True
-                stop()
-        elif status == AttendanceCorrectionRequest.VALIDATED and is_administrative_officer(acting_employee):
-            if action == "approve":
-                _finalize_correction(correction, request.user)
-                allowed = True
-                apply_transition(AttendanceCorrectionRequest.APPROVED, "approve")
-            elif action in ("reject", "return"):
-                allowed = True
-                stop()
-        # Old Supervisor -> HR -> AO chain, only for requests already endorsed
-        # before 2026-10-06 (nothing new reaches these statuses).
-        elif status == AttendanceCorrectionRequest.ENDORSED_BY_SUPERVISOR and is_hr(acting_employee):
-            if action == "process":
-                allowed = True
-                apply_transition(AttendanceCorrectionRequest.PROCESSED_BY_HR, "process")
-            elif action in ("reject", "return"):
-                allowed = True
-                apply_transition(
-                    AttendanceCorrectionRequest.REJECTED if action == "reject" else AttendanceCorrectionRequest.RETURNED,
-                    action,
-                )
-        elif status == AttendanceCorrectionRequest.PROCESSED_BY_HR and is_administrative_officer(acting_employee):
-            if action == "approve":
-                _finalize_correction(correction, request.user)
-                allowed = True
-                apply_transition(AttendanceCorrectionRequest.APPROVED, "approve")
-            elif action in ("reject", "return"):
-                allowed = True
-                apply_transition(
-                    AttendanceCorrectionRequest.REJECTED if action == "reject" else AttendanceCorrectionRequest.RETURNED,
-                    action,
-                )
-
-    if allowed:
-        messages.success(request, "Action recorded.")
-    else:
+    correction = get_object_or_404(AttendanceCorrectionRequest, pk=pk)
+    form = ActionForm(request.POST)
+    action = request.POST.get("action")
+    if action not in {code for code, _ in available_actions(acting_employee, correction)}:
         raise PermissionDenied("You are not authorized to take this action on this request.")
+    if not form.is_valid():
+        messages.error(request, " ".join(e for errs in form.errors.values() for e in errs))
+        return redirect("attendance:correction_detail", pk=pk)
 
+    with transaction.atomic():
+        if action == "approve":
+            _finalize_correction(correction, request.user)
+        correction.status = _NEXT_STATUS[action]
+        correction.save(update_fields=["status", "updated_at"])
+        _log(correction, action, request.user, form.cleaned_data["notes"].strip())
+    notify_status_change(correction)
+    messages.success(request, "Action recorded.")
     return redirect("attendance:correction_queue")
 
 

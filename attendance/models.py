@@ -36,6 +36,14 @@ Confirmed with the project owner on 2026-09-27:
         AO chain finish on that chain (ENDORSED_BY_SUPERVISOR /
         PROCESSED_BY_HR are kept for them).
 
+Multiple dates (Batch 2, Item 6, owner decisions 2026-10-07): a request
+holds 1-10 AttendanceCorrectionLine rows, each with its own date, times and
+reason. Every approver acts on the WHOLE request (validate/approve or
+return - a return needs a remark). A returned request is edited and
+resubmitted by its filer and starts again from the first step; the return
+history stays in the action log. For FORMAL requests all lines must belong
+to the same validator (ICTU or HR), so one request has one validator.
+
 Biometric data is advisory, not authoritative (§9): once an
 AttendanceRecord has been hand-corrected (source=MANUAL), a later
 biometric import for that same employee/date is skipped rather than
@@ -227,23 +235,24 @@ class AttendanceCorrectionRequest(models.Model):
     ICTU_VALIDATED_REASONS = {REASON_OFFLINE, REASON_FAILED_ATTEMPT, REASON_WRONG_ENTRY}
     REASONS_NEEDING_DETAILS = {REASON_ATTENDED_ACTIVITY, REASON_OTHERS}
 
+    VALIDATOR_ICTU = "ICTU"
+    VALIDATOR_HR = "HR"
+    VALIDATOR_CHOICES = [(VALIDATOR_ICTU, "ICTU Staff"), (VALIDATOR_HR, "HR Staff")]
+
+    MAX_LINES = 10
+    # Statuses where the request is still open (a date in one of these can't
+    # be filed again in another request). RETURNED is open: the filer is
+    # expected to edit and resubmit it (Batch 2, Item 6).
+    OPEN_STATUSES = {SUBMITTED, VALIDATED, ENDORSED_BY_SUPERVISOR, PROCESSED_BY_HR, RETURNED}
+
     correction_type = models.CharField(max_length=10, choices=CORRECTION_TYPE_CHOICES)
     employee = models.ForeignKey(
         "employees.Employee", on_delete=models.CASCADE, related_name="attendance_correction_requests"
     )
-    date = models.DateField(help_text="The attendance date being corrected.")
-    requested_time_in = models.TimeField(null=True, blank=True)
-    requested_time_out = models.TimeField(null=True, blank=True)
-    requested_is_absent = models.BooleanField(
-        default=False, help_text="Check to correct this date to Absent instead of supplying times."
-    )
-    reason_category = models.CharField(
-        "Reason", max_length=20, choices=REASON_CATEGORY_CHOICES, default=REASON_OTHERS,
-        help_text="As on the Missed Log Justification Form. Decides who validates (ICTU or HR).",
-    )
-    reason = models.CharField(
-        "Details", max_length=255, blank=True,
-        help_text="Required for 'Attended meeting/activity/training' and 'Others': say what it was.",
+    validator = models.CharField(
+        max_length=5, choices=VALIDATOR_CHOICES, blank=True,
+        help_text="FORMAL only: who validates, decided by the reasons on the lines (all lines in one request "
+        "must belong to the same validator - owner decision 2026-10-07). Blank for MINOR.",
     )
     status = models.CharField(max_length=25, choices=STATUS_CHOICES, default=SUBMITTED)
     filed_by = models.ForeignKey(
@@ -257,26 +266,79 @@ class AttendanceCorrectionRequest(models.Model):
         ordering = ["-submitted_at"]
 
     def __str__(self):
-        return f"{self.get_correction_type_display()} — {self.employee} {self.date} ({self.status})"
+        return f"{self.get_correction_type_display()} — {self.employee} ({self.status})"
+
+    @classmethod
+    def validator_for_reason(cls, reason_category):
+        return cls.VALIDATOR_ICTU if reason_category in cls.ICTU_VALIDATED_REASONS else cls.VALIDATOR_HR
 
     @property
     def validated_by_ictu(self):
-        return self.reason_category in self.ICTU_VALIDATED_REASONS
+        return self.validator == self.VALIDATOR_ICTU
 
     @property
     def validator_label(self):
         return "ICTU Staff" if self.validated_by_ictu else "HR Staff"
 
-    def clean(self):
-        if not self.reason.strip():
-            if self.correction_type == self.MINOR:
-                raise ValidationError({"reason": "Give the reason for this correction."})
-            if self.reason_category in self.REASONS_NEEDING_DETAILS:
-                raise ValidationError({"reason": "Please specify the meeting/activity/training or other reason."})
-        if self.requested_is_absent and (self.requested_time_in or self.requested_time_out):
-            raise ValidationError("Check 'mark as absent' OR give time in/out, not both.")
-        if not self.requested_is_absent and not self.requested_time_in and not self.requested_time_out:
-            raise ValidationError("Provide requested time in/out, or check 'mark as absent'.")
+    @property
+    def sorted_lines(self):
+        return sorted(self.lines.all(), key=lambda line: line.date)
+
+    @property
+    def dates_summary(self):
+        """'Oct 01, 2026' or 'Oct 01 – Oct 05, 2026 (3 dates)' for lists."""
+        dates = [line.date for line in self.sorted_lines]
+        if not dates:
+            return ""
+        if len(dates) == 1:
+            return f"{dates[0]:%b %d, %Y}"
+        return f"{dates[0]:%b %d} – {dates[-1]:%b %d, %Y} ({len(dates)} dates)"
+
+    @property
+    def is_returned(self):
+        return self.status == self.RETURNED
+
+    def latest_return(self):
+        return self.actions.filter(action="return").order_by("-acted_at").first()
+
+    def current_cycle_actions(self):
+        """Actions since the latest (re)submission - what the printed stamps
+        show. Earlier cycles stay in the return history."""
+        actions = list(self.actions.select_related("acted_by__employee").order_by("acted_at", "pk"))
+        starts = [i for i, a in enumerate(actions) if a.action in ("submit", "resubmit")]
+        return actions[starts[-1]:] if starts else actions
+
+
+class AttendanceCorrectionLine(models.Model):
+    """One date on a correction request (Batch 2, Item 6: up to 10 dates per
+    request, approved or returned together - no line-by-line approval)."""
+
+    request = models.ForeignKey(AttendanceCorrectionRequest, on_delete=models.CASCADE, related_name="lines")
+    date = models.DateField(help_text="The attendance date being corrected.")
+    time_in = models.TimeField(null=True, blank=True)
+    time_out = models.TimeField(null=True, blank=True)
+    overnight = models.BooleanField(default=False, help_text="Shift ends the next day (time out earlier than time in).")
+    is_absent = models.BooleanField(default=False, help_text="Correct this date to Absent instead of supplying times.")
+    reason_category = models.CharField(
+        "Reason", max_length=20, choices=AttendanceCorrectionRequest.REASON_CATEGORY_CHOICES, blank=True,
+        help_text="FORMAL: as on the Missed Log Justification Form. Blank for MINOR.",
+    )
+    reason = models.CharField("Details", max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["date", "pk"]
+        constraints = [models.UniqueConstraint(fields=["request", "date"], name="unique_correction_line_date")]
+
+    def __str__(self):
+        return f"{self.request_id}: {self.date}"
+
+    @property
+    def times_display(self):
+        if self.is_absent:
+            return "Mark as Absent"
+        t_in = f"{self.time_in:%I:%M %p}" if self.time_in else "—"
+        t_out = f"{self.time_out:%I:%M %p}" if self.time_out else "—"
+        return f"{t_in} – {t_out}{' (overnight)' if self.overnight else ''}"
 
 
 class AttendanceCorrectionRequestAction(models.Model):

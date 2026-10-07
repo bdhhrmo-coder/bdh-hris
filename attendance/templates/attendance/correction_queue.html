@@ -3,43 +3,25 @@
 {% block title %}Attendance correction queue — BDH HRIS{% endblock %}
 {% block content %}
 <h1>Attendance corrections awaiting my action</h1>
+<p style="color:var(--gray-600);">Open a request to see all its dates and history. Approve or return the whole request; a return needs a remark.</p>
 <div class="card">
+<div class="table-scroll">
 <table>
-  <tr><th>Employee</th><th>Date</th><th>Type</th><th>Requested</th><th>Reason</th><th>Status</th><th>Action</th></tr>
+  <tr><th>Employee</th><th>Date(s)</th><th>Type</th><th>Validator</th><th>Filed</th><th>Status</th><th></th></tr>
   {% for r in requests %}
   <tr>
     <td>{{ r.employee.full_name }}</td>
-    <td>{{ r.date }}</td>
+    <td>{{ r.dates_summary }}</td>
     <td>{{ r.get_correction_type_display }}</td>
-    <td>{% if r.requested_is_absent %}Mark Absent{% else %}{{ r.requested_time_in }} – {{ r.requested_time_out }}{% endif %}</td>
-    <td>{% if r.correction_type == "FORMAL" %}{{ r.get_reason_category_display }}{% if r.reason %}: {% endif %}{% endif %}{{ r.reason }}</td>
+    <td>{% if r.validator %}{{ r.validator_label }}{% else %}—{% endif %}</td>
+    <td>{{ r.submitted_at|date:"Y-m-d" }}</td>
     <td>{% status_badge r.status r.get_status_display %}</td>
-    <td class="row-actions">
-      {% if r.correction_type == "FORMAL" %}<a href="{% url 'attendance:print_correction_form' r.pk %}" target="_blank">Print form</a>{% endif %}
-      <form method="post" action="{% url 'attendance:correction_action' r.pk %}">
-        {% csrf_token %}
-        {% if r.correction_type == "MINOR" and r.status == "SUBMITTED" %}
-          <button type="submit" name="action" value="approve">Authorize</button>
-          <button type="submit" name="action" value="reject">Reject</button>
-        {% elif r.status == "SUBMITTED" %}
-          <button type="submit" name="action" value="validate">Validate</button>
-          <button type="submit" name="action" value="reject">Reject</button>
-          <button type="submit" name="action" value="return">Return</button>
-        {% elif r.status == "ENDORSED_BY_SUPERVISOR" %}
-          <button type="submit" name="action" value="process">Process</button>
-          <button type="submit" name="action" value="reject">Reject</button>
-          <button type="submit" name="action" value="return">Return</button>
-        {% elif r.status == "VALIDATED" or r.status == "PROCESSED_BY_HR" %}
-          <button type="submit" name="action" value="approve">Approve</button>
-          <button type="submit" name="action" value="reject">Reject</button>
-          <button type="submit" name="action" value="return">Return</button>
-        {% endif %}
-      </form>
-    </td>
+    <td class="row-actions"><a href="{% url 'attendance:correction_detail' r.pk %}" class="btn btn-sm">Review</a></td>
   </tr>
   {% empty %}
   <tr><td colspan="7" class="empty-note">Nothing awaiting your action.</td></tr>
   {% endfor %}
 </table>
+</div>
 </div>
 {% endblock %}
