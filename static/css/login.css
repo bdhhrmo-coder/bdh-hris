@@ -174,23 +174,29 @@ body.login-page .guest-main {
   outline-offset: 1px;
 }
 
-.password-field { position: relative; }
-.password-field input.input-control { padding-right: 2.6rem; }
+.password-wrap { position: relative; }
+.password-wrap input.input-control { padding-right: 3rem; }
+/* Eye icon button: 44px-ish touch target on phones, centred on the input. */
 .password-toggle {
   position: absolute;
-  right: 0.3rem;
+  right: 0.2rem;
   top: 50%;
   transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
   background: transparent;
   border: none;
   color: var(--gray-600);
-  padding: 0.4rem 0.5rem;
+  padding: 0;
   cursor: pointer;
-  font-size: 0.78rem;
-  font-weight: 600;
   border-radius: 6px;
+  -webkit-tap-highlight-color: transparent;
   transition: color 150ms ease, background 150ms ease;
 }
+.password-toggle .eye-icon { display: block; }
 .password-toggle:hover { color: var(--navy-800); background: var(--navy-100); }
 .password-toggle:focus-visible { outline: 2px solid var(--navy-700); outline-offset: 1px; }
 

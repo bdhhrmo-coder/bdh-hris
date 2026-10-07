@@ -198,6 +198,14 @@ class PermanentLoginLinkTests(TestCase):
         page = self.client.get("/hris/login/?next=/leave/")
         self.assertContains(page, "Session expired. Please log in again.")
 
+    def test_password_toggle_is_an_accessible_eye_icon(self):
+        page = self.client.get("/hris/login/").content.decode()
+        self.assertIn('class="password-toggle"', page)
+        self.assertIn('aria-label="Show password"', page)
+        self.assertIn('aria-controls="id_password"', page)
+        self.assertEqual(page.count('class="eye-icon"'), 2)  # eye and eye-slash
+        self.assertNotIn(">Show</button>", page)
+
     def test_fresh_visit_shows_no_message(self):
         page = self.client.get("/hris/login/")
         self.assertNotContains(page, "Session expired")
