@@ -150,6 +150,12 @@ class NotificationListViewTests(TestCase):
         self.assertIn('class="topbar-bell"', page)
         self.assertIn('11 unread notifications', page)
 
+    def test_pages_load_the_animation_script(self):
+        self.client.login(username="listview_emp", password="testpass123")
+        page = self.client.get(reverse("notifications:notification_list")).content.decode()
+        self.assertIn("js/ui.js", page)
+        self.assertIn("pulseBell", page)
+
     def test_unread_count_requires_login(self):
         self.assertEqual(self.client.get(reverse("notifications:unread_count")).status_code, 302)
 

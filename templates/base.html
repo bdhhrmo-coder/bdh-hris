@@ -114,14 +114,25 @@
         if (document.hidden) return;
         fetch("{% url 'notifications:unread_count' %}", { headers: { "Accept": "application/json" }, credentials: "same-origin" })
           .then(function (r) { return r.ok && r.headers.get("content-type").indexOf("json") !== -1 ? r.json() : null; })
-          .then(function (data) { if (data) { Alpine.store("notif").count = data.count; Alpine.store("notif").label = data.label; } })
+          .then(function (data) {
+            if (!data) return;
+            var st = Alpine.store("notif"), went_up = data.count > st.count;
+            st.count = data.count; st.label = data.label;
+            if (went_up) pulseBell();
+          })
           .catch(function () {});
+      }
+      function pulseBell() {  // animation 4 (Batch 2, Item 3)
+        var b = document.querySelector(".topbar-bell .bell-count");
+        if (!b) return;
+        b.classList.remove("is-pulsing"); void b.offsetWidth; b.classList.add("is-pulsing");
       }
       setInterval(refresh, 45000);
       document.addEventListener("visibilitychange", refresh);
     });
   </script>
   {% endif %}
+  <script src="{% static 'js/ui.js' %}"></script>
   <script src="{% static 'vendor/alpine.min.js' %}" defer></script>
   {% block extra_scripts %}{% endblock %}
 </body>
