@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}BDH HRIS{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <link rel="stylesheet" href="{% static 'css/animations.css' %}">
   {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -93,7 +94,8 @@
         {% block messages %}
         {% if messages %}
           {% for message in messages %}
-            <div class="msg {{ message.tags }}">{{ message }}</div>
+            {# Shown as a toast (top right) by static/js/ui.js; stays here as plain text if scripts are off. #}
+            <div class="msg {{ message.tags }}"{% if user.is_authenticated %} data-toast="{{ message.tags }}"{% endif %}>{{ message }}</div>
           {% endfor %}
         {% endif %}
         {% endblock %}

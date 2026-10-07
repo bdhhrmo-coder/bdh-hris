@@ -1,0 +1,131 @@
+/*
+  BDH HRIS - ALL animations and the small shared components (toast,
+  confirm dialog, snackbar, progress bar, accordion) in ONE stylesheet
+  (Batch 3, 2026-10-07). Visual polish only: nothing here changes what the
+  system does.
+
+  Rules: short (150-300 ms mostly), never blocks clicking or typing, and
+  with "Reduce motion" turned on every movement is removed (see the end of
+  this file) - things simply appear, or fade.
+*/
+
+/* --- Animations (approved 2026-10-07, Batch 2 Item 3) ---------------- */
+
+/* 1. Button feedback: dims while saving, with a small spinner */
+button.is-busy { opacity: 0.75; cursor: progress; position: relative; padding-right: 2.2rem; }
+button.is-busy::after {
+  content: "";
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  width: 0.85rem;
+  height: 0.85rem;
+  margin-top: -0.425rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: btn-spin 700ms linear infinite;
+}
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+
+/* 2. Messages slide/fade in; success messages fade out (ui.js) */
+.msg { animation: msg-in 220ms ease-out; transition: opacity 400ms ease, transform 400ms ease; }
+.msg.is-leaving { opacity: 0; transform: translateY(-4px); }
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 3. Loading bar across the very top while the next page loads */
+.page-loading-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 0;
+  background: #2bb3a3;
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+}
+.page-loading-bar.is-active { opacity: 1; animation: loading-bar 2.5s ease-out forwards; }
+@keyframes loading-bar {
+  0% { width: 0; }
+  40% { width: 55%; }
+  100% { width: 90%; }
+}
+
+/* 4. Bell bubble pulses twice when the unread count goes up */
+.topbar-bell .bell-count.is-pulsing { animation: bell-pulse 600ms ease-in-out 2; }
+@keyframes bell-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 2px var(--navy-900); }
+  50% { transform: scale(1.25); box-shadow: 0 0 0 2px var(--navy-900), 0 0 0 6px rgba(211, 47, 47, 0.35); }
+}
+
+/* --- Toasts (Batch 3 Item 11) ---------------------------------------- */
+.toast-stack {
+  position: fixed;
+  top: calc(var(--topbar-h, 64px) + 12px);  /* below the header: never covers the bell */
+  right: 16px;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.7rem 0.75rem 0.7rem 0.85rem;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid var(--gray-200, #dfe3e8);
+  border-left: 4px solid var(--toast-c);
+  box-shadow: 0 8px 24px rgba(11, 44, 77, 0.16);
+  font-size: 0.9rem;
+  color: var(--gray-900, #1d2733);
+  animation: toast-in 220ms ease-out;
+  transition: opacity 250ms ease, transform 250ms ease;
+}
+.toast.is-leaving { opacity: 0; transform: translateX(12px); }
+.toast-success { --toast-c: #2e8b57; }
+.toast-info    { --toast-c: #1a4b7a; }
+.toast-warning { --toast-c: #d9a400; }
+.toast-error   { --toast-c: #c62828; }
+.toast-icon {
+  flex-shrink: 0; width: 1.35rem; height: 1.35rem; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--toast-c); color: #fff; font-weight: 700; font-size: 0.8rem; line-height: 1;
+}
+.toast-text { flex: 1; padding-top: 0.08rem; }
+.toast-close {
+  background: transparent; border: none; color: var(--gray-600, #5b6570); font-size: 1.15rem;
+  line-height: 1; padding: 0 0.25rem; cursor: pointer;
+}
+.toast-close:hover { background: transparent; color: var(--gray-900, #1d2733); }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@media (max-width: 480px) {
+  .toast-stack { left: 16px; right: 16px; width: auto; }
+}
+
+/* ===== (new component styles go above this line) ===== */
+
+/* Reduce motion: no movement anywhere. The loading bar stays as a still
+   strip and the busy button keeps its "dimmed" look, so the feedback is
+   still there - only the motion is removed. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .page-loading-bar.is-active { width: 100%; animation: none; }
+  button.is-busy::after { animation: none; border-right-color: currentColor; }
+}
+

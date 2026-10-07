@@ -9,7 +9,7 @@
   not wanted for daily-use hospital admin software. On 2026-10-07 the owner
   approved four small functional animations (button "Saving...", message
   fade, page loading bar, bell pulse - see static/js/ui.js and the
-  "Animations" block at the end of this file). All of them are switched off
+  shared static/css/animations.css). All of them are switched off
   for users with "Reduce motion" on.
 
   Palette: official provincial-government navy (matches the CSC Form 6 /
@@ -626,71 +626,7 @@ button:active, .btn:active { transform: scale(0.98); }
 }
 
 
-/* --- Animations (approved 2026-10-07, Batch 2 Item 3) ---------------- */
-
-/* 1. Button feedback: dims while saving, with a small spinner */
-button.is-busy { opacity: 0.75; cursor: progress; position: relative; padding-right: 2.2rem; }
-button.is-busy::after {
-  content: "";
-  position: absolute;
-  right: 0.75rem;
-  top: 50%;
-  width: 0.85rem;
-  height: 0.85rem;
-  margin-top: -0.425rem;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  border-radius: 50%;
-  animation: btn-spin 700ms linear infinite;
-}
-@keyframes btn-spin { to { transform: rotate(360deg); } }
-
-/* 2. Messages slide/fade in; success messages fade out (ui.js) */
-.msg { animation: msg-in 220ms ease-out; transition: opacity 400ms ease, transform 400ms ease; }
-.msg.is-leaving { opacity: 0; transform: translateY(-4px); }
-@keyframes msg-in {
-  from { opacity: 0; transform: translateY(-6px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* 3. Loading bar across the very top while the next page loads */
-.page-loading-bar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  height: 3px;
-  width: 0;
-  background: #2bb3a3;
-  z-index: 1000;
-  opacity: 0;
-  pointer-events: none;
-}
-.page-loading-bar.is-active { opacity: 1; animation: loading-bar 2.5s ease-out forwards; }
-@keyframes loading-bar {
-  0% { width: 0; }
-  40% { width: 55%; }
-  100% { width: 90%; }
-}
-
-/* 4. Bell bubble pulses twice when the unread count goes up */
-.topbar-bell .bell-count.is-pulsing { animation: bell-pulse 600ms ease-in-out 2; }
-@keyframes bell-pulse {
-  0%, 100% { transform: scale(1); box-shadow: 0 0 0 2px var(--navy-900); }
-  50% { transform: scale(1.25); box-shadow: 0 0 0 2px var(--navy-900), 0 0 0 6px rgba(211, 47, 47, 0.35); }
-}
-
-/* Reduce motion: no movement anywhere. The loading bar stays as a still
-   strip and the busy button keeps its "dimmed" look, so the feedback is
-   still there - only the motion is removed. */
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-  .page-loading-bar.is-active { width: 100%; animation: none; }
-  button.is-busy::after { animation: none; border-right-color: currentColor; }
-}
+/* Animations live in animations.css (one shared stylesheet, Batch 3). */
 
 /* --- Correction lines editor (Batch 2, Item 6) ----------------------- */
 .line-card {
