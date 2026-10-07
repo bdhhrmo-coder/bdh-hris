@@ -200,6 +200,24 @@ button.is-busy::after {
 .snackbar.is-leaving { opacity: 0; }
 @keyframes snack-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
+/* --- Dashboard charts (Batch 3 Item 4) ---------------------------------
+   The charts are pictures drawn on the server, so the whole picture is
+   revealed (owner decision 2026-10-07): bar charts rise from the baseline,
+   the trend line draws left to right, pie charts sweep round. Under 1 s;
+   the numbers are not touched. Replays whenever the page/filters reload. */
+.chart-anim { animation-duration: 800ms; animation-timing-function: cubic-bezier(.2, .7, .2, 1); animation-fill-mode: both; }
+.chart-bars { animation-name: chart-rise; }
+.chart-line { animation-name: chart-draw; }
+.chart-pie  { animation-name: chart-sweep; }
+@keyframes chart-rise { from { clip-path: inset(100% 0 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes chart-draw { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@property --sweep { syntax: "<angle>"; inherits: false; initial-value: 360deg; }
+@keyframes chart-sweep { from { --sweep: 0deg; } to { --sweep: 360deg; } }
+.chart-pie {
+  -webkit-mask-image: conic-gradient(#000 var(--sweep), transparent 0);
+          mask-image: conic-gradient(#000 var(--sweep), transparent 0);
+}
+
 /* ===== (new component styles go above this line) ===== */
 
 /* Reduce motion: no movement anywhere. The loading bar stays as a still
