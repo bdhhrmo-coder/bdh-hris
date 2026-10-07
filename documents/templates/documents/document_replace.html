@@ -4,7 +4,7 @@
 <h1>Replace document</h1>
 <p style="color:var(--gray-600);">Replacing: {{ old_document.original_filename }} — the old file is kept for the audit trail, not deleted.</p>
 <div class="card">
-  <form method="post" enctype="multipart/form-data">
+  <form method="post" enctype="multipart/form-data" data-upload data-max-bytes="{{ max_bytes }}" data-allowed=".pdf,.jpg,.jpeg,.png">
     {% csrf_token %}
     {{ form.as_p }}
     <button type="submit">Upload replacement</button>

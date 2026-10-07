@@ -373,4 +373,108 @@
     if (!window.fetch || !window.DOMParser) return;
     document.querySelectorAll("form[data-live-results]").forEach(liveResults);
   });
+
+  // ---------------------------------------------------------------------
+  // File upload (Item 8). Enhances forms marked data-upload: shows the
+  // chosen file (icon, name, size, Remove), checks type and size at once
+  // with the SAME limits as the server (which still checks everything),
+  // sends the file with a REAL progress bar, then a green check - or a red
+  // message with the reason and "Try again".
+  // ---------------------------------------------------------------------
+  function fmtSize(n) {
+    return n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
+  }
+
+  function uploadForm(form) {
+    var input = form.querySelector("input[type=file]");
+    if (!input || !window.XMLHttpRequest || !window.FormData) return;
+    var maxBytes = parseInt(form.getAttribute("data-max-bytes"), 10) || 0;
+    var allowed = (form.getAttribute("data-allowed") || "").split(",");
+    var box = document.createElement("div");
+    box.className = "upload-box";
+    box.setAttribute("aria-live", "polite");
+    box.hidden = true;
+    input.insertAdjacentElement("afterend", box);
+
+    function show(state, html) {
+      box.hidden = false;
+      box.className = "upload-box is-" + state;
+      box.innerHTML = html;
+    }
+    function esc(t) { var d = document.createElement("div"); d.textContent = t; return d.innerHTML; }
+    function fileLine(f, extra) {
+      return '<span class="upload-icon" aria-hidden="true"></span><span class="upload-name">' + esc(f.name) +
+             ' <small>' + fmtSize(f.size) + '</small></span>' + (extra || "");
+    }
+    function problem(f, reason) {
+      show("error", (f ? fileLine(f) : "") + '<p class="upload-msg">' + esc(reason) + '</p>' +
+           '<button type="button" class="btn-secondary btn-sm upload-retry">Try again</button>');
+      box.querySelector(".upload-retry").addEventListener("click", function () { reset(); input.click(); });
+    }
+    function reset() { input.value = ""; box.hidden = true; box.innerHTML = ""; }
+    function check(f) {
+      var ext = "." + (f.name.split(".").pop() || "").toLowerCase();
+      if (allowed.length && allowed.indexOf(ext) === -1) return "Wrong file type — only PDF, JPG or PNG.";
+      if (maxBytes && f.size > maxBytes) return "File is too large — maximum is " + fmtSize(maxBytes) + ".";
+      return "";
+    }
+
+    input.addEventListener("change", function () {
+      var f = input.files[0];
+      if (!f) { reset(); return; }
+      var why = check(f);
+      if (why) { problem(f, why); input.value = ""; return; }
+      show("ready", fileLine(f, '<button type="button" class="upload-remove" aria-label="Remove ' + esc(f.name) + '">Remove</button>'));
+      box.querySelector(".upload-remove").addEventListener("click", reset);
+    });
+
+    form.addEventListener("submit", function (e) {
+      var f = input.files[0];
+      if (!f) return;  // let the server say what's missing
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      var why = check(f);
+      if (why) { problem(f, why); return; }
+      var buttons = form.querySelectorAll("button[type=submit]");
+      buttons.forEach(function (b) { b.disabled = true; });
+      show("uploading", fileLine(f) + '<div class="upload-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"><span></span></div><p class="upload-msg">Uploading… 0%</p>');
+      var bar = box.querySelector(".upload-bar"), fill = bar.querySelector("span"), msg = box.querySelector(".upload-msg");
+      var xhr = new XMLHttpRequest();
+      xhr.open("POST", form.action || location.href);
+      xhr.upload.onprogress = function (ev) {
+        if (!ev.lengthComputable) { msg.textContent = "Uploading…"; return; }
+        var pct = Math.round(ev.loaded / ev.total * 100);
+        fill.style.width = pct + "%";
+        bar.setAttribute("aria-valuenow", pct);
+        msg.textContent = "Uploading… " + pct + "%";
+      };
+      xhr.onload = function () {
+        buttons.forEach(function (b) { b.disabled = false; });
+        var target = xhr.responseURL || "";
+        var stayed = target.split("?")[0] === (form.action || location.href).split("?")[0];
+        if (xhr.status >= 200 && xhr.status < 300 && !stayed) {
+          show("done", fileLine(f, '<span class="upload-check" aria-hidden="true">✓</span>') + '<p class="upload-msg">Uploaded.</p>');
+          setTimeout(function () { location.href = target; }, 700);
+          return;
+        }
+        // The server refused it: show its reason.
+        var reason = "The upload was not accepted.";
+        try {
+          var doc = new DOMParser().parseFromString(xhr.responseText, "text/html");
+          var err = doc.querySelector(".errorlist");
+          if (err) reason = err.textContent.trim();
+          else if (xhr.status === 403) reason = "You are not allowed to upload here, or the page expired. Reload and try again.";
+        } catch (ignore) { /* keep the general reason */ }
+        problem(f, reason);
+      };
+      xhr.onerror = function () {
+        buttons.forEach(function (b) { b.disabled = false; });
+        problem(f, "Network error — the file did not reach the server.");
+      };
+      xhr.send(new FormData(form));
+    }, true);
+  }
+  document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll("form[data-upload]").forEach(uploadForm);
+  });
 })();

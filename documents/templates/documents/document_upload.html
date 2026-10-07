@@ -4,7 +4,7 @@
 <h1>Upload a document</h1>
 <p style="color:var(--gray-600);">{{ obj }}<br>PDF, JPG, or PNG only — max 10 MB, up to 5 documents per transaction.</p>
 <div class="card">
-  <form method="post" enctype="multipart/form-data">
+  <form method="post" enctype="multipart/form-data" data-upload data-max-bytes="{{ max_bytes }}" data-allowed=".pdf,.jpg,.jpeg,.png">
     {% csrf_token %}
     {{ form.as_p }}
     <button type="submit">Upload</button>

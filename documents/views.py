@@ -10,7 +10,7 @@ from .forms import DocumentUploadForm
 from .models import UploadedDocument, UploadedDocumentEvent
 from .permissions import can_upload_to, can_view_document, can_view_transaction, get_acting_employee
 from .requirements import required_documents_for, requirement_status_for
-from .validators import validate_upload
+from .validators import MAX_FILE_SIZE_BYTES, validate_upload
 
 
 def _get_target(app_label, model_name, object_id):
@@ -89,6 +89,7 @@ def document_upload(request, app_label, model_name, object_id):
 
     return render(request, "documents/document_upload.html", {
         "form": form, "obj": obj, "app_label": app_label, "model_name": model_name,
+        "max_bytes": MAX_FILE_SIZE_BYTES,  # shown/checked on the page too; the server still validates
     })
 
 
@@ -144,7 +145,8 @@ def document_replace(request, pk):
     else:
         form = DocumentUploadForm(requirement_queryset=requirement_queryset)
 
-    return render(request, "documents/document_replace.html", {"form": form, "old_document": old_document})
+    return render(request, "documents/document_replace.html",
+                  {"form": form, "old_document": old_document, "max_bytes": MAX_FILE_SIZE_BYTES})
 
 
 @login_required
