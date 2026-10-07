@@ -114,6 +114,24 @@ button.is-busy::after {
   .toast-stack { left: 16px; right: 16px; width: auto; }
 }
 
+/* --- Sidebar active indicator (Batch 3 Item 1) ------------------------ */
+.app-sidebar nav { position: relative; }
+.app-sidebar nav a.is-current {
+  background: #eaf2f9;                 /* subtle tint */
+  color: var(--navy-900, #0b2c4d);
+  font-weight: 600;
+}
+.nav-indicator {
+  position: absolute;
+  left: 0;
+  width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: var(--teal-600, #157a6e);
+  pointer-events: none;
+  transition: top 280ms cubic-bezier(.4, 0, .2, 1), height 280ms cubic-bezier(.4, 0, .2, 1);
+}
+.nav-indicator.no-anim { transition: none; }
+
 /* ===== (new component styles go above this line) ===== */
 
 /* Reduce motion: no movement anywhere. The loading bar stays as a still

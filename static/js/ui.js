@@ -143,4 +143,57 @@
       el.remove();
     });
   });
+
+  // ---------------------------------------------------------------------
+  // Sidebar active indicator (Item 1). Finds the menu link for the current
+  // page, tints it, and slides a bar there from where it was on the last
+  // page (remembered only for this browser tab). If that memory is not
+  // available, the bar simply appears in place - no jump.
+  // ---------------------------------------------------------------------
+  function currentNavLink(nav) {
+    var path = location.pathname, best = null, bestLen = -1;
+    nav.querySelectorAll("a[href]").forEach(function (a) {
+      var p = a.pathname;
+      if (p === "/") return;
+      if ((path === p || path.indexOf(p) === 0) && p.length > bestLen) { best = a; bestLen = p.length; }
+    });
+    return best;
+  }
+
+  function placeIndicator(nav, link, animateFrom) {
+    var ind = nav.querySelector(".nav-indicator");
+    if (!ind) {
+      ind = document.createElement("span");
+      ind.className = "nav-indicator";
+      ind.setAttribute("aria-hidden", "true");
+      nav.appendChild(ind);
+    }
+    var top = link.offsetTop, h = link.offsetHeight;
+    if (animateFrom && animateFrom.top !== top) {
+      ind.classList.add("no-anim");
+      ind.style.top = animateFrom.top + "px";
+      ind.style.height = animateFrom.h + "px";
+      void ind.offsetWidth;  // apply the start position first
+      ind.classList.remove("no-anim");
+    } else {
+      ind.classList.add("no-anim");
+    }
+    ind.style.top = top + "px";
+    ind.style.height = h + "px";
+    if (!animateFrom) requestAnimationFrame(function () { ind.classList.remove("no-anim"); });
+    return { top: top, h: h };
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    var nav = document.querySelector(".app-sidebar nav");
+    if (!nav) return;
+    var link = currentNavLink(nav);
+    if (!link) return;
+    link.classList.add("is-current");
+    link.setAttribute("aria-current", "page");
+    var prev = null;
+    try { prev = JSON.parse(sessionStorage.getItem("bdh-nav") || "null"); } catch (e) { prev = null; }
+    var pos = placeIndicator(nav, link, prev);
+    try { sessionStorage.setItem("bdh-nav", JSON.stringify(pos)); } catch (e) { /* not available: no slide */ }
+  });
 })();
