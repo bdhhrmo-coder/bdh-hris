@@ -22,9 +22,21 @@
           <small>Bataraza District Hospital</small>
         </div>
         <div class="spacer"></div>
+        {# Batch 2, Item 4: bell with a live unread count (own notifications only). #}
+        <a href="{% url 'notifications:notification_list' %}" class="topbar-bell" x-data
+           :aria-label="$store.notif.count ? $store.notif.count + ' unread notifications' : 'Notifications'"
+           aria-label="{% if unread_notification_count %}{{ unread_notification_count }} unread notifications{% else %}Notifications{% endif %}">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+          </svg>
+          <span class="bell-count" x-show="$store.notif.count" x-text="$store.notif.label"
+                {% if not unread_notification_count %}style="display:none"{% endif %}>{{ unread_notification_label }}</span>
+        </a>
         <div class="user-chip">
-          {% if user.employee %}{{ user.employee.first_name }} {{ user.employee.surname }}{% else %}{{ user.username }}{% endif %}
-          &middot;
+          <span class="user-name">{% if user.employee %}{{ user.employee.first_name }} {{ user.employee.surname }}{% else %}{{ user.username }}{% endif %}
+          &middot;</span>
           <a href="{% url 'password_change' %}" class="topbar-link">Change password</a>
           &middot;
           <form method="post" action="{% url 'logout' %}" class="logout-form">
@@ -39,7 +51,8 @@
           {% if can_list_employees %}<a href="{% url 'employees:employee_list' %}">Employees</a>{% endif %}
           <a href="{% url 'notifications:notification_list' %}">
             Notifications
-            {% if unread_notification_count %}<span class="count">{{ unread_notification_count }}</span>{% endif %}
+            <span class="count" x-data x-show="$store.notif.count" x-text="$store.notif.label"
+                  {% if not unread_notification_count %}style="display:none"{% endif %}>{{ unread_notification_label }}</span>
           </a>
 
           <p class="nav-section-label">My Requests</p>
@@ -87,6 +100,27 @@
       </main>
   {% if user.is_authenticated %}
     </div>
+  {% endif %}
+  {% if user.is_authenticated %}
+  <script>
+    // Unread-notification count for the header bell and the sidebar
+    // (Batch 2, Item 4). Starts from the number on the page, then asks the
+    // server every 45 seconds while the tab is visible. Plain fetch +
+    // Alpine - no extra library.
+    document.addEventListener("alpine:init", function () {
+      var store = { count: {{ unread_notification_count|default:0 }}, label: "{{ unread_notification_label|default:'' }}" };
+      Alpine.store("notif", store);
+      function refresh() {
+        if (document.hidden) return;
+        fetch("{% url 'notifications:unread_count' %}", { headers: { "Accept": "application/json" }, credentials: "same-origin" })
+          .then(function (r) { return r.ok && r.headers.get("content-type").indexOf("json") !== -1 ? r.json() : null; })
+          .then(function (data) { if (data) { Alpine.store("notif").count = data.count; Alpine.store("notif").label = data.label; } })
+          .catch(function () {});
+      }
+      setInterval(refresh, 45000);
+      document.addEventListener("visibilitychange", refresh);
+    });
+  </script>
   {% endif %}
   <script src="{% static 'vendor/alpine.min.js' %}" defer></script>
   {% block extra_scripts %}{% endblock %}

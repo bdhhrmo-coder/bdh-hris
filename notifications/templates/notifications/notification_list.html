@@ -1,15 +1,26 @@
 {% extends "base.html" %}
 {% block title %}Notifications — BDH HRIS{% endblock %}
 {% block content %}
-<h1>Notifications</h1>
+<div class="split-row">
+  <h1>Notifications</h1>
+  {% if unread_ids %}
+  <form method="post" action="{% url 'notifications:mark_all_read' %}">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-secondary">Mark all as read</button>
+  </form>
+  {% endif %}
+</div>
 <div class="card">
-<table>
+<table class="notification-table">
   <tr><th>When</th><th>Message</th><th></th></tr>
   {% for n in notifications %}
-  <tr{% if n.pk in unread_ids %} style="font-weight:600; border-left:3px solid var(--teal-600);"{% endif %}>
+  <tr class="{% if n.pk in unread_ids %}is-unread{% endif %}">
     <td>{{ n.created_at|date:"Y-m-d H:i" }}</td>
-    <td>{{ n.message }}</td>
-    <td>{% if n.url %}<a href="{{ n.url }}">Open</a>{% endif %}</td>
+    <td>{% if n.pk in unread_ids %}<span class="unread-dot" aria-hidden="true"></span><span class="sr-only">Unread: </span>{% endif %}{{ n.message }}</td>
+    <td>
+      {% if n.url %}<a href="{% url 'notifications:open' n.pk %}">Open</a>
+      {% elif n.pk in unread_ids %}<a href="{% url 'notifications:open' n.pk %}">Mark read</a>{% endif %}
+    </td>
   </tr>
   {% empty %}
   <tr><td colspan="3" class="empty-note">No notifications yet.</td></tr>

@@ -91,13 +91,67 @@ class NotificationListViewTests(TestCase):
         self.assertContains(response, "Mine")
         self.assertNotContains(response, "Not mine")
 
-    def test_viewing_marks_unread_as_read(self):
+    def test_viewing_the_list_no_longer_marks_everything_read(self):
         n = Notification.objects.create(recipient=self.employee, message="Unread")
-        self.assertFalse(n.is_read)
         self.client.login(username="listview_emp", password="testpass123")
-        self.client.get(reverse("notifications:notification_list"))
+        page = self.client.get(reverse("notifications:notification_list"))
+        self.assertContains(page, "Mark all as read")
         n.refresh_from_db()
+        self.assertFalse(n.is_read)
+
+    def test_opening_a_notification_marks_it_read_and_follows_its_link(self):
+        n = Notification.objects.create(recipient=self.employee, message="Go", url="/leave/mine/")
+        other = Notification.objects.create(recipient=self.employee, message="Stay unread")
+        self.client.login(username="listview_emp", password="testpass123")
+        r = self.client.get(reverse("notifications:open", args=[n.pk]))
+        self.assertRedirects(r, "/leave/mine/", fetch_redirect_response=False)
+        n.refresh_from_db(); other.refresh_from_db()
         self.assertTrue(n.is_read)
+        self.assertFalse(other.is_read)
+
+    def test_cannot_open_someone_elses_notification(self):
+        stranger = make_employee("listview_stranger", "EMP-LV-3")
+        n = Notification.objects.create(recipient=stranger, message="Private")
+        self.client.login(username="listview_emp", password="testpass123")
+        self.assertEqual(self.client.get(reverse("notifications:open", args=[n.pk])).status_code, 404)
+        n.refresh_from_db()
+        self.assertFalse(n.is_read)
+
+    def test_outside_link_is_not_followed(self):
+        n = Notification.objects.create(recipient=self.employee, message="Bad", url="http://evil.example/")
+        self.client.login(username="listview_emp", password="testpass123")
+        r = self.client.get(reverse("notifications:open", args=[n.pk]))
+        self.assertRedirects(r, reverse("notifications:notification_list"), fetch_redirect_response=False)
+
+    def test_mark_all_read_only_touches_my_notifications(self):
+        other = make_employee("listview_other2", "EMP-LV-4")
+        for i in range(3):
+            Notification.objects.create(recipient=self.employee, message=f"m{i}")
+        theirs = Notification.objects.create(recipient=other, message="theirs")
+        self.client.login(username="listview_emp", password="testpass123")
+        self.assertEqual(self.client.get(reverse("notifications:mark_all_read")).status_code, 405)  # POST only
+        self.client.post(reverse("notifications:mark_all_read"))
+        self.assertFalse(Notification.objects.filter(recipient=self.employee, is_read=False).exists())
+        theirs.refresh_from_db()
+        self.assertFalse(theirs.is_read)
+
+    def test_unread_count_endpoint_and_bubble_label(self):
+        other = make_employee("listview_other3", "EMP-LV-5")
+        Notification.objects.create(recipient=other, message="not counted")
+        self.client.login(username="listview_emp", password="testpass123")
+        self.assertEqual(self.client.get(reverse("notifications:unread_count")).json(), {"count": 0, "label": ""})
+        for i in range(3):
+            Notification.objects.create(recipient=self.employee, message=f"n{i}")
+        self.assertEqual(self.client.get(reverse("notifications:unread_count")).json(), {"count": 3, "label": "3"})
+        for i in range(8):
+            Notification.objects.create(recipient=self.employee, message=f"x{i}")
+        self.assertEqual(self.client.get(reverse("notifications:unread_count")).json()["label"], "9+")
+        page = self.client.get(reverse("leave:my_applications")).content.decode()
+        self.assertIn('class="topbar-bell"', page)
+        self.assertIn('11 unread notifications', page)
+
+    def test_unread_count_requires_login(self):
+        self.assertEqual(self.client.get(reverse("notifications:unread_count")).status_code, 302)
 
     def test_unread_count_context_processor(self):
         Notification.objects.create(recipient=self.employee, message="One")

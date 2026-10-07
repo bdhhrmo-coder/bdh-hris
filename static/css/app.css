@@ -121,6 +121,48 @@ h2 { font-size: 1.15rem; margin-top: 1.6em; }
 
 .app-topbar .spacer { flex: 1; }
 
+/* Header bell + red unread bubble (Batch 2, Item 4) */
+.topbar-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: var(--navy-100);
+  flex-shrink: 0;
+}
+.topbar-bell:hover, .topbar-bell:focus-visible { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.topbar-bell:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.topbar-bell .bell-count {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #d32f2f;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--navy-900);
+}
+.notification-table tr.is-unread td { font-weight: 600; background: #f3f8fc; }
+.notification-table tr.is-unread td:first-child { box-shadow: inset 3px 0 0 var(--teal-600); }
+.unread-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 0.45rem;
+  border-radius: 50%;
+  background: #d32f2f;
+  vertical-align: middle;
+}
+
 .app-topbar .user-chip {
   font-size: 0.85rem;
   color: var(--navy-100);
@@ -194,6 +236,12 @@ h2 { font-size: 1.15rem; margin-top: 1.6em; }
 @media (max-width: 480px) {
   .app-topbar .brand-logo { height: 38px; }
   .app-topbar { gap: 0.5rem; padding: 0 0.85rem; }
+}
+@media (max-width: 480px) {
+  /* phones: keep the bell, Change password and Log out on screen */
+  .app-topbar .user-chip .user-name,
+  .app-topbar .brand-text small { display: none; }
+  .app-topbar .user-chip { font-size: 0.8rem; }
 }
 
 /* --- Watermark (logged-in screens only; base.html never renders it on

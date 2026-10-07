@@ -12,4 +12,7 @@ def unread_notification_count(request):
     acting_employee = get_acting_employee(user)
     if acting_employee is None:
         return {}
-    return {"unread_notification_count": acting_employee.notifications.filter(is_read=False).count()}
+    from .views import badge_label
+
+    count = acting_employee.notifications.filter(is_read=False).count()
+    return {"unread_notification_count": count, "unread_notification_label": badge_label(count)}
