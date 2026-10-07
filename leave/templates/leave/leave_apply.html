@@ -1,17 +1,31 @@
 {% extends "base.html" %}
 {% block title %}Apply for leave — BDH HRIS{% endblock %}
 {% block content %}
+<div x-data="{ sel: '{{ selected_type }}' }"
+     @change="if ($event.target.name === 'leave_type') sel = $event.target.value">
 <h1>Apply for leave</h1>
 
-<div class="card">
-  <h2 style="margin-top:0;">My balances</h2>
-  <table>
-    <tr><th>Leave type</th><th>Available</th></tr>
-    {% for lt, bal in balances %}
-    <tr><td>{{ lt.name }}</td><td>{% if bal is None %}Not capped — recorded only{% else %}{{ bal }} day(s){% endif %}</td></tr>
+<section class="balance-panel" aria-labelledby="balances-title">
+  <h2 id="balances-title" class="balance-panel-title">My balances <small>as of {% now "M j, Y" %}</small></h2>
+  <div class="balance-cards">
+    {% for c in cards %}
+    <div class="balance-card is-{{ c.colour }}"
+         {% if c.type_id %}:class="{ 'is-selected': sel === '{{ c.type_id }}' }"{% endif %}>
+      <p class="bc-name">{{ c.name }}</p>
+      {% if c.remaining is None %}
+        <p class="bc-remaining bc-nolimit">No fixed limit</p>
+        <p class="bc-used">{{ c.used|floatformat:"-2" }} used this year</p>
+      {% else %}
+        <p class="bc-remaining">{{ c.remaining|floatformat:"-2" }} <span>day{{ c.remaining|pluralize }} left</span></p>
+        <p class="bc-used">{{ c.used|floatformat:"-2" }} used / {{ c.total|floatformat:"-2" }} total</p>
+        <div class="bc-bar" role="progressbar" aria-label="{{ c.name }} remaining" aria-valuemin="0" aria-valuemax="100"
+             aria-valuenow="{{ c.percent }}"><span style="width: {{ c.percent }}%"></span></div>
+      {% endif %}
+      {% if c.note %}<p class="bc-note">{{ c.note }}</p>{% endif %}
+    </div>
     {% endfor %}
-  </table>
-</div>
+  </div>
+</section>
 
 <div class="card">
   <form method="post">
@@ -19,5 +33,6 @@
     {{ form.as_p }}
     <button type="submit">Submit</button>
   </form>
+</div>
 </div>
 {% endblock %}

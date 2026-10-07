@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from employees.permissions import get_acting_employee
 
+from .balance_cards import balance_cards
 from .balances import compute_available_balance
 from .csc_form6 import render_pdf as render_csc_form6_pdf
 from .cosp_leave_form import render_pdf as render_cosp_leave_form_pdf
@@ -48,13 +49,9 @@ def leave_apply(request):
     else:
         form = LeaveApplicationForm(employee=acting_employee)
 
-    balances = [
-        (lt, compute_available_balance(acting_employee, lt))
-        for lt in LeaveType.objects.filter(
-            is_active=True, applicable_to__in=[LeaveType.APPLICABLE_BOTH, acting_employee.employment_status]
-        )
-    ]
-    return render(request, "leave/leave_apply.html", {"form": form, "balances": balances})
+    selected = form["leave_type"].value() or ""
+    return render(request, "leave/leave_apply.html",
+                  {"form": form, "cards": balance_cards(acting_employee), "selected_type": str(selected)})
 
 
 @login_required

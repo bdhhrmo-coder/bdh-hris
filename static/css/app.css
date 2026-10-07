@@ -584,3 +584,39 @@ button:active, .btn:active { transform: scale(0.98); }
 .section-title { font-size: 1.05rem; color: var(--navy-900); margin: 1.4rem 0 0.4rem; }
 .split-row { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center; }
 .table-scroll { overflow-x: auto; }
+
+/* --- My Balances cards (Apply for Leave, Batch 2 Item 5) ------------- */
+.balance-panel { margin-bottom: 1rem; }
+.balance-panel-title { font-size: 1rem; margin: 0 0 0.5rem; }
+.balance-panel-title small { font-weight: 400; color: var(--gray-600); font-size: 0.8rem; margin-left: 0.4rem; }
+.balance-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.65rem;
+}
+.balance-card {
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-top: 4px solid var(--bc, #9aa5b1);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.75rem 0.55rem;
+  transition: box-shadow 150ms ease, border-color 150ms ease;
+}
+.balance-card.is-green  { --bc: #2e8b57; }
+.balance-card.is-yellow { --bc: #d9a400; }
+.balance-card.is-red    { --bc: #c62828; }
+.balance-card.is-neutral { --bc: #9aa5b1; }
+.balance-card.is-selected { border-color: var(--navy-700); box-shadow: 0 0 0 2px var(--navy-700); }
+.balance-card p { margin: 0; }
+.bc-name { font-size: 0.8rem; font-weight: 600; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.03em; }
+.bc-remaining { font-size: 1.6rem; font-weight: 700; line-height: 1.2; color: var(--navy-900); }
+.bc-remaining span { font-size: 0.8rem; font-weight: 500; color: var(--gray-600); }
+.bc-remaining.bc-nolimit { font-size: 1.05rem; padding: 0.3rem 0; }
+.bc-used { font-size: 0.78rem; color: var(--gray-600); }
+.bc-bar { height: 6px; background: #e9edf2; border-radius: 999px; margin-top: 0.35rem; overflow: hidden; }
+.bc-bar span { display: block; height: 100%; background: var(--bc); border-radius: 999px; }
+.bc-note { font-size: 0.72rem; color: var(--gray-600); margin-top: 0.3rem !important; font-style: italic; }
+@media (max-width: 480px) {
+  .balance-cards { grid-template-columns: repeat(2, 1fr); }
+  .bc-remaining { font-size: 1.35rem; }
+}

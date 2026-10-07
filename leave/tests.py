@@ -431,3 +431,67 @@ class QueueOrderTests(TestCase):
         self.client.force_login(hr.user)
         listed = [a.pk for a in self.client.get(reverse("leave:leave_queue")).context["applications"]]
         self.assertEqual(listed, made)  # filed 10, 9, 8 days ago -> shown in that order, not by name
+
+
+class BalanceCardTests(TestCase):
+    """Batch 2, Item 5: 'My balances' cards on the Apply for Leave page."""
+
+    TODAY = date(2026, 10, 7)
+
+    def setUp(self):
+        from cto.models import CTOCreditTransaction
+
+        self.CTO = CTOCreditTransaction
+        self.recorder = User.objects.create_user("bc_recorder", password="x")
+
+    def cards(self, employee):
+        from .balance_cards import balance_cards
+
+        return {c["key"]: c for c in balance_cards(employee, today=self.TODAY)}
+
+    def test_regular_gets_vl_sl_wellness_emergency_and_cto(self):
+        emp = make_employee("bc_reg", "BC-1", date_hired=date(2026, 1, 7))  # 9 full months -> 11.25 VL
+        vl = LeaveType.objects.get(code="VL")
+        LeaveCreditTransaction.objects.create(employee=emp, leave_type=vl, transaction_type="USED", days=-2,
+                                              transaction_date=date(2026, 5, 4), created_by=self.recorder)
+        cards = self.cards(emp)
+        self.assertEqual(list(cards), ["VL", "SL", "WELLNESS", "EMERGENCY", "CTO"])
+        self.assertEqual((cards["VL"]["remaining"], cards["VL"]["used"], cards["VL"]["total"]),
+                         (Decimal("9.25"), Decimal("2"), Decimal("11.25")))
+        self.assertEqual(cards["VL"]["colour"], "green")
+        self.assertEqual(cards["WELLNESS"]["note"], "Expires Dec 31")
+        self.assertIsNone(cards["EMERGENCY"]["remaining"])
+        self.assertEqual(cards["EMERGENCY"]["colour"], "neutral")
+        self.assertEqual(cards["CTO"]["note"], "Use by Dec 15")
+
+    def test_cosp_gets_contract_leave_not_vl_sl(self):
+        emp = make_employee("bc_cosp", "BC-2", date_hired=date(2026, 1, 1), employment_status="COSP")
+        self.assertEqual(list(self.cards(emp)), ["COSP_LEAVE", "WELLNESS", "EMERGENCY", "CTO"])
+
+    def test_colours(self):
+        from .balance_cards import status_colour
+
+        self.assertEqual(status_colour(Decimal("0"), Decimal("5")), "red")
+        self.assertEqual(status_colour(Decimal("1"), Decimal("20")), "red")
+        self.assertEqual(status_colour(Decimal("5"), Decimal("20")), "yellow")  # 25%
+        self.assertEqual(status_colour(Decimal("6"), Decimal("20")), "green")
+        self.assertEqual(status_colour(None, None), "neutral")
+
+    def test_cto_card_uses_existing_ledger_and_is_hidden_for_coh(self):
+        emp = make_employee("bc_cto", "BC-3", date_hired=date(2020, 1, 1))
+        self.CTO.objects.create(employee=emp, transaction_type="EARNED", days=3, transaction_date=date(2026, 3, 1),
+                                created_by=self.recorder)
+        self.CTO.objects.create(employee=emp, transaction_type="USED", days=-1, transaction_date=date(2026, 4, 1),
+                                created_by=self.recorder)
+        cto = self.cards(emp)["CTO"]
+        self.assertEqual((cto["remaining"], cto["used"], cto["total"]), (Decimal("2"), Decimal("1"), Decimal("3")))
+        RoleAssignment.objects.create(employee=emp, role=RoleAssignment.CHIEF_OF_HOSPITAL)
+        self.assertNotIn("CTO", self.cards(emp))
+
+    def test_apply_page_shows_cards(self):
+        emp = make_employee("bc_page", "BC-4", date_hired=date(2025, 1, 1))
+        self.client.force_login(emp.user)
+        page = self.client.get(reverse("leave:leave_apply")).content.decode()
+        self.assertIn("My balances", page)
+        self.assertEqual(page.count('class="balance-card '), 5)
+        self.assertIn("No fixed limit", page)
