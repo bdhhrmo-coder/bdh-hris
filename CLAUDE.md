@@ -150,6 +150,14 @@ Implemented as a **custom `Role` model tied to Employee** (not Django's built-in
 | **Travel** | Employee → Supervisor → AO → COH (no HR step) |
 | **Authorized OT/restday/holiday work** | Employee → Supervisor → HR → AO → COH |
 
+**Attendance Correction, multiple dates (settled 2026-10-07):** one request holds 1–10 dates, each with its own times and reason. All dates in one formal request must belong to the same validator (ICTU-type and HR-type reasons are filed separately). Approvers act on the whole request only (validate/approve, return, reject); **a return needs a remark**. The filer edits and resubmits the same request, which **starts again from the first step**; the return history is kept and printed on F10.
+
+**Group (batch) filing — Travel, Official Business, OT / rest-day / holiday work (settled 2026-10-07):**
+- Who files: **Supervisor** (own sections/units incl. OIC; all types), **HR Processor** (any employee; **Travel and Official Business only**), **HR Administrator** (any employee; all types). The filer cannot include themselves.
+- One batch; each employee-date is its own OfficialRequest line. Whole-batch approve/return (remark required); filer edits and resubmits, starting the route again.
+- Routes (filer's step counts as done): OT/rest/holiday by Supervisor → HR → AO → COH; by HR Admin → AO → COH. Travel by Supervisor or HR → AO → COH. **Official Business by Supervisor → HR → AO → COH; by HR → Supervisor → AO → COH** (the Supervisor still endorses).
+- The filer can never act on their own batch at a later step, even with other roles or OIC. Approved OT creates no CTO (§7.1 unchanged). A regular employee filing their own request keeps the normal route.
+
 **⚠️ Critical:** Regular Leave must NOT be routed through the internal approval workflow engine — it's data-entry/monitoring only. Building this into the same generic workflow as other request types risks incorrectly implying internal approval authority that doesn't exist.
 
 ### 6.3 Output Forms
