@@ -100,8 +100,16 @@ body.login-page .guest-main {
   border-radius: 16px;
   box-shadow: 0 20px 50px rgba(6, 24, 44, 0.35);
   padding: 2.25rem 2rem 2rem;
-  animation: card-in 320ms ease-out;
 }
+
+/* Entrance (Batch 3 Item 3) - only on a fresh page load (the template
+   adds .entrance on GET only, never after a failed login): the logo fades
+   in, the panel rises a few pixels, then the tagline appears. ~0.4 s. */
+.login-card.entrance { animation: card-in 300ms 80ms cubic-bezier(.2, .7, .2, 1) both; }
+.login-card.entrance .login-brand img { animation: logo-in 200ms ease-out both; }
+.login-card.entrance .login-tagline { animation: tagline-in 160ms 280ms ease-out both; }
+@keyframes logo-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes tagline-in { from { opacity: 0; } to { opacity: 1; } }
 
 @supports (backdrop-filter: blur(14px)) or (-webkit-backdrop-filter: blur(14px)) {
   .login-card {
@@ -112,8 +120,8 @@ body.login-page .guest-main {
 }
 
 @keyframes card-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { transform: translateY(10px); }
+  to   { transform: translateY(0); }
 }
 
 .login-brand {
@@ -285,6 +293,8 @@ body.login-page .guest-main {
   body.login-page::after,
   .login-blob-a, .login-blob-b,
   .login-card,
+  .login-card.entrance .login-brand img,
+  .login-card.entrance .login-tagline,
   .spinner {
     animation: none !important;
   }

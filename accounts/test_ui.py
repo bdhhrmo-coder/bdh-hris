@@ -27,3 +27,11 @@ class SharedUiTests(TestCase):
         html = r.content.decode()
         self.assertIn('data-toast="success"', html)
         self.assertIn("Your password has been changed.", html)
+
+
+class LoginEntranceTests(TestCase):
+    def test_entrance_plays_on_page_load_but_not_after_a_failed_login(self):
+        self.assertContains(self.client.get("/hris/login/"), 'class="login-card entrance"')
+        failed = self.client.post("/hris/login/", {"username": "nobody", "password": "x"})
+        self.assertContains(failed, 'class="login-card"')
+        self.assertNotContains(failed, "login-card entrance")
