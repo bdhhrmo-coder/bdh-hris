@@ -132,6 +132,21 @@ button.is-busy::after {
 }
 .nav-indicator.no-anim { transition: none; }
 
+/* --- Signing out overlay (Batch 3 Item 2) ----------------------------- */
+.signout-overlay {
+  position: fixed; inset: 0; z-index: 2000;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(11, 44, 77, 0.92);
+  opacity: 0; transition: opacity 400ms ease;
+}
+.signout-overlay.is-visible { opacity: 1; }
+.signout-box { color: #fff; font-size: 1.05rem; font-weight: 600; display: flex; align-items: center; gap: 0.7rem; }
+.signout-spinner {
+  width: 1.1rem; height: 1.1rem; border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.85); border-right-color: transparent;
+  animation: btn-spin 700ms linear infinite;
+}
+
 /* ===== (new component styles go above this line) ===== */
 
 /* Reduce motion: no movement anywhere. The loading bar stays as a still

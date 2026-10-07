@@ -196,4 +196,47 @@
     var pos = placeIndicator(nav, link, prev);
     try { sessionStorage.setItem("bdh-nav", JSON.stringify(pos)); } catch (e) { /* not available: no slide */ }
   });
+
+  // ---------------------------------------------------------------------
+  // Logout (Item 2). The sign-out request is sent at once (the server ends
+  // the session immediately); the screen fades with "Signing out..." for
+  // at least ~0.6 s and then opens the login page. If the request fails,
+  // the overlay is removed and an error is shown - never a blank screen.
+  // ---------------------------------------------------------------------
+  var LOGOUT_MIN_MS = 600;
+
+  function signOutOverlay() {
+    var o = document.createElement("div");
+    o.className = "signout-overlay";
+    o.setAttribute("role", "status");
+    o.innerHTML = '<div class="signout-box"><span class="signout-spinner" aria-hidden="true"></span>Signing out…</div>';
+    document.body.appendChild(o);
+    requestAnimationFrame(function () { o.classList.add("is-visible"); });
+    return o;
+  }
+
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (!form.classList || !form.classList.contains("logout-form") || !window.fetch) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    var started = Date.now();
+    var overlay = signOutOverlay();
+    fetch(form.action, { method: "POST", body: new FormData(form), credentials: "same-origin" })
+      .then(function (r) {
+        var landed = new URL(r.url, location.href).pathname;
+        if (!r.ok) throw new Error("status " + r.status);
+        if (landed.indexOf("/hris/login") !== 0) {
+          // e.g. the page had expired: let the browser do a normal sign-out
+          overlay.remove();
+          form.submit();
+          return;
+        }
+        setTimeout(function () { location.replace(r.url); }, Math.max(0, LOGOUT_MIN_MS - (Date.now() - started)));
+      })
+      .catch(function () {
+        overlay.remove();
+        BDH.toast("Could not sign out — the server did not answer. Check the network connection and try again.", "error");
+      });
+  }, true);
 })();
