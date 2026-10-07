@@ -24,7 +24,11 @@
   </div>
 {% endif %}
 
-<div class="card">
+<section class="card accordion" x-data="{ open: true }">
+  <h2 class="accordion-head"><button type="button" id="acc-details-btn" aria-controls="acc-details"
+      aria-expanded="true" :aria-expanded="open.toString()" @click="open = !open">Employment details<svg class="accordion-chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg></button></h2>
+  <div class="accordion-panel is-open" id="acc-details" role="region" aria-labelledby="acc-details-btn"
+       :class="{ 'is-open': open }" :inert="!open"><div class="accordion-inner">
 <table>
   <tr><th>Position</th><td>{{ employee.position }}</td></tr>
   <tr><th>Employment status</th><td>{{ employee.get_employment_status_display }}</td></tr>
@@ -47,10 +51,14 @@
     {% endif %}
   </p>
 {% endif %}
-</div>
+  </div></div>
+</section>
 
-<div class="card">
-  <h2 style="margin-top:0;">Education history</h2>
+<section class="card accordion" x-data="{ open: false }">
+  <h2 class="accordion-head"><button type="button" id="acc-education-btn" aria-controls="acc-education"
+      aria-expanded="false" :aria-expanded="open.toString()" @click="open = !open">Education history<svg class="accordion-chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg></button></h2>
+  <div class="accordion-panel" id="acc-education" role="region" aria-labelledby="acc-education-btn"
+       :class="{ 'is-open': open }" :inert="!open"><div class="accordion-inner">
   {% if education_history %}
   <table>
     <tr><th>Level</th><th>School</th><th>Degree/Course</th><th>Units earned</th></tr>
@@ -66,10 +74,14 @@
   {% else %}
   <p class="empty-note">No education records yet.</p>
   {% endif %}
-</div>
+  </div></div>
+</section>
 
-<div class="card">
-  <h2 style="margin-top:0;">Edit history</h2>
+<section class="card accordion" x-data="{ open: false }">
+  <h2 class="accordion-head"><button type="button" id="acc-history-btn" aria-controls="acc-history"
+      aria-expanded="false" :aria-expanded="open.toString()" @click="open = !open">Edit history<svg class="accordion-chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg></button></h2>
+  <div class="accordion-panel" id="acc-history" role="region" aria-labelledby="acc-history-btn"
+       :class="{ 'is-open': open }" :inert="!open"><div class="accordion-inner">
   {% if history %}
   <table>
     <tr><th>When</th><th>Field</th><th>Old value</th><th>New value</th><th>Reason</th><th>Changed by</th></tr>
@@ -87,5 +99,6 @@
   {% else %}
   <p class="empty-note">No edits recorded yet.</p>
   {% endif %}
-</div>
+  </div></div>
+</section>
 {% endblock %}

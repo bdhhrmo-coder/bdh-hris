@@ -259,9 +259,30 @@ body > .working-panel { position: fixed; right: 16px; bottom: 16px; z-index: 900
 .working-panel.is-done .working-bar span { width: 100%; left: 0; animation: none; background: #2e8b57; }
 @keyframes working-slide { from { left: -35%; } to { left: 100%; } }
 
+/* --- Accordions (Batch 3 Item 10) ------------------------------------- */
+.accordion-head { margin: 0; font-size: 1.05rem; }
+.accordion-head button {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+  background: transparent; border: none; padding: 0.15rem 0; color: inherit; font: inherit; font-weight: 700;
+  text-align: left; cursor: pointer; border-radius: 6px;
+}
+.accordion-head button:hover { background: transparent; color: var(--navy-700, #1a4b7a); }
+.accordion-head button:focus-visible { outline: 2px solid var(--navy-700, #1a4b7a); outline-offset: 3px; }
+.accordion-chev { flex-shrink: 0; transition: transform 220ms ease; }
+.accordion-head button[aria-expanded="true"] .accordion-chev { transform: rotate(180deg); }
+.accordion-panel { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 230ms ease; }
+.js .accordion-panel:not(.is-open) { grid-template-rows: 0fr; }   /* collapsed only when scripts run */
+.accordion-inner { overflow: hidden; min-height: 0; }
+.accordion-panel.is-open .accordion-inner { padding-top: 0.75rem; }
+@media print {
+  .accordion-panel, .js .accordion-panel:not(.is-open) { grid-template-rows: 1fr !important; }
+  .accordion-inner { overflow: visible; padding-top: 0.5rem; }
+  .accordion-chev { display: none; }
+}
+
 /* ===== (new component styles go above this line) ===== */
 
-/* Reduce motion: no movement anywhere. The loading bar stays as a still
+/* Reduce motion (keep this block LAST): no movement anywhere. The loading bar stays as a still
    strip and the busy button keeps its "dimmed" look, so the feedback is
    still there - only the motion is removed. */
 @media (prefers-reduced-motion: reduce) {
@@ -272,5 +293,10 @@ body > .working-panel { position: fixed; right: 16px; bottom: 16px; z-index: 900
   }
   .page-loading-bar.is-active { width: 100%; animation: none; }
   button.is-busy::after { animation: none; border-right-color: currentColor; }
+  .signout-spinner { animation: none; border-right-color: rgba(255, 255, 255, 0.85); }
+  .working-bar span { animation: none; left: 0; width: 100%; opacity: 0.55; }   /* still bar, no sliding */
+  .snackbar-timer span { transition: none !important; transform: none !important; }  /* no shrinking bar */
+  .chart-anim { animation: none !important; clip-path: none; -webkit-mask-image: none; mask-image: none; }
+  .confirm-icon.is-shaking { animation: none; }
 }
 

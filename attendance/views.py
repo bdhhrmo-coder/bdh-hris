@@ -57,7 +57,10 @@ def my_attendance(request):
         raise PermissionDenied("No employee record is linked to your account.")
     records = acting_employee.attendance_records.all()
     corrections = acting_employee.attendance_correction_requests.prefetch_related("lines")
-    return render(request, "attendance/my_attendance.html", {"records": records, "corrections": corrections})
+    # The correction section starts closed, unless one was returned and needs the employee's action.
+    has_returned = corrections.filter(status=AttendanceCorrectionRequest.RETURNED).exists()
+    return render(request, "attendance/my_attendance.html",
+                  {"records": records, "corrections": corrections, "has_returned": has_returned})
 
 
 def _line_editor_context(formset, *, formal):

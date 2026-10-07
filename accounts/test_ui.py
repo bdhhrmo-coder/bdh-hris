@@ -35,3 +35,33 @@ class LoginEntranceTests(TestCase):
         failed = self.client.post("/hris/login/", {"username": "nobody", "password": "x"})
         self.assertContains(failed, 'class="login-card"')
         self.assertNotContains(failed, "login-card entrance")
+
+
+class AccordionTests(TestCase):
+    def setUp(self):
+        from accounts.models import RoleAssignment
+
+        user = User.objects.create_user("acc", password=PASSWORD)
+        self.emp = Employee.objects.create(user=user, employee_id="ACC-1", surname="Acc", first_name="T")
+        RoleAssignment.objects.create(employee=self.emp, role=RoleAssignment.HR_ADMINISTRATOR)
+        other = Employee.objects.create(employee_id="ACC-2", surname="Other", first_name="T")
+        self.other = other
+        self.client.force_login(user)
+
+    def test_profile_first_section_open_others_closed_with_aria(self):
+        html = self.client.get(reverse("employees:employee_detail", args=[self.other.pk])).content.decode()
+        self.assertEqual(html.count('class="card accordion"'), 3)
+        self.assertIn('aria-controls="acc-details"', html)
+        self.assertIn('id="acc-details" role="region"', html)
+        self.assertEqual(html.count('aria-expanded="true"'), 1)
+        self.assertEqual(html.count('aria-expanded="false"'), 2)
+
+    def test_attendance_corrections_open_when_one_was_returned(self):
+        from attendance.models import AttendanceCorrectionRequest
+
+        url = reverse("attendance:my_attendance")
+        self.assertIn('aria-expanded="false"', self.client.get(url).content.decode())
+        AttendanceCorrectionRequest.objects.create(correction_type="FORMAL", employee=self.emp, validator="HR",
+                                                  status="RETURNED", filed_by=self.emp.user)
+        html = self.client.get(url).content.decode()
+        self.assertNotIn('aria-expanded="false"', html)
