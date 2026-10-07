@@ -157,8 +157,10 @@ else:
 
 # Log in with username (Django's default) or Employee ID - see
 # accounts/backends.py.
+# BDHModelBackend = Django's ModelBackend + "archived employees can't log
+# in" (Batch 3 Item 5). Changing this list signs everyone out once.
 AUTHENTICATION_BACKENDS = [
-    "django.contrib.auth.backends.ModelBackend",
+    "accounts.backends.BDHModelBackend",
     "accounts.backends.EmployeeIDBackend",
 ]
 

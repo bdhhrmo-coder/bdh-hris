@@ -13,7 +13,20 @@ from django.contrib.auth.backends import ModelBackend
 from employees.models import Employee
 
 
-class EmployeeIDBackend(ModelBackend):
+class BDHModelBackend(ModelBackend):
+    """Django's normal username login, plus one rule (Batch 3 Item 5): an
+    ARCHIVED employee's account can't log in, and an open session ends on
+    the next page (Django re-checks this for every request). The account
+    itself is not changed, so Undo/Restore gives access back exactly."""
+
+    def user_can_authenticate(self, user):
+        if not super().user_can_authenticate(user):
+            return False
+        employee = getattr(user, "employee", None)
+        return employee is None or employee.archived_at is None
+
+
+class EmployeeIDBackend(BDHModelBackend):
     def authenticate(self, request, username=None, password=None, **kwargs):
         if not username or not password:
             return None

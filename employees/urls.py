@@ -16,4 +16,6 @@ urlpatterns = [
     ),
     path("<int:pk>/", views.employee_detail, name="employee_detail"),
     path("<int:pk>/edit/", views.employee_edit, name="employee_edit"),
+    path("<int:pk>/archive/", views.employee_archive, name="employee_archive"),
+    path("<int:pk>/restore/", views.employee_restore, name="employee_restore"),
 ]

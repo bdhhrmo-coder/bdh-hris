@@ -316,4 +316,24 @@
     e.stopImmediatePropagation();
     BDH.confirm(form, e.submitter);
   }, true);
+
+  // ---------------------------------------------------------------------
+  // Undo snackbar (Item 5). Rendered by the page right after archiving;
+  // shows a shrinking bar for the remaining seconds, then disappears.
+  // Leaving the page or letting it run out keeps the archive.
+  // ---------------------------------------------------------------------
+  document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll("[data-snackbar]").forEach(function (bar) {
+      var secs = Math.max(1, parseInt(bar.getAttribute("data-snackbar"), 10) || 8);
+      var fill = bar.querySelector(".snackbar-timer span");
+      if (fill) {
+        fill.style.transitionDuration = secs + "s";
+        requestAnimationFrame(function () { requestAnimationFrame(function () { fill.style.transform = "scaleX(0)"; }); });
+      }
+      setTimeout(function () {
+        bar.classList.add("is-leaving");
+        setTimeout(function () { bar.remove(); }, 300);
+      }, secs * 1000);
+    });
+  });
 })();

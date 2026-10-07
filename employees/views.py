@@ -12,6 +12,7 @@ from accounts.models import RoleAssignment
 from django.utils import timezone
 
 from .forms import EmployeeCreateForm, EmployeeForm, SelfServiceProfileForm
+from . import archive as archive_rules
 from .models import EducationHistory, Employee, EmployeeEditHistory, EmployeeProfileEditRequest
 from .permissions import (
     can_create_employee,
@@ -54,6 +55,9 @@ def employee_list(request):
         raise PermissionDenied("You are not authorized to browse employee records.")
 
     employees = Employee.objects.select_related(None).prefetch_related("sections")
+    show_archived = request.GET.get("archived") == "1"
+    if not show_archived:
+        employees = employees.filter(archived_at__isnull=True)
 
     query = request.GET.get("q", "").strip()
     if query:
@@ -76,6 +80,8 @@ def employee_list(request):
         "employees/employee_list.html",
         {
             "employees": employees.distinct(),
+            "show_archived": show_archived,
+            "undo": _pop_undo(request),
             "sections": Section.objects.filter(is_active=True),
             "query": query,
             "selected_section": section_id or "",
@@ -131,6 +137,7 @@ def employee_detail(request, pk):
             "can_edit": can_edit,
             "self_locked": self_locked,
             "history": employee.edit_history.select_related("changed_by")[:50],
+            "can_archive": archive_rules.can_archive(acting_employee, employee),
             "education_history": employee.education_history.all(),
         },
     )
@@ -315,3 +322,57 @@ def profile_edit_request_review(request, pk):
         messages.error(request, "Unknown decision.")
 
     return redirect("employees:profile_edit_request_queue")
+
+
+# -- archive / undo / restore (Batch 3 Item 5) ---------------------------------
+
+def _pop_undo(request):
+    """The 8-second Undo offer, shown once on the page after archiving."""
+    from django.utils import timezone
+
+    offer = request.session.pop("undo_archive", None)
+    if not offer:
+        return None
+    left = offer["until"] - timezone.now().timestamp()
+    return {**offer, "seconds": round(left)} if left > 1 else None
+
+
+@login_required
+def employee_archive(request, pk):
+    from django.utils import timezone
+
+    employee = get_object_or_404(Employee, pk=pk)
+    acting_employee = get_acting_employee(request.user)
+    if request.method != "POST":
+        return redirect("employees:employee_detail", pk=pk)
+    if not archive_rules.can_archive(acting_employee, employee):
+        raise PermissionDenied("Only an HR Administrator may archive an employee record (not their own).")
+    if employee.archived_at:
+        messages.info(request, "This record is already archived.")
+        return redirect("employees:employee_detail", pk=pk)
+    reason = request.POST.get("reason", "").strip()
+    if not reason:
+        messages.error(request, "Give the reason for archiving this record.")
+        return redirect("employees:employee_detail", pk=pk)
+    archive_rules.archive(employee, request.user, reason)
+    # No toast here: the Undo snackbar is the message (no double messages).
+    request.session["undo_archive"] = {"pk": employee.pk, "name": employee.full_name,
+                                       "until": timezone.now().timestamp() + archive_rules.UNDO_SECONDS}
+    return redirect("employees:employee_list")
+
+
+@login_required
+def employee_restore(request, pk):
+    employee = get_object_or_404(Employee, pk=pk)
+    acting_employee = get_acting_employee(request.user)
+    if request.method != "POST":
+        return redirect("employees:employee_detail", pk=pk)
+    if not archive_rules.can_archive(acting_employee, employee):
+        raise PermissionDenied("Only an HR Administrator may restore an archived employee record.")
+    if not employee.archived_at:
+        messages.info(request, "This record is not archived.")
+        return redirect("employees:employee_detail", pk=pk)
+    undo = request.POST.get("undo") == "1"
+    archive_rules.restore(employee, request.user, undo=undo)
+    messages.success(request, f"{'Archive undone' if undo else 'Record restored'}: {employee.full_name}.")
+    return redirect("employees:employee_list" if undo else "employees:employee_detail", **({} if undo else {"pk": pk}))

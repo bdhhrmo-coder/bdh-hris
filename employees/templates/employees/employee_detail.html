@@ -4,6 +4,19 @@
 <p><a href="{% url 'employees:employee_list' %}">&larr; Employees</a></p>
 <h1>{{ employee.full_name }} ({{ employee.employee_id }})</h1>
 
+{% if employee.archived_at %}
+  <div class="msg warning" role="status">
+    <strong>Archived</strong> on {{ employee.archived_at|date:"M d, Y h:i A" }}
+    by {{ employee.archived_by.employee.full_name|default:employee.archived_by.username }}.
+    Reason: {{ employee.archive_reason }}
+    {% if can_archive %}
+    <form method="post" action="{% url 'employees:employee_restore' employee.pk %}" style="display:inline; margin-left:0.5rem;">
+      {% csrf_token %}<button type="submit" class="btn-sm">Restore record</button>
+    </form>
+    {% endif %}
+  </div>
+{% endif %}
+
 {% if self_locked %}
   <div class="locked-note">
     This is your own employee record. It is read-only to you — another HR Administrator
@@ -20,8 +33,19 @@
   <tr><th>Mobile</th><td>{{ employee.telephone_mobile|default:"—" }}</td></tr>
   <tr><th>Active</th><td>{% if employee.is_active %}<span class="badge badge-approved">Active</span>{% else %}<span class="badge badge-not-approved">Inactive</span>{% endif %}</td></tr>
 </table>
-{% if can_edit %}
-  <p style="margin-bottom:0;"><a href="{% url 'employees:employee_edit' employee.pk %}" class="btn">Edit this record</a></p>
+{% if can_edit or can_archive and not employee.archived_at %}
+  <p style="margin-bottom:0;" class="row-actions">
+    {% if can_edit %}<a href="{% url 'employees:employee_edit' employee.pk %}" class="btn">Edit this record</a>{% endif %}
+    {% if can_archive and not employee.archived_at %}
+    <form method="post" action="{% url 'employees:employee_archive' employee.pk %}" style="display:inline;"
+          data-confirm="{{ employee.full_name }} will be hidden from lists and can no longer log in. Nothing is deleted — you can undo or restore it."
+          data-confirm-title="Archive this employee record?" data-confirm-ok="Archive record"
+          data-confirm-reason="Reason for archiving (required)">
+      {% csrf_token %}
+      <button type="submit" class="btn-danger">Archive record</button>
+    </form>
+    {% endif %}
+  </p>
 {% endif %}
 </div>
 

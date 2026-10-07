@@ -132,6 +132,20 @@ class Employee(models.Model):
         "suspension) — the System Administrator enters the actual separation date on record.",
     )
 
+    # Archive (Batch 3 Item 5, owner decisions 2026-10-07): a SOFT delete by
+    # an HR Administrator, with a required reason. The record and all its
+    # history stay in the database (retention / audit trail); it is hidden
+    # from lists, pickers and dashboard counts and the person can't log in.
+    # Undo/Restore puts it back exactly, including the earlier is_active.
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+",
+    )
+    archive_reason = models.CharField(max_length=255, blank=True)
+    active_before_archive = models.BooleanField(
+        null=True, blank=True, help_text="is_active as it was when archived, so Undo/Restore puts it back exactly.",
+    )
+
     must_change_password = models.BooleanField(
         default=False,
         help_text="Set when the account gets a temporary password (e.g. from the employee import). "

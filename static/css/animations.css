@@ -178,6 +178,28 @@ button.is-busy::after {
   60% { transform: translateX(-3px); } 80% { transform: translateX(2px); }
 }
 
+/* --- Undo snackbar (Batch 3 Item 5) ----------------------------------- */
+.snackbar {
+  position: fixed; left: 50%; bottom: 20px; z-index: 950;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap;
+  padding: 0.8rem 1rem 1.05rem;
+  background: #1d2733; color: #fff; border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(6, 24, 44, 0.35);
+  font-size: 0.9rem; overflow: hidden;
+  animation: snack-in 240ms ease-out;
+  transition: opacity 300ms ease;
+}
+.snackbar > span:first-child { flex: 1; }
+.snackbar form { margin: 0; }
+.snackbar-undo { background: transparent; border: 1px solid #8fd3c9; color: #8fd3c9; font-weight: 700; padding: 0.35rem 0.9rem; }
+.snackbar-undo:hover { background: rgba(143, 211, 201, 0.15); color: #fff; }
+.snackbar-timer { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(255, 255, 255, 0.15); }
+.snackbar-timer span { display: block; height: 100%; background: #8fd3c9; transform-origin: left; transition: transform linear; }
+.snackbar.is-leaving { opacity: 0; }
+@keyframes snack-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
 /* ===== (new component styles go above this line) ===== */
 
 /* Reduce motion: no movement anywhere. The loading bar stays as a still
