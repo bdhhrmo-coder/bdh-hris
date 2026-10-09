@@ -44,6 +44,14 @@ class DutyExchangeRequestForm(forms.ModelForm):
                     "This request gives less than 24 hours' notice before the earliest affected date. "
                     "Check 'Documented emergency' if this is a genuine emergency (§8).",
                 )
+            employee_b = cleaned.get("employee_b")
+            if employee_b is not None:
+                from .schedule_checks import check
+
+                errors, notes = check(self.employee_a, date_a, employee_b, date_b, date_cls.today(), is_emergency)
+                for e in errors:
+                    self.add_error(None, e)
+                self.schedule_notes = notes
             if exceeds_monthly_cap(self.employee_a):
                 self.add_error(None, "You have already reached the 3-exchange-request-per-month limit (§8).")
 

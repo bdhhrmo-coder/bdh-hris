@@ -15,7 +15,7 @@ def make_employee(username, employee_id, role=None):
     user = User.objects.create_user(username=username, password="testpass123")
     employee = Employee.objects.create(
         user=user, employee_id=employee_id, surname=username.title(), first_name="Test",
-        date_hired=date(2024, 1, 1), employment_status="REGULAR",
+        date_hired=date(2024, 1, 1), employment_status="REGULAR", position="Nurse II",
     )
     if role:
         RoleAssignment.objects.create(employee=employee, role=role)

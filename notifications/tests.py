@@ -200,6 +200,8 @@ class ExchangeNotificationIntegrationTests(TestCase):
 
         a = make_employee("exnotif_a", "EMP-EN-1")
         b = make_employee("exnotif_b", "EMP-EN-2")
+        # Batch 5: exchange partners must hold the same position.
+        Employee.objects.filter(pk__in=[a.pk, b.pk]).update(position="Nurse II")
         far_future_a = date.today() + timedelta(days=30)
         far_future_b = date.today() + timedelta(days=31)
         client = Client()

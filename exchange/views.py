@@ -40,6 +40,8 @@ def exchange_apply(request):
             messages.success(
                 request, f"Exchange request filed. Awaiting {exchange_request.employee_b}'s consent."
             )
+            for note in getattr(form, "schedule_notes", []):
+                messages.info(request, note)
             return redirect("exchange:my_exchanges")
     else:
         form = DutyExchangeRequestForm(employee_a=acting_employee)
@@ -168,8 +170,22 @@ def exchange_action(request, pk):
             )
     elif status == DutyExchangeRequest.RECOMMENDED_BY_AO and is_chief_of_hospital(acting_employee):
         if action == "approve":
+            # Batch 5: the swap is written into the duty schedule(s) at final
+            # approval; if the schedule changed since filing, approval stops.
+            from django.core.exceptions import ValidationError
+            from django.db import transaction
+
+            from .schedule_checks import apply_to_schedules
+
+            try:
+                with transaction.atomic():
+                    apply_to_schedules(exchange_request, request.user)
+                    apply_transition(DutyExchangeRequest.APPROVED, "approve")
+            except ValidationError as exc:
+                messages.error(request, "Not approved - the duty schedule no longer fits this exchange: "
+                               + " ".join(exc.messages) + " Return the request instead.")
+                return redirect("exchange:exchange_queue")
             allowed = True
-            apply_transition(DutyExchangeRequest.APPROVED, "approve")
         elif action in ("reject", "return"):
             allowed = True
             apply_transition(

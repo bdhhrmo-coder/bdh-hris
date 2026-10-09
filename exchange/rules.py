@@ -3,6 +3,10 @@ Exchange of Duty compliance checks, isolated the same way leave/balances.py
 and cto/balances.py are, since CLAUDE.md flags §6-10 as real signed policy
 and this module encodes two of its numeric limits (§8).
 
+Batch 5 (2026-10-09) adds the schedule-based checks (same position, duty
+and off days, the 7-days-before-cut-off rule before approval) in
+schedule_checks.py; the rules below are unchanged.
+
 See models.py's module docstring for the documented proxy this module
 relies on (timing keyed off the exchange date itself, since no
 duty-schedule module exists to check "before next month's schedule is
