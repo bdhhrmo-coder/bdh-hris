@@ -785,3 +785,11 @@ a.kpi-card:hover, a.kpi-card:focus-visible { border-color: var(--navy-700); box-
 @media (min-width: 640px) and (max-width: 1023px) {
   .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Data-entry forms keep a comfortable width instead of stretching across a
+   wide screen (owner decision 2026-10-09, option A): about 880px, two
+   columns inside, so a date or time box is about 400px wide. Lists,
+   queues, reports, Home and Dashboard still use the full width. */
+:root { --form-max: 880px; }
+.form-card { max-width: var(--form-max); }
+.form-2col > p { margin: 0 0 var(--space-2); }     /* no blank gap at the top of the form */

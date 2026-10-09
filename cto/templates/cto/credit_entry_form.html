@@ -4,7 +4,7 @@
 <h1>Exception CTO claim</h1>
 <p style="color:var(--gray-600);">HR Administrator only. For credit with no approved OT request behind it (e.g. certified emergency duty). A reason is required. This saves a draft; it goes through the same document and filing-date checks as any other claim before anything is credited.</p>
 
-<div class="card">
+<div class="card form-card">
   <form method="post" class="form-2col">
     {% csrf_token %}
     {{ form.as_p }}

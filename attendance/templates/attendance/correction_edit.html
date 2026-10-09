@@ -9,7 +9,7 @@
   on {{ latest_return.acted_at|date:"M d, Y h:i A" }}:<br>{{ latest_return.notes }}
 </div>
 {% endif %}
-<div class="card">
+<div class="card form-card">
   <form method="post" novalidate>
     {% csrf_token %}
     {% include "attendance/_line_editor.html" %}

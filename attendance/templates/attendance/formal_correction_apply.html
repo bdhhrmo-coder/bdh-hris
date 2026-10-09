@@ -3,7 +3,7 @@
 {% block content %}
 <h1>Request an attendance correction</h1>
 <p style="color:var(--gray-600);">Missed Log Justification (Form BDH-ADM-AO-01F10). You can list up to {{ max_lines }} dates in one request. Offline, Failed Attempt and Wrong Button/Invalid Entry are validated by ICTU; meetings, activities, trainings and other reasons are validated by HR &mdash; so file those two kinds as separate requests. The Administrative Officer gives final approval.</p>
-<div class="card">
+<div class="card form-card">
   <form method="post" novalidate>
     {% csrf_token %}
     {% include "attendance/_line_editor.html" %}

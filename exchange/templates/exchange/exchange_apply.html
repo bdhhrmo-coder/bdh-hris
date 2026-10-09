@@ -4,7 +4,7 @@
 <h1>Request duty exchange</h1>
 <p style="color:var(--gray-600);">One-for-one only: you take the other employee's date, they take yours. The other employee must consent before this is submitted for endorsement.</p>
 
-<div class="card">
+<div class="card form-card">
   <form method="post" class="form-2col">
     {% csrf_token %}
     {{ form.as_p }}

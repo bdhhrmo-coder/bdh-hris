@@ -2,7 +2,7 @@
 {% block title %}Edit {{ employee.full_name }} — BDH HRIS{% endblock %}
 {% block content %}
 <h1>Edit {{ employee.full_name }}</h1>
-<div class="card">
+<div class="card form-card">
 <form method="post">
   {% csrf_token %}
   <fieldset class="form-2col">

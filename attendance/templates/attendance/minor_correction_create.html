@@ -3,7 +3,7 @@
 {% block content %}
 <h1>Minor administrative attendance correction</h1>
 <p style="color:var(--gray-600);">For a straightforward fix (e.g. a biometric misread). Up to {{ max_lines }} dates for one employee. If you are an HR Processor, this needs HR Administrator authorization before it takes effect.</p>
-<div class="card">
+<div class="card form-card">
   <form method="post" novalidate>
     {% csrf_token %}
     <div class="field-block" style="margin-top:0;">
