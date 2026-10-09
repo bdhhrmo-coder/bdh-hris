@@ -48,4 +48,5 @@ urlpatterns = [
     path("password/change/", login_required(BDHPasswordChangeView.as_view()), name="password_change"),
     path("data-import/", include("dataimport.urls")),
     path("announcements/", include("announcements.urls")),
+    path("schedules/", include("schedules.urls")),
 ]

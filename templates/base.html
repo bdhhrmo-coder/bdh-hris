@@ -51,6 +51,8 @@
           {% if can_view_dashboard %}<a href="{% url 'dashboard:dashboard_home' %}">Dashboard</a>{% endif %}
           {% if can_list_employees %}<a href="{% url 'employees:employee_list' %}">Employees</a>{% endif %}
           <a href="{% url 'announcements:list' %}">Announcements</a>
+          <a href="{% url 'schedules:mine' %}">My Schedule</a>
+          {% if can_view_schedules %}<a href="{% url 'schedules:list' %}">Duty Schedules</a>{% endif %}
           <a href="{% url 'notifications:notification_list' %}">
             Notifications
             <span class="count" x-data x-show="$store.notif.count" x-text="$store.notif.label"
@@ -80,7 +82,8 @@
           {% if can_import_data %}
           <p class="nav-section-label">HR Tools</p>
           <a href="{% url 'dataimport:home' %}">Data Import</a>
-          {% if can_manage_announcements %}<a href="{% url 'announcements:manage' %}">Manage Announcements</a>{% endif %}
+          {% if can_manage_announcements %}<a href="{% url 'announcements:manage' %}">Manage Announcements</a>
+          <a href="{% url 'schedules:shift_codes' %}">Shift Codes</a>{% endif %}
           {% endif %}
 
           {% if can_view_audit_log %}

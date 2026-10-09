@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Edit schedule — {{ schedule }} — BDH HRIS{% endblock %}
+{% block content %}
+<p><a href="{% url 'schedules:detail' schedule.pk %}">&larr; Back to the schedule</a></p>
+<div class="split-row" style="justify-content:space-between;">
+  <h1>{{ schedule.area_full_name }} — {{ schedule.month_label }}</h1>
+  {% include "schedules/_status_badge.html" with s=schedule %}
+</div>
+{% if latest_return and schedule.status == "RETURNED" %}
+<div class="msg error">Returned by {{ latest_return.acted_by.employee.full_name|default:latest_return.acted_by.username }}: "{{ latest_return.notes }}". Fix it, then submit again — it restarts at HR review.</div>
+{% endif %}
+{% if conflicts %}
+<div class="msg warning"><strong>Double-booked:</strong>
+  {% for emp, day, other in conflicts %}{{ emp.full_name }} on {{ day|date:"M j" }} (also on {{ other.area_name }}){% if not forloop.last %}; {% endif %}{% endfor %}.
+  This is a warning only — check it before submitting.</div>
+{% endif %}
+
+{{ editor|json_script:"schedule-editor" }}
+<form method="post" x-data="scheduleGrid()" id="grid-form">
+  {% csrf_token %}
+  {# Enter key = Save (the first submit button in a form is the default one). #}
+  <button type="submit" name="then" value="save" class="sr-only" tabindex="-1" aria-hidden="true">Save</button>
+  <div class="card">
+    <h2 style="margin-top:0;">Fill a pattern</h2>
+    <p class="field-help">Example: 3 days of 7A-7P then 3 days OFF, repeated to the end of the month. You can still change any day after.</p>
+    <div class="pattern-tool">
+      <label>Employee <select x-model="p.row"><option value="all">Everyone</option>
+        <template x-for="(r, i) in rows" :key="r.id"><option :value="i" x-text="r.name"></option></template></select></label>
+      <label>From day <input type="number" min="1" :max="days.length" x-model.number="p.start"></label>
+      <label><select x-model="p.on"><template x-for="c in codes" :key="c.id"><option :value="String(c.id)" x-text="c.code"></option></template></select>
+        for <input type="number" min="1" max="31" x-model.number="p.onDays"> day(s),</label>
+      <label>then <select x-model="p.off"><option value="">blank</option><template x-for="c in codes" :key="c.id"><option :value="String(c.id)" x-text="c.code"></option></template></select>
+        for <input type="number" min="0" max="31" x-model.number="p.offDays"> day(s)</label>
+      <button type="button" class="btn-secondary" @click="fill()">Repeat to month end</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="table-scroll sched-scroll">
+    <table class="sched-grid">
+      <thead>
+        <tr><th class="sticky-col">Name</th>
+          <template x-for="d in days" :key="d.d"><th :class="{weekend: d.wd === 'Sa' || d.wd === 'Su'}"><span x-text="d.d"></span><br><small x-text="d.wd"></small></th></template>
+          <th>Total hours</th><th>Total days</th><th></th></tr>
+      </thead>
+      <tbody>
+        <template x-for="(r, ri) in rows" :key="r.id">
+          <tr>
+            <td class="sticky-col"><strong x-text="r.name"></strong><br><small x-text="r.designation"></small></td>
+            <template x-for="(d, di) in days" :key="d.d">
+              <td :class="cellClass(r.cells[di])">
+                <select :name="'c-' + r.id + '-' + d.d" x-model="r.cells[di]" :aria-label="r.name + ' day ' + d.d">
+                  <option value=""></option>
+                  <template x-for="c in codes" :key="c.id"><option :value="String(c.id)" x-text="c.code" :selected="String(c.id) === r.cells[di]"></option></template>
+                </select>
+              </td>
+            </template>
+            <td class="num"><strong x-text="totals(r).hours"></strong></td>
+            <td class="num"><strong x-text="totals(r).days"></strong></td>
+            <td><button type="submit" name="remove_row" :value="r.id" class="btn-sm btn-secondary" title="Remove from this schedule"
+                        data-confirm="Remove this employee from the schedule? Their days on it will be deleted." data-confirm-ok="Remove">✕</button></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+    </div>
+    <template x-if="rows.length === 0"><p class="empty-note">No employees yet — add them below.</p></template>
+    <div class="field-block" style="margin-top:1rem;">
+      <label class="field-title" for="add_employee">Add an employee</label>
+      <select name="add_employee" id="add_employee">
+        <option value="">— choose —</option>
+        {% for e in addable %}<option value="{{ e.pk }}">{{ e.surname }}, {{ e.first_name }}{% if e.position %} — {{ e.position }}{% endif %}</option>{% endfor %}
+      </select>
+      <p class="field-help">Picks are added when you press Save.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="field-block">
+      <label class="field-title" for="notes">Notes / remarks</label>
+      <textarea name="notes" id="notes" rows="2">{{ schedule.notes }}</textarea>
+    </div>
+    {% if can_set_cutoff %}
+    <div class="field-block">
+      <label class="field-title" for="cutoff_date">Exchange of Duty cut-off date</label>
+      <input type="date" name="cutoff_date" id="cutoff_date" value="{{ schedule.cutoff_date|date:'Y-m-d' }}">
+      <p class="field-help">Before this schedule is approved, exchange requests must be filed at least 7 days before this date. Set by HR.</p>
+    </div>
+    {% else %}
+    <p class="field-help">Exchange of Duty cut-off: {{ schedule.cutoff_date|date:"F j, Y" }} (set by HR).</p>
+    {% endif %}
+    <div class="row-actions">
+      <button type="submit" name="then" value="save">Save</button>
+      <button type="submit" name="then" value="submit" data-confirm="Submit this schedule for HR review? You can't edit it unless it is returned." data-confirm-ok="Submit">Save and submit</button>
+    </div>
+  </div>
+</form>
+
+<div class="card">
+  <h2 style="margin-top:0;">Excel</h2>
+  <p class="field-help">Download the template (laid out like F50), fill the day columns, then upload it here. Uploading replaces the days in this grid.</p>
+  <p><a class="btn btn-secondary" href="{% url 'schedules:excel_template' schedule.pk %}">Download Excel template</a></p>
+  <form method="post" action="{% url 'schedules:excel_import' schedule.pk %}" enctype="multipart/form-data" data-working data-upload-text="Reading the schedule…">
+    {% csrf_token %}
+    <input type="file" name="file" accept=".xlsx,.xlsm" required>
+    <button type="submit" class="btn-secondary">Upload filled template</button>
+  </form>
+</div>
+
+<script>
+function scheduleGrid() {
+  const data = JSON.parse(document.getElementById("schedule-editor").textContent);
+  data.rows.forEach(r => { r.cells = r.cells.map(v => v === "" || v === null ? "" : String(v)); });
+  const byId = {};
+  data.codes.forEach(c => { byId[String(c.id)] = c; });
+  const off = data.codes.find(c => c.code === "OFF");
+  const first = data.codes.find(c => c.duty);
+  return {
+    codes: data.codes, days: data.days, rows: data.rows,
+    p: { row: "all", start: 1, on: first ? String(first.id) : "", onDays: 3, off: off ? String(off.id) : "", offDays: 3 },
+    totals(r) {
+      let hours = 0, days = 0;
+      r.cells.forEach(v => { const c = byId[v]; if (c) { hours += c.hours; if (c.duty) days += 1; } });
+      return { hours: Math.round(hours * 100) / 100, days };
+    },
+    cellClass(v) { const c = byId[v]; return c ? (c.duty ? "cell-duty" : "cell-off") : ""; },
+    fill() {
+      const on = Math.max(1, this.p.onDays || 1), offN = Math.max(0, this.p.offDays || 0);
+      const start = Math.min(Math.max(1, this.p.start || 1), this.days.length) - 1;
+      const targets = this.p.row === "all" ? this.rows : [this.rows[Number(this.p.row)]];
+      targets.forEach(r => {
+        for (let i = start; i < this.days.length; i++) {
+          const pos = (i - start) % (on + offN);
+          r.cells[i] = pos < on ? this.p.on : this.p.off;
+        }
+      });
+      if (window.BDH && BDH.toast) BDH.toast("Pattern filled. Press Save to keep it.", "info");
+    },
+  };
+}
+</script>
+{% endblock %}

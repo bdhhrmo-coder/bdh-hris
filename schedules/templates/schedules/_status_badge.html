@@ -1,0 +1,1 @@
+<span class="badge {% if s.status == 'RECORDED' or s.status == 'APPROVED' %}badge-approved{% elif s.status == 'RETURNED' %}badge-not-approved{% else %}badge-pending{% endif %}">{{ s.get_status_display }}</span>

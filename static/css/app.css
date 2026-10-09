@@ -223,6 +223,7 @@ h2 { font-size: 1.15rem; margin-top: 1.6em; }
   margin-top: var(--topbar-h);
   padding: 1.5rem 2rem 3rem;
   width: 100%;
+  min-width: 0; /* let wide tables scroll inside their box instead of widening the page */
   max-width: 1200px;
   animation: fade-in 180ms ease-out;
 }
@@ -690,3 +691,25 @@ a.kpi-card:hover, a.kpi-card:focus-visible { border-color: var(--navy-700); box-
 .announcement-filter select { width: auto; }
 .choice-columns ul, .choice-columns > div { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.3rem 1rem; list-style: none; padding: 0; margin: 0.3rem 0 0; }
 .choice-columns label { display: flex; align-items: center; gap: 0.45rem; font-weight: 400; }
+
+/* -- Duty schedules (Batch 5) ------------------------------------------------ */
+.pattern-tool { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: flex-end; }
+.pattern-tool label { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; font-size: .9rem; }
+.pattern-tool input[type=number] { width: 4.2rem; }
+.sched-scroll { max-height: 70vh; overflow: auto; }
+.sched-grid { border-collapse: separate; border-spacing: 0; font-size: .8rem; }
+.sched-grid th, .sched-grid td { padding: 2px 3px; text-align: center; border-bottom: 1px solid var(--gray-200, #e5e7eb); white-space: nowrap; }
+.sched-grid thead th { position: sticky; top: 0; background: var(--navy-100, #e8eef6); z-index: 2; }
+.sched-grid .sticky-col { position: sticky; left: 0; background: #fff; text-align: left; z-index: 1; min-width: 9.5rem; max-width: 12rem; white-space: normal; }
+.sched-grid thead .sticky-col { z-index: 3; background: var(--navy-100, #e8eef6); }
+.sched-grid th.weekend { background: #dfe6f0; }
+.sched-grid select { width: 4.1rem; font-size: .75rem; padding: 1px 2px; min-height: 0; }
+.sched-grid td.num { font-variant-numeric: tabular-nums; }
+.sched-readonly td { min-width: 2.6rem; }
+.cell-duty { background: #e7f4ec; }
+.cell-off { background: #f3f4f6; color: var(--gray-600, #6b7280); }
+.my-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; margin-top: .75rem; }
+.my-day { display: flex; flex-direction: column; align-items: center; padding: 4px 2px; border: 1px solid var(--gray-200, #e5e7eb); border-radius: 6px; font-size: .8rem; }
+.my-day small { color: var(--gray-600, #6b7280); font-size: .7rem; }
+.my-day span { font-weight: 600; font-size: .7rem; white-space: nowrap; letter-spacing: -.02em; }
+.my-day.weekend { border-color: #c7d2e0; }

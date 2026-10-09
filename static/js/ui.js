@@ -242,7 +242,9 @@
 
   // ---------------------------------------------------------------------
   // Confirmation dialog (Item 6). Any form with data-confirm="message"
-  // asks first. Optional attributes:
+  // asks first; so does a submit button with its own data-confirm (the
+  // button's attributes are used, so one form can have a plain Save and a
+  // confirmed Submit). Optional attributes:
   //   data-confirm-title="Archive this record?"
   //   data-confirm-ok="Archive"            (the red button's label)
   //   data-confirm-reason="Reason"         (adds a required reason box; its
@@ -273,7 +275,8 @@
     ok.addEventListener("click", function () {
       if (!pending) return;
       var form = pending.form, submitter = pending.submitter;
-      if (form.hasAttribute("data-confirm-reason")) {
+      var src = submitter && submitter.hasAttribute && submitter.hasAttribute("data-confirm") ? submitter : form;
+      if (src.hasAttribute("data-confirm-reason")) {
         var field = form.querySelector("input[name=reason][data-from-dialog]");
         if (!field) {
           field = document.createElement("input");
@@ -291,14 +294,15 @@
   BDH.confirm = function (form, submitter) {
     if (!dialog) buildDialog();
     pending = { form: form, submitter: submitter };
-    dialog.querySelector("#confirm-title").textContent = form.getAttribute("data-confirm-title") || "Are you sure?";
-    dialog.querySelector("#confirm-text").textContent = form.getAttribute("data-confirm");
+    var src = submitter && submitter.hasAttribute && submitter.hasAttribute("data-confirm") ? submitter : form;
+    dialog.querySelector("#confirm-title").textContent = src.getAttribute("data-confirm-title") || "Are you sure?";
+    dialog.querySelector("#confirm-text").textContent = src.getAttribute("data-confirm");
     var ok = dialog.querySelector(".confirm-ok"), box = dialog.querySelector(".confirm-reason");
     var reason = box.querySelector("textarea");
-    ok.textContent = form.getAttribute("data-confirm-ok") || "Confirm";
-    var needsReason = form.hasAttribute("data-confirm-reason");
+    ok.textContent = src.getAttribute("data-confirm-ok") || "Confirm";
+    var needsReason = src.hasAttribute("data-confirm-reason");
     box.hidden = !needsReason;
-    box.querySelector("span").textContent = form.getAttribute("data-confirm-reason") || "Reason";
+    box.querySelector("span").textContent = src.getAttribute("data-confirm-reason") || "Reason";
     reason.value = ""; reason.required = needsReason;
     ok.disabled = needsReason;
     var icon = dialog.querySelector(".confirm-icon");
@@ -309,7 +313,10 @@
 
   document.addEventListener("submit", function (e) {
     var form = e.target;
-    if (!form.hasAttribute || !form.hasAttribute("data-confirm")) return;
+    var btn = e.submitter;
+    var asks = form.hasAttribute && (form.hasAttribute("data-confirm") ||
+      (btn && btn.hasAttribute && btn.hasAttribute("data-confirm")));
+    if (!asks) return;
     if (form.hasAttribute("data-confirmed")) { form.removeAttribute("data-confirmed"); return; }
     if (!window.HTMLDialogElement) return;  // very old browser: plain submit, server still checks
     e.preventDefault();

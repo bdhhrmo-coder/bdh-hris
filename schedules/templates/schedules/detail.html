@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}{{ schedule }} — BDH HRIS{% endblock %}
+{% block content %}
+<p><a href="{% url 'schedules:list' %}">&larr; Duty schedules</a></p>
+<div class="split-row" style="justify-content:space-between;">
+  <h1>{{ schedule.area_full_name }} — {{ schedule.month_label }}</h1>
+  {% include "schedules/_status_badge.html" with s=schedule %}
+</div>
+<p class="field-help">
+  Prepared by {{ schedule.prepared_by.employee.full_name|default:schedule.prepared_by.username }} ({{ schedule.get_preparer_role_display }})
+  {% if schedule.approved_at %} · Approved by the Chief of Hospital {{ schedule.approved_at|date:"M j, Y g:i A" }}{% endif %}
+  {% if schedule.recorded_at %} · Recorded by HR {{ schedule.recorded_at|date:"M j, Y g:i A" }}{% endif %}
+  · Exchange cut-off: {{ schedule.cutoff_date|date:"M j, Y" }}
+</p>
+<div class="row-actions" style="display:block; margin-bottom:1rem;">
+  {% if can_edit %}<a class="btn" href="{% url 'schedules:edit' schedule.pk %}">Edit grid</a>{% endif %}
+  <a class="btn btn-secondary" href="{% url 'schedules:print' schedule.pk %}" target="_blank" rel="noopener">Print (F50)</a>
+  <a class="btn btn-secondary" href="{% url 'schedules:excel_template' schedule.pk %}">Excel</a>
+</div>
+
+{% if conflicts %}
+<div class="msg warning"><strong>Double-booked:</strong>
+  {% for emp, day, other in conflicts %}{{ emp.full_name }} on {{ day|date:"M j" }} (also on {{ other.area_name }}){% if not forloop.last %}; {% endif %}{% endfor %}.</div>
+{% endif %}
+
+{% if actions %}
+<div class="card">
+  <h2 style="margin-top:0;">Your action</h2>
+  <form method="post" action="{% url 'schedules:action' schedule.pk %}">
+    {% csrf_token %}
+    <div class="field-block">
+      <label class="field-title" for="notes">Remarks <span class="field-help">(required when returning)</span></label>
+      <textarea name="notes" id="notes" rows="2" maxlength="255"></textarea>
+    </div>
+    <div class="row-actions">
+      {% for code, label in actions %}
+      <button type="submit" name="action" value="{{ code }}"{% if code == "approve" %} data-confirm="Approve this schedule? It locks now; later changes come only from an approved exchange or an HR correction." data-confirm-ok="Approve"{% endif %}>{{ label }}</button>
+      {% endfor %}
+    </div>
+  </form>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="table-scroll sched-scroll">
+  <table class="sched-grid sched-readonly">
+    <thead><tr><th class="sticky-col">Name</th>
+      {% for d in schedule.days %}<th{% if d.weekday >= 5 %} class="weekend"{% endif %}>{{ d.day }}<br><small>{{ d|date:"D"|slice:":2" }}</small></th>{% endfor %}
+      <th>Total hours</th><th>Total days</th></tr></thead>
+    <tbody>
+    {% for g in grid %}
+      <tr><td class="sticky-col"><strong>{{ g.row.employee.full_name }}</strong><br><small>{{ g.row.designation }}</small></td>
+        {% for c in g.cells %}<td class="{% if c.shift %}{% if c.shift.is_duty %}cell-duty{% else %}cell-off{% endif %}{% endif %}">{{ c.shift.code|default:"" }}</td>{% endfor %}
+        <td class="num"><strong>{{ g.hours|floatformat:"-2" }}</strong></td><td class="num"><strong>{{ g.days }}</strong></td></tr>
+    {% empty %}<tr><td class="empty-note" colspan="34">No employees on this schedule.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% if schedule.notes %}<p class="field-help" style="margin-top:.5rem;"><strong>Notes:</strong> {{ schedule.notes }}</p>{% endif %}
+</div>
+
+{% if can_correct %}
+<div class="card">
+  <h2 style="margin-top:0;">HR correction</h2>
+  <p class="field-help">For an approved schedule only. The old value stays in the change history below, and the employee is notified.</p>
+  <form method="post" action="{% url 'schedules:correct' schedule.pk %}" class="pattern-tool">
+    {% csrf_token %}
+    <label>Employee <select name="row" required>{% for g in grid %}<option value="{{ g.row.pk }}">{{ g.row.employee.full_name }}</option>{% endfor %}</select></label>
+    <label>Date <input type="date" name="date" required min="{{ schedule.days.0|date:'Y-m-d' }}" max="{{ schedule.days|last|date:'Y-m-d' }}"></label>
+    <label>New shift <select name="shift"><option value="">blank</option>{% for c in codes %}<option value="{{ c.pk }}">{{ c.code }}</option>{% endfor %}</select></label>
+    <label>Reason <input type="text" name="reason" maxlength="200" required></label>
+    <button type="submit" class="btn-secondary">Save correction</button>
+  </form>
+</div>
+{% endif %}
+
+{% if changes %}
+<div class="card">
+  <h2 style="margin-top:0;">Changes after approval</h2>
+  <div class="table-scroll"><table>
+    <tr><th>When</th><th>Employee</th><th>Date</th><th>From</th><th>To</th><th>Reason</th><th>By</th></tr>
+    {% for ch in changes %}
+    <tr><td>{{ ch.changed_at|date:"M j, Y g:i A" }}</td><td>{{ ch.employee.full_name }}</td><td>{{ ch.date|date:"M j" }}</td>
+      <td>{{ ch.old_shift|default:"blank" }}</td><td>{{ ch.new_shift|default:"blank" }}</td>
+      <td>{{ ch.reason }}{% if ch.exchange_id %} (Exchange No. {{ ch.exchange_id }}){% endif %}</td>
+      <td>{{ ch.changed_by.employee.full_name|default:ch.changed_by.username }}</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2 style="margin-top:0;">History</h2>
+  <div class="table-scroll"><table>
+    <tr><th>When</th><th>Action</th><th>By</th><th>Remarks</th></tr>
+    {% for h in history %}<tr><td>{{ h.acted_at|date:"M j, Y g:i A" }}</td><td>{{ h.action|capfirst }}</td><td>{{ h.acted_by.employee.full_name|default:h.acted_by.username }}</td><td>{{ h.notes|default:"—" }}</td></tr>{% endfor %}
+  </table></div>
+</div>
+{% endblock %}

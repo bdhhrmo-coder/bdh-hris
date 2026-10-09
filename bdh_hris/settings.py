@@ -75,6 +75,7 @@ INSTALLED_APPS = [
     "dataimport",
     "homepage",
     "announcements",
+    "schedules",
 ]
 
 # CLAUDE.md §13: RA 10173 personnel-record retention period, in years, for a
@@ -251,6 +252,10 @@ CSRF_FAILURE_VIEW = "accounts.views.csrf_failure"
 # Homepage watermark (Batch 4, owner decision 2026-10-09): shown on the
 # homepage ONLY. A path inside the static folder; blank (or a missing file)
 # means no watermark.
+# Duty schedules (Batch 5): default Exchange-of-Duty cut-off = this day of
+# the month BEFORE the schedule month; HR can change it per schedule.
+SCHEDULE_CUTOFF_DAY = 20
+
 HOME_WATERMARK_IMAGE = os.environ.get("BDH_HRIS_HOME_WATERMARK", "images/home-watermark.jpg")
 # Without this, Django shows its own built-in "Logged out" page (the Django
 # administration one), whose "Log in again" link goes to /admin/login/ - a

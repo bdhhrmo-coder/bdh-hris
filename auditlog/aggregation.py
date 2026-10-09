@@ -111,6 +111,29 @@ def _rows_from_announcement_actions():
     return rows
 
 
+def _rows_from_schedule_events():
+    """Batch 5: duty-schedule routing steps, and every cell changed after
+    COH approval (approved exchange or HR correction)."""
+    from schedules.models import ScheduleAction, ScheduleChange
+
+    rows = []
+    for row in ScheduleAction.objects.select_related("schedule__section", "schedule__unit", "acted_by"):
+        rows.append({
+            "timestamp": row.acted_at, "module": "Duty Schedule", "action": row.action,
+            "detail": f"{row.schedule}" + (f" — {row.notes}" if row.notes else ""),
+            "actor": row.acted_by, "employee_ids": set(), "employee_display": "—",
+        })
+    for ch in ScheduleChange.objects.select_related("schedule__section", "schedule__unit", "employee", "changed_by"):
+        rows.append({
+            "timestamp": ch.changed_at, "module": "Duty Schedule", "action": "change",
+            "detail": f"{ch.schedule}: {ch.date:%b %d} {ch.old_shift or 'blank'} → {ch.new_shift or 'blank'} "
+                      f"— {ch.reason}",
+            "actor": ch.changed_by, "employee_ids": {ch.employee_id},
+            "employee_display": ch.employee.full_name,
+        })
+    return rows
+
+
 def audit_rows(employee_id=None, module=None, date_from=None, date_to=None):
     """
     Merged, filtered, newest-first list of audit rows across all seven
@@ -129,6 +152,7 @@ def audit_rows(employee_id=None, module=None, date_from=None, date_to=None):
     rows += _rows_from_request_actions(OfficialRequestAction.objects.all(), "Official Request", "request")
     rows += _rows_from_document_events(UploadedDocumentEvent.objects.all())
     rows += _rows_from_announcement_actions()
+    rows += _rows_from_schedule_events()
 
     if employee_id:
         rows = [r for r in rows if employee_id in r["employee_ids"]]
@@ -152,4 +176,5 @@ MODULE_CHOICES = [
     "Official Request",
     "Documents",
     "Announcements",
+    "Duty Schedule",
 ]

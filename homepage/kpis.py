@@ -169,6 +169,7 @@ def waiting_for_me(acting_employee, user):
     from leave.permissions import visible_applications_for
     from official_requests.batch import batches_awaiting
     from official_requests.permissions import visible_requests_for
+    from schedules.rules import schedules_waiting_for
 
     if acting_employee is None:
         return []
@@ -181,5 +182,6 @@ def waiting_for_me(acting_employee, user):
         ("Official Business/Time/Travel/OT",
          visible_requests_for(acting_employee).count() + len(batches_awaiting(acting_employee, user)),
          "official_requests:request_queue"),
+        ("Duty schedule", len(schedules_waiting_for(acting_employee, user)), "schedules:list"),
     ]
     return [i for i in items if i[1]]

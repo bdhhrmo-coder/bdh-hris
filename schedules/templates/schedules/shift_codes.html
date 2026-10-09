@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Shift codes — BDH HRIS{% endblock %}
+{% block content %}
+<p><a href="{% url 'schedules:list' %}">&larr; Duty schedules</a></p>
+<div class="split-row" style="justify-content:space-between;">
+  <h1>Shift codes</h1>
+  <a class="btn" href="{% url 'schedules:shift_code_new' %}">+ New code</a>
+</div>
+<p style="color:var(--gray-600);">These are the choices in every schedule grid. Paid hours and "duty day" give each employee's Total Hours and Total Days. To stop using a code, untick "Is active" (codes already used stay on old schedules).</p>
+<div class="card"><div class="table-scroll">
+<table>
+  <tr><th>Code</th><th>Description</th><th>Time</th><th>Paid hours</th><th>Duty day</th><th>Active</th></tr>
+  {% for c in codes %}
+  <tr>
+    <td><a href="{% url 'schedules:shift_code_edit' c.pk %}"><strong>{{ c.code }}</strong></a></td>
+    <td>{{ c.description }}</td>
+    <td>{% if c.start_time %}{{ c.start_time|time:"g:i A" }} – {{ c.end_time|time:"g:i A" }}{% else %}—{% endif %}</td>
+    <td>{{ c.paid_hours|floatformat:"-2" }}</td>
+    <td>{{ c.is_duty|yesno:"Yes,No" }}</td>
+    <td>{{ c.is_active|yesno:"Yes,No" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div></div>
+{% endblock %}

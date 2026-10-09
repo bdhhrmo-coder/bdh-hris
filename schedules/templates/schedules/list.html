@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Duty schedules — BDH HRIS{% endblock %}
+{% block content %}
+<div class="split-row" style="justify-content:space-between;">
+  <h1>Duty schedules</h1>
+  <div>
+    {% if can_manage_codes %}<a class="btn btn-secondary" href="{% url 'schedules:shift_codes' %}">Shift codes</a>{% endif %}
+    {% if can_create %}<a class="btn" href="{% url 'schedules:new' %}">+ New schedule</a>{% endif %}
+  </div>
+</div>
+<p style="color:var(--gray-600);">Monthly Personnel Work Schedule (F50). Route: Prepared &rarr; Reviewed (HR) &rarr; Recommending approval (AO) &rarr; Approved (COH) &rarr; Recorded (HR). Staff see it in "My Schedule" once HR records it.</p>
+
+{% if waiting %}
+<div class="card">
+  <h2 style="margin-top:0;">Waiting for your action ({{ waiting|length }})</h2>
+  <div class="table-scroll"><table>
+    <tr><th>Section / unit</th><th>Month</th><th>Status</th><th></th></tr>
+    {% for s in waiting %}
+    <tr><td>{{ s.area_full_name }}</td><td>{{ s.month_label }}</td><td>{% include "schedules/_status_badge.html" %}</td>
+        <td><a class="btn btn-sm" href="{% url 'schedules:detail' s.pk %}">Open</a></td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endif %}
+
+<div class="card"><div class="table-scroll">
+<table>
+  <tr><th>Month</th><th>Section / unit</th><th>Status</th><th>Prepared by</th><th></th></tr>
+  {% for s in schedules %}
+  <tr>
+    <td>{{ s.month_label }}</td>
+    <td><a href="{% url 'schedules:detail' s.pk %}">{{ s.area_full_name }}</a></td>
+    <td>{% include "schedules/_status_badge.html" %}</td>
+    <td>{{ s.prepared_by.employee.full_name|default:s.prepared_by.username }} <small>({{ s.get_preparer_role_display }})</small></td>
+    <td><a href="{% url 'schedules:print' s.pk %}" target="_blank" rel="noopener">Print</a></td>
+  </tr>
+  {% empty %}<tr><td colspan="5" class="empty-note">No duty schedules yet.</td></tr>{% endfor %}
+</table>
+</div></div>
+{% endblock %}

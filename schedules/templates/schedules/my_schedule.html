@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}My schedule — BDH HRIS{% endblock %}
+{% block content %}
+<div class="split-row" style="justify-content:space-between;">
+  <h1>My schedule — {{ first|date:"F Y" }}</h1>
+  <div>
+    <a class="btn btn-secondary btn-sm" href="?y={{ prev.year }}&m={{ prev.month }}">&larr; {{ prev|date:"M" }}</a>
+    <a class="btn btn-secondary btn-sm" href="?y={{ next.year }}&m={{ next.month }}">{{ next|date:"M" }} &rarr;</a>
+  </div>
+</div>
+{% for b in blocks %}
+<div class="card">
+  <div class="split-row" style="justify-content:space-between;">
+    <h2 style="margin:0;">{{ b.schedule.area_full_name }}</h2>
+    <span><strong>{{ b.hours|floatformat:"-2" }}</strong> hours · <strong>{{ b.days }}</strong> duty days</span>
+  </div>
+  <div class="my-days">
+    {% for c in b.cells %}
+    <div class="my-day {% if c.shift %}{% if c.shift.is_duty %}cell-duty{% else %}cell-off{% endif %}{% endif %}{% if c.date.weekday >= 5 %} weekend{% endif %}">
+      <small>{{ c.date|date:"D" }}</small><strong>{{ c.date.day }}</strong><span>{{ c.shift.code|default:"—" }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% if b.schedule.notes %}<p class="field-help">{{ b.schedule.notes }}</p>{% endif %}
+</div>
+{% empty %}
+<div class="card"><p class="empty-note">No recorded schedule for you this month yet. A schedule shows here once HR records it after the Chief of Hospital's approval.</p></div>
+{% endfor %}
+<p class="field-help">Need to swap a duty? File an <a href="{% url 'exchange:exchange_apply' %}">Exchange of Duty</a>.</p>
+{% endblock %}

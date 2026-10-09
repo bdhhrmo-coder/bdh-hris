@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Shift code — BDH HRIS{% endblock %}
+{% block content %}
+<p><a href="{% url 'schedules:shift_codes' %}">&larr; Shift codes</a></p>
+<h1>{% if code %}Edit {{ code.code }}{% else %}New shift code{% endif %}</h1>
+<div class="card">
+  <form method="post" novalidate>
+    {% include "schedules/_form_fields.html" %}
+    <div class="field-block"><button type="submit">Save</button></div>
+  </form>
+</div>
+{% endblock %}
