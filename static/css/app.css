@@ -650,20 +650,25 @@ tr.history-return td { background: #fff6dc; }
 /* The watermark is the homepage's own background layer (owner decision
    2026-10-09): faint, behind everything, never catches clicks. */
 .home-watermark {
-  /* Fills the content area beside the sidebar. "contain" shows the whole
-     image (building, BDH logo, HRIS title) at its own proportions - never
-     zoomed or cropped - centred on any screen size. */
+  /* Homepage background picture, in the content area beside the sidebar.
+     Wide screens: fills the area ("cover"); the picture is about as wide
+     as the area, so only a thin edge is trimmed and it is not zoomed in.
+     Tall phone screens: also fills the screen, centred on the BDH logo
+     (the left part of the picture) so the logo shows in full. */
   position: fixed;
   top: var(--topbar-h); right: 0; bottom: 0; left: 216px;
-  background-size: contain;
+  background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  opacity: 0.12;
+  opacity: 0.35;
   pointer-events: none;
   z-index: -1;
 }
 @media (max-width: 860px) {
   .home-watermark { left: 0; }   /* sidebar is hidden on small screens */
+}
+@media (max-aspect-ratio: 1/1) {
+  .home-watermark { background-position: 18% center; }
 }
 .home-hero { margin-bottom: 1.25rem; }
 .home-hero h1 { margin: 0; }
