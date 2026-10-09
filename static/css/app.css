@@ -668,7 +668,7 @@ tr.history-return td { background: #fff6dc; }
   .home-watermark { left: 0; }   /* sidebar is hidden on small screens */
 }
 @media (max-aspect-ratio: 1/1) {
-  .home-watermark { background-position: 18% center; }
+  .home-watermark { background-position: 15% center; }
 }
 .home-hero { margin-bottom: 1.25rem; }
 .home-hero h1 { margin: 0; }
