@@ -4,7 +4,7 @@
 <h1>File a request</h1>
 <p style="color:var(--gray-600);">Official Business, Official Time, Travel, or Authorized OT/rest day/holiday work. Routing depends on the type you pick.</p>
 <div class="card">
-  <form method="post">
+  <form method="post" class="form-2col">
     {% csrf_token %}
     {{ form.as_p }}
     <button type="submit">Submit</button>

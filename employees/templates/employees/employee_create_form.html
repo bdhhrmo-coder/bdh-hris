@@ -5,7 +5,7 @@
 <p style="color:var(--gray-600);">System Administrator only. This creates the account shell (ID, name, active status) —
 an HR Administrator fills in the rest of the master data afterward.</p>
 <div class="card">
-  <form method="post">
+  <form method="post" class="form-2col">
     {% csrf_token %}
     {{ form.as_p }}
     <button type="submit">Create</button>

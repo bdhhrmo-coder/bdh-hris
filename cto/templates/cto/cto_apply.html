@@ -5,7 +5,7 @@
 <p>Available CTO balance: <strong style="color:var(--navy-900);">{{ balance }} day(s)</strong></p>
 
 <div class="card">
-  <form method="post">
+  <form method="post" class="form-2col">
     {% csrf_token %}
     {{ form.as_p }}
     <button type="submit">Submit</button>

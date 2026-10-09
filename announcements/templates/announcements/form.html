@@ -3,7 +3,7 @@
 {% block content %}
 <h1>{% if a %}Edit draft{% else %}New announcement{% endif %}</h1>
 <div class="card" x-data="{ vis: '{{ form.visibility.value|default:'ALL' }}' }">
-  <form method="post" enctype="multipart/form-data" novalidate>
+  <form method="post" enctype="multipart/form-data" novalidate class="form-2col">
     {% csrf_token %}
     {% if form.non_field_errors %}<div class="msg error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
     {% for field in form %}

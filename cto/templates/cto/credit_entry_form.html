@@ -5,7 +5,7 @@
 <p style="color:var(--gray-600);">HR Administrator only. For credit with no approved OT request behind it (e.g. certified emergency duty). A reason is required. This saves a draft; it goes through the same document and filing-date checks as any other claim before anything is credited.</p>
 
 <div class="card">
-  <form method="post">
+  <form method="post" class="form-2col">
     {% csrf_token %}
     {{ form.as_p }}
     <button type="submit">Save draft claim</button>

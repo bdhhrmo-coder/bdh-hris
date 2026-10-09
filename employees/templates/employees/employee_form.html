@@ -5,17 +5,17 @@
 <div class="card">
 <form method="post">
   {% csrf_token %}
-  <fieldset>
+  <fieldset class="form-2col">
     <legend>System Administrator only</legend>
-    {{ form.employee_id.label_tag }} {{ form.employee_id }}
-    {{ form.is_active.label_tag }} {{ form.is_active }}
+    <div class="field-pair">{{ form.employee_id.label_tag }} {{ form.employee_id }}</div>
+    <div class="field-pair">{{ form.is_active.label_tag }} {{ form.is_active }}</div>
   </fieldset>
-  <fieldset>
+  <fieldset class="form-2col">
     <legend>HR Administrator</legend>
     {% for field in form %}
       {% if field.name != "employee_id" and field.name != "is_active" and field.name != "reason" %}
-        {{ field.label_tag }} {{ field }}
-        {% if field.errors %}<div class="msg error">{{ field.errors }}</div>{% endif %}
+        <div class="field-pair">{{ field.label_tag }} {{ field }}
+        {% if field.errors %}<div class="msg error">{{ field.errors }}</div>{% endif %}</div>
       {% endif %}
     {% endfor %}
   </fieldset>
@@ -31,12 +31,12 @@
     <legend>Education history</legend>
     {{ education_formset.management_form }}
     {% for ed_form in education_formset %}
-      <div style="border-bottom:1px solid var(--gray-100); padding-bottom:0.5rem; margin-bottom:0.5rem;">
+      <div class="form-2col" style="border-bottom:1px solid var(--gray-100); padding-bottom:0.5rem; margin-bottom:0.5rem;">
         {{ ed_form.id }}
-        {{ ed_form.education_level.label_tag }} {{ ed_form.education_level }}
-        {{ ed_form.school.label_tag }} {{ ed_form.school }}
-        {{ ed_form.degree_course.label_tag }} {{ ed_form.degree_course }}
-        {{ ed_form.units_earned.label_tag }} {{ ed_form.units_earned }}
+        <div class="field-pair">{{ ed_form.education_level.label_tag }} {{ ed_form.education_level }}</div>
+        <div class="field-pair">{{ ed_form.school.label_tag }} {{ ed_form.school }}</div>
+        <div class="field-pair">{{ ed_form.degree_course.label_tag }} {{ ed_form.degree_course }}</div>
+        <div class="field-pair">{{ ed_form.units_earned.label_tag }} {{ ed_form.units_earned }}</div>
         {% if ed_form.instance.pk %}
           <label>{{ ed_form.DELETE }} Remove this entry</label>
         {% endif %}

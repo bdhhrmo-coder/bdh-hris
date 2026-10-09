@@ -4,7 +4,7 @@
 <p><a href="{% url 'schedules:list' %}">&larr; Duty schedules</a></p>
 <h1>New duty schedule</h1>
 <div class="card">
-  <form method="post" novalidate>
+  <form method="post" novalidate class="form-2col">
     {% include "schedules/_form_fields.html" %}
     <p class="field-help">The employees attached to the section or unit are added for you. You can add or remove people on the next page.</p>
     <div class="field-block"><button type="submit">Create and open the grid</button></div>

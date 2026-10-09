@@ -17,7 +17,7 @@
 {% endif %}
 
 <div class="card">
-  <form method="post">
+  <form method="post" class="form-2col">
     {% csrf_token %}
     {{ form.as_p }}
     <button type="submit">Submit for approval</button>

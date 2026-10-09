@@ -23,6 +23,14 @@
   /* Top bar height - shared by the bar, the sidebar offset and the main
      content offset so they always line up. */
   --topbar-h: 64px;
+  /* Page layout (2026-10-09): the ONE place to change the widest content
+     width, plus the spacing scale used between blocks. */
+  --sidebar-w: 216px;
+  --content-max: 1600px;
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --prose-max: 75ch;   /* readable line length for help text and paragraphs */
   --navy-900: #0b2c4d;
   --navy-800: #123a63;
   --navy-700: #1a4b7a;
@@ -219,14 +227,18 @@ h2 { font-size: 1.15rem; margin-top: 1.6em; }
 }
 
 .app-main {
-  margin-left: 216px;
+  /* Uses the space beside the sidebar up to --content-max, centred in it
+     on very wide screens (was a fixed 1200px pinned to the left). */
   margin-top: var(--topbar-h);
-  padding: 1.5rem 2rem 3rem;
+  margin-left: calc(var(--sidebar-w) + max(0px, (100% - var(--sidebar-w) - var(--content-max)) / 2));
+  padding: var(--space-3) 32px 48px;
   width: 100%;
   min-width: 0; /* let wide tables scroll inside their box instead of widening the page */
-  max-width: 1200px;
+  max-width: var(--content-max);
+  box-sizing: border-box;
   animation: fade-in 180ms ease-out;
 }
+@media (max-width: 1365px) { .app-main { padding-left: var(--space-3); padding-right: var(--space-3); } }
 
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(4px); }
@@ -237,6 +249,7 @@ h2 { font-size: 1.15rem; margin-top: 1.6em; }
   .app-sidebar { display: none; }
   .app-main { margin-left: 0; }
 }
+@media (max-width: 639px) { .app-main { padding-left: var(--space-2); padding-right: var(--space-2); } }
 
 @media (max-width: 480px) {
   .app-topbar .brand-logo { height: 38px; }
@@ -285,8 +298,8 @@ h2 { font-size: 1.15rem; margin-top: 1.6em; }
   border: 1px solid var(--gray-200);
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
-  padding: 1.1rem 1.25rem;
-  margin-bottom: 1.25rem;
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
   transition: box-shadow var(--transition-fast);
 }
 .card:hover { box-shadow: var(--shadow-md); }
@@ -670,10 +683,10 @@ tr.history-return td { background: #fff6dc; }
 @media (max-aspect-ratio: 1/1) {
   .home-watermark { background-position: 15% center; }
 }
-.home-hero { margin-bottom: 1.25rem; }
+.home-hero { margin-bottom: var(--space-3); }
 .home-hero h1 { margin: 0; }
 .home-hero p { margin: 0.2rem 0 0; color: var(--gray-600); }
-.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.85rem; margin-bottom: 1.25rem; }
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--space-2); margin-bottom: var(--space-3); }
 .kpi-card {
   display: block; background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius);
   padding: 0.9rem 1rem; color: inherit; text-decoration: none; position: relative;
@@ -690,7 +703,7 @@ a.kpi-card:hover, a.kpi-card:focus-visible { border-color: var(--navy-700); box-
 .kpi-list li { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.15rem 0; border-bottom: 1px dashed var(--gray-200); }
 .kpi-list li:last-child { border-bottom: 0; }
 .as-of { font-size: 0.75rem; color: var(--gray-600); }
-.home-columns { display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; align-items: start; }
+.home-columns { display: grid; grid-template-columns: 2fr 1fr; gap: var(--space-3); align-items: start; }
 @media (max-width: 900px) { .home-columns { grid-template-columns: 1fr; } }
 
 /* --- Announcements (Batch 4) ------------------------------------------- */
@@ -730,3 +743,45 @@ a.kpi-card:hover, a.kpi-card:focus-visible { border-color: var(--navy-700); box-
 .tab-row .tab { padding: .5rem 1rem; text-decoration: none; color: var(--gray-600, #6b7280); font-weight: 600;
   border-bottom: 3px solid transparent; margin-bottom: -2px; }
 .tab-row .tab.is-active { color: var(--navy-800, #0b2c4d); border-bottom-color: var(--navy-800, #0b2c4d); }
+
+
+/* -- Page layout helpers (2026-10-09) ----------------------------------------
+   Two-column forms on screens 1024px and wider; one column below. Field order
+   is unchanged (left to right, then down). Long boxes (text areas, tick-box
+   lists) and anything that is not a single field span both columns. */
+.form-2col { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: var(--space-3); align-items: start; }
+.form-2col > button, .form-2col > .btn { justify-self: start; }
+@media (min-width: 1024px) {
+  .form-2col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .form-2col > * { grid-column: 1 / -1; }
+  .form-2col > p:not(:has(textarea, ul, input[type="checkbox"])),
+  .form-2col > .field-pair:not(:has(textarea)),
+  .form-2col > .field-block:not(:has(textarea, .choice-columns, button, input[type="checkbox"], input[type="file"])) {
+    grid-column: auto;
+  }
+}
+.field-pair label { margin-top: var(--space-1); }
+
+/* Readable line length: paragraphs and help text don't stretch across a
+   wide screen. Tables, cards and forms still use the full width. */
+.app-main > p, .card > p, .field-help, .helptext, .announcement-item p { max-width: var(--prose-max); }
+
+/* A small card that is meant to stay small (e.g. Change password), centred. */
+.card-narrow { max-width: 520px; margin-left: auto; margin-right: auto; }
+
+/* Charts are drawn to scale with their box; on a very wide screen that made
+   their lettering oversized. Keep them at the size they had before the page
+   was widened, centred in their card (the table below still uses the full width). */
+.svg-chart-wrap:not([style]) { max-width: 1100px; margin-left: auto; margin-right: auto; }
+
+/* Phones and tablets: a table wider than the screen scrolls sideways inside
+   its own card instead of making the whole page scroll (existing issue found
+   in the 2026-10-09 layout audit on 15 list pages at phone width). */
+@media (max-width: 1023px) {
+  .card { overflow-x: auto; }
+}
+
+/* KPI cards: 2 per row on tablets so they wrap evenly (no lone card). */
+@media (min-width: 640px) and (max-width: 1023px) {
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
