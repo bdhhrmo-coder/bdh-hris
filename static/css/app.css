@@ -254,37 +254,6 @@ h2 { font-size: 1.15rem; margin-top: 1.6em; }
    sidebar, and every normal-flow element (.app-main, .card, etc.) without
    needing z-index bumps on any of them. pointer-events: none keeps it
    from ever intercepting clicks. */
-.page-watermark {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: min(450px, 70vw);
-  z-index: -1;
-  opacity: 0.08;
-  pointer-events: none;
-}
-.page-watermark img {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-.page-watermark-tagline {
-  margin: 0.85rem 0 0;
-  width: 100%;
-  text-align: center;
-  font-family: Arial, Helvetica, sans-serif; /* system-safe: no font download */
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  font-size: 1rem;
-  color: var(--navy-900);
-}
-@media (max-width: 480px) {
-  .page-watermark { width: min(260px, 80vw); }
-  .page-watermark-tagline { font-size: 0.65rem; letter-spacing: 0.14em; margin-top: 0.5rem; }
-}
-
 /* --- Messages ------------------------------------------------------- */
 
 .msg {
@@ -671,3 +640,43 @@ tr.history-return td { background: #fff6dc; }
 .batch-lines td { padding: 0.3rem 0.4rem; }
 .conflict-card { border-left: 4px solid var(--red-700); }
 @media (max-width: 700px) { .batch-header-grid { grid-template-columns: 1fr; } }
+
+/* --- Header greeting (Batch 4) ------------------------------------------ */
+.app-topbar .header-date { display: inline; margin-left: 0.4rem; font-size: 0.75rem; color: var(--navy-100); opacity: 0.8; }
+@media (max-width: 900px) { .app-topbar .header-date { display: none; } }
+
+/* --- Homepage (Batch 4) -------------------------------------------------- */
+/* The watermark is the homepage's own background layer (owner decision
+   2026-10-09): faint, behind everything, never catches clicks. */
+.home-watermark {
+  position: fixed;
+  inset: var(--topbar-h) 0 0 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.07;
+  pointer-events: none;
+  z-index: -1;
+}
+.home-hero { margin-bottom: 1.25rem; }
+.home-hero h1 { margin: 0; }
+.home-hero p { margin: 0.2rem 0 0; color: var(--gray-600); }
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.85rem; margin-bottom: 1.25rem; }
+.kpi-card {
+  display: block; background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius);
+  padding: 0.9rem 1rem; color: inherit; text-decoration: none; position: relative;
+  transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+a.kpi-card:hover, a.kpi-card:focus-visible { border-color: var(--navy-700); box-shadow: 0 2px 10px rgba(16, 42, 67, 0.12); text-decoration: none; }
+.kpi-label { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-600); margin: 0; }
+.kpi-value { font-size: 2.1rem; font-weight: 700; color: var(--navy-900); line-height: 1.15; margin: 0.15rem 0 0; }
+.kpi-sub { font-size: 0.82rem; color: var(--gray-600); margin: 0.2rem 0 0; }
+.kpi-sub a { font-weight: 600; }
+.kpi-split { display: flex; gap: 1.2rem; align-items: flex-end; }
+.kpi-split .kpi-pending { font-size: 1.25rem; font-weight: 700; color: #a3690a; }
+.kpi-list { list-style: none; padding: 0; margin: 0.45rem 0 0; font-size: 0.85rem; }
+.kpi-list li { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.15rem 0; border-bottom: 1px dashed var(--gray-200); }
+.kpi-list li:last-child { border-bottom: 0; }
+.as-of { font-size: 0.75rem; color: var(--gray-600); }
+.home-columns { display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; align-items: start; }
+@media (max-width: 900px) { .home-columns { grid-template-columns: 1fr; } }

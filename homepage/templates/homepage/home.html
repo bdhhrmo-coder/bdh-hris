@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Home — BDH HRIS{% endblock %}
+{% block content %}
+{% if watermark_url %}<div class="home-watermark" aria-hidden="true" style="background-image:url('{{ watermark_url }}')"></div>{% endif %}
+
+<div class="home-hero">
+  <h1>{{ header_greeting }}{% if request.user.employee %}, {{ request.user.employee.first_name }}{% endif %}</h1>
+  <p>{{ header_today|date:"l, F j, Y" }} &middot; <span class="as-of">Figures as of {{ as_of|date:"g:i A" }}</span></p>
+</div>
+
+<section class="kpi-grid" aria-label="Key figures">
+  {% if can_list_employees %}<a class="kpi-card" href="{% url 'employees:employee_list' %}">{% else %}<div class="kpi-card">{% endif %}
+    <p class="kpi-label">Headcount</p>
+    <p class="kpi-value">{{ headcount }}</p>
+    <p class="kpi-sub">Active employees (archived records not counted)</p>
+  {% if can_list_employees %}</a>{% else %}</div>{% endif %}
+
+  <div class="kpi-card">
+    <p class="kpi-label">Absent today</p>
+    <div class="kpi-split">
+      <div>
+        <p class="kpi-value">{% if scope != "self" %}<a href="{% url 'homepage:absent_list' %}" aria-label="{{ absent_count }} absent today, see list">{{ absent_count }}</a>{% else %}{{ absent_count }}{% endif %}</p>
+      </div>
+      <div>
+        <span class="kpi-pending">{% if scope != "self" %}<a href="{% url 'homepage:pending_leave_list' %}" style="color:inherit">{{ pending_lc_count }}</a>{% else %}{{ pending_lc_count }}{% endif %}</span>
+        <span class="kpi-sub">pending leave/CTO</span>
+      </div>
+    </div>
+    <p class="kpi-sub">On approved or recorded leave, or approved CTO, today{% if scope == "sections" %} &mdash; your sections{% endif %}. Pending is not counted as absent.</p>
+  </div>
+
+  <a class="kpi-card" href="{% url 'homepage:pending_applications_list' %}">
+    <p class="kpi-label">{% if scope == "self" %}My pending requests{% elif scope == "sections" %}Pending in my sections{% else %}Pending applications{% endif %}</p>
+    <p class="kpi-value">{{ pending_apps_total }}</p>
+    <p class="kpi-sub">Waiting at an approval step</p>
+  </a>
+
+  <div class="kpi-card">
+    <p class="kpi-label">Waiting for my action</p>
+    <p class="kpi-value">{{ waiting_total }}</p>
+    {% if waiting %}
+    <ul class="kpi-list">
+      {% for label, count, url_name in waiting %}<li><a href="{% url url_name %}">{{ label }}</a><strong>{{ count }}</strong></li>{% endfor %}
+    </ul>
+    {% else %}<p class="kpi-sub">Nothing waiting for you.</p>{% endif %}
+  </div>
+</section>
+
+<div class="home-columns">
+  <div>
+    {% block announcements_panel %}{% if announcements_panel_template %}{% include announcements_panel_template %}{% endif %}{% endblock %}
+  </div>
+  <div class="card">
+    <h2 style="margin-top:0;">Quick links</h2>
+    <ul class="kpi-list">
+      <li><a href="{% url 'leave:leave_apply' %}">Apply for leave</a></li>
+      <li><a href="{% url 'cto:my_cto' %}">CTO</a></li>
+      <li><a href="{% url 'exchange:my_exchanges' %}">Exchange of Duty</a></li>
+      <li><a href="{% url 'attendance:formal_correction_apply' %}">Attendance correction</a></li>
+      <li><a href="{% url 'official_requests:my_requests' %}">Official Business/Time/Travel/OT</a></li>
+      {% if can_file_batch %}<li><a href="{% url 'official_requests:batch_file' %}">File for a group</a></li>{% endif %}
+      {% if can_view_dashboard %}<li><a href="{% url 'dashboard:dashboard_home' %}">Dashboard (analytics)</a></li>{% endif %}
+    </ul>
+  </div>
+</div>
+{% endblock %}

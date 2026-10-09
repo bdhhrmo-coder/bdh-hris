@@ -72,16 +72,16 @@ class LoginLogoutTests(TestCase):
         response = self.client.get("/")
         self.assertRedirects(response, reverse("login"), fetch_redirect_response=False)
 
-    def test_login_success_lands_on_notifications(self):
+    def test_login_success_lands_on_homepage(self):
         response = self.login()
-        self.assertRedirects(response, reverse("notifications:notification_list"))
+        self.assertRedirects(response, reverse("homepage:home"))
 
     def test_employee_id_logs_in_like_a_username(self):
         response = self.login(username="E-10")
-        self.assertRedirects(response, reverse("notifications:notification_list"))
+        self.assertRedirects(response, reverse("homepage:home"))
 
     def test_employee_id_is_case_insensitive(self):
-        self.assertRedirects(self.login(username="e-10"), reverse("notifications:notification_list"))
+        self.assertRedirects(self.login(username="e-10"), reverse("homepage:home"))
 
     def test_employee_id_with_wrong_password_gets_the_generic_message(self):
         response = self.login(username="E-10", password="nope")
@@ -159,15 +159,15 @@ class PermanentLoginLinkTests(TestCase):
         response = self.client.get("/login/?next=/leave/")
         self.assertRedirects(response, "/hris/login/?next=/leave/", fetch_redirect_response=False)
 
-    def test_signed_in_staff_goes_to_notifications_and_hr_to_dashboard(self):
+    def test_everyone_signed_in_lands_on_the_homepage(self):
         self.client.login(username="staff", password=PASSWORD)
         for url in ("/hris/login/", "/", "/login/"):
-            self.assertRedirects(self.client.get(url, follow=True), reverse("notifications:notification_list"))
+            self.assertRedirects(self.client.get(url, follow=True), reverse("homepage:home"))
         hr = Client()
         hr.login(username="hrboss", password=PASSWORD)
-        self.assertRedirects(hr.get("/hris/login/"), reverse("dashboard:dashboard_home"))
+        self.assertRedirects(hr.get("/hris/login/"), reverse("homepage:home"))
         self.assertRedirects(hr.post("/hris/login/", {"username": "hrboss", "password": PASSWORD}),
-                             reverse("dashboard:dashboard_home"))
+                             reverse("homepage:home"))
 
     def test_inner_page_bookmark_logs_in_then_returns_there(self):
         response = self.client.get(reverse("leave:my_applications"))
@@ -182,7 +182,7 @@ class PermanentLoginLinkTests(TestCase):
         for bad in ("/hris/login/", "/logout/", "/login/", "/admin/"):
             client = Client()
             r = client.post(f"/hris/login/?next={bad}", {"username": "staff", "password": PASSWORD, "next": bad})
-            self.assertRedirects(r, reverse("notifications:notification_list"), fetch_redirect_response=False)
+            self.assertRedirects(r, reverse("homepage:home"), fetch_redirect_response=False)
             self.assertEqual(client.get(f"/hris/login/?next={bad}").status_code, 302)  # signed in: no loop
 
     def test_expired_login_form_shows_message_not_403(self):

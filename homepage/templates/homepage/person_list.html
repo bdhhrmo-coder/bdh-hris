@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — BDH HRIS{% endblock %}
+{% block content %}
+<p><a href="{% url 'homepage:home' %}">&larr; Home</a></p>
+<h1>{{ title }} <small class="as-of">({{ rows|length }} &middot; as of {{ as_of|date:"M j, Y g:i A" }})</small></h1>
+<p style="color:var(--gray-600);">{{ note }}{% if scope == "sections" %} Showing your sections only.{% endif %}</p>
+<div class="card">
+<div class="table-scroll">
+<table>
+  <tr><th>Name</th><th>Section/Unit</th><th>Type</th><th>Date(s)</th>{% if show_status %}<th>Status</th>{% endif %}</tr>
+  {% for r in rows %}
+  <tr>
+    <td>{{ r.employee.full_name }}</td>
+    <td>{{ r.section }}</td>
+    <td>{{ r.what|join:" + " }}</td>
+    <td>{% for s, e in r.dates %}{{ s|date:"M j" }}{% if e != s %} – {{ e|date:"M j" }}{% endif %}{% if not forloop.last %}; {% endif %}{% endfor %}</td>
+    {% if show_status %}<td>{{ r.status }}</td>{% endif %}
+  </tr>
+  {% empty %}
+  <tr><td colspan="5" class="empty-note">No one.</td></tr>
+  {% endfor %}
+</table>
+</div>
+</div>
+{% endblock %}

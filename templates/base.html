@@ -12,10 +12,7 @@
 </head>
 <body class="{% block body_class %}{% endblock %}">
   {% if user.is_authenticated %}
-    <div class="page-watermark" aria-hidden="true">
-      <img src="{% static 'images/bdh-logo.png' %}" alt="">
-      <p class="page-watermark-tagline">RIGHT CARE, RIGHT HERE</p>
-    </div>
+    {# Batch 4 (owner decision 2026-10-09): no watermark on working screens; the homepage has its own. #}
     <div class="app-shell">
       <header class="app-topbar">
         <img class="brand-logo" src="{% static 'images/bdh-logo.png' %}" alt="Bataraza District Hospital">
@@ -37,7 +34,8 @@
                 {% if not unread_notification_count %}style="display:none"{% endif %}>{{ unread_notification_label }}</span>
         </a>
         <div class="user-chip">
-          <span class="user-name">{% if user.employee %}{{ user.employee.first_name }} {{ user.employee.surname }}{% else %}{{ user.username }}{% endif %}
+          <span class="user-name">{{ header_greeting }}, {% if user.employee %}{{ user.employee.first_name }}{% else %}{{ user.username }}{% endif %}
+            <small class="header-date">{{ header_today|date:"D, M j, Y" }}</small>
           &middot;</span>
           <a href="{% url 'password_change' %}" class="topbar-link">Change password</a>
           &middot;
@@ -49,6 +47,7 @@
       </header>
       <aside class="app-sidebar">
         <nav>
+          <a href="{% url 'homepage:home' %}">Home</a>
           {% if can_view_dashboard %}<a href="{% url 'dashboard:dashboard_home' %}">Dashboard</a>{% endif %}
           {% if can_list_employees %}<a href="{% url 'employees:employee_list' %}">Employees</a>{% endif %}
           <a href="{% url 'notifications:notification_list' %}">

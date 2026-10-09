@@ -16,15 +16,10 @@ _BAD_NEXT_PREFIXES = ("/hris/login", "/login", "/logout", "/admin")
 
 
 def landing_url(user):
-    """Where a signed-in person starts (Batch 2, Item 1c): the Dashboard for
-    the roles that can see it, Notifications for everyone else (the only
-    page every role has - see the note on LOGIN_REDIRECT_URL in settings)."""
-    from dashboard.permissions import can_view_dashboard
-    from employees.permissions import get_acting_employee
-
-    if can_view_dashboard(get_acting_employee(user)):
-        return reverse("dashboard:dashboard_home")
-    return reverse("notifications:notification_list")
+    """Where a signed-in person starts: the homepage, for every role
+    (Batch 4, owner decision 2026-10-09). The Dashboard stays as the
+    analytics page."""
+    return reverse("homepage:home")
 
 
 def home(request):

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Pending applications — BDH HRIS{% endblock %}
+{% block content %}
+<p><a href="{% url 'homepage:home' %}">&larr; Home</a></p>
+<h1>{% if scope == "self" %}My pending requests{% elif scope == "sections" %}Pending in my sections{% else %}Pending applications{% endif %}
+  <small class="as-of">({{ rows|length }} &middot; as of {{ as_of|date:"M j, Y g:i A" }})</small></h1>
+<p style="color:var(--gray-600);">Requests waiting at an approval step, oldest first. To act on one, use your Approvals queues.</p>
+<div class="card">
+<div class="table-scroll">
+<table>
+  <tr><th>Filed</th><th>Type</th><th>Employee</th><th>Status</th></tr>
+  {% for r in rows %}
+  <tr><td>{{ r.filed|date:"M j, Y" }}</td><td>{{ r.type }}</td><td>{{ r.employee.full_name }}</td><td>{{ r.status }}</td></tr>
+  {% empty %}
+  <tr><td colspan="4" class="empty-note">Nothing pending.</td></tr>
+  {% endfor %}
+</table>
+</div>
+</div>
+{% endblock %}

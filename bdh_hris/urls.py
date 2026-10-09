@@ -31,6 +31,7 @@ urlpatterns = [
     path("", home, name="home"),
     path("hris/", home),
     path("hris/login/", BDHLoginView.as_view(), name="login"),
+    path("hris/home/", include("homepage.urls")),
     path("login/", RedirectView.as_view(pattern_name="login", permanent=False, query_string=True)),
     path("admin/", admin.site.urls),
     path("employees/", include("employees.urls")),

@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     "dashboard",
     "auditlog",
     "dataimport",
+    "homepage",
 ]
 
 # CLAUDE.md §13: RA 10173 personnel-record retention period, in years, for a
@@ -118,6 +119,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "notifications.context_processors.unread_notification_count",
+                "homepage.context_processors.greeting",
                 "dashboard.context_processors.dashboard_link",
                 "auditlog.context_processors.audit_log_link",
                 "employees.context_processors.nav_links",
@@ -244,6 +246,11 @@ LOGIN_REDIRECT_URL = "notifications:notification_list"
 # show Django's "403 CSRF verification failed" page. This shows the login
 # page with "Session expired. Please log in again." instead.
 CSRF_FAILURE_VIEW = "accounts.views.csrf_failure"
+
+# Homepage watermark (Batch 4, owner decision 2026-10-09): shown on the
+# homepage ONLY. A path inside the static folder; blank (or a missing file)
+# means no watermark.
+HOME_WATERMARK_IMAGE = os.environ.get("BDH_HRIS_HOME_WATERMARK", "images/home-watermark.jpg")
 # Without this, Django shows its own built-in "Logged out" page (the Django
 # administration one), whose "Log in again" link goes to /admin/login/ - a
 # staff-only login that rejects normal accounts. Send people straight back to
