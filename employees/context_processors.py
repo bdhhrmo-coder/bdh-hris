@@ -50,6 +50,9 @@ def nav_links(request):
         "can_list_employees": _can_list_employees(acting_employee),
         "has_approval_role": has_approval_role,
         "is_ictu_staff": is_ictu_staff,
+        # Announcements are managed by the HR Administrator only (Batch 4).
+        "can_manage_announcements": acting_employee is not None
+        and acting_employee.has_role(RoleAssignment.HR_ADMINISTRATOR),
         # Group filing of Travel / OB / OT (Batch 2, Item 7): Supervisors and HR.
         "can_file_batch": acting_employee is not None and any(
             acting_employee.has_role(role) for role in

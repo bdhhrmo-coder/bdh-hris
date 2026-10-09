@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Announcements — BDH HRIS{% endblock %}
+{% block content %}
+<div class="split-row" style="justify-content:space-between;">
+  <h1>Announcements</h1>
+  {% if can_manage %}<a class="btn" href="{% url 'announcements:manage' %}">Manage announcements</a>{% endif %}
+</div>
+<form method="get" class="filter-bar card">
+  <label>Type
+    <select name="type" onchange="this.form.submit()">
+      <option value="">All types</option>
+      {% for value, label in announcement_types %}<option value="{{ value }}" {% if announcement_type == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </label>
+  <noscript><button type="submit">Filter</button></noscript>
+</form>
+<div class="card">
+  {% for a in announcements %}
+  <article class="announcement-item">
+    <p class="announcement-meta"><span class="badge badge-pending">{{ a.get_announcement_type_display }}</span>
+      {% if a.reference_no %}{{ a.reference_no }} &middot; {% endif %}Issued {{ a.date_issued|date:"M j, Y" }} &middot; Effective {{ a.effective_date|date:"M j, Y" }}{% if a.expiry_date %} &middot; Until {{ a.expiry_date|date:"M j, Y" }}{% endif %}</p>
+    <h3><a href="{% url 'announcements:detail' a.pk %}">{{ a.title }}</a></h3>
+    <p>{{ a.summary|truncatechars:300 }}</p>
+  </article>
+  {% empty %}<p class="empty-note">No announcements.</p>{% endfor %}
+</div>
+{% endblock %}

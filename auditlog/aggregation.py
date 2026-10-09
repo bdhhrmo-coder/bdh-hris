@@ -96,6 +96,21 @@ def _rows_from_document_events(qs):
     return rows
 
 
+def _rows_from_announcement_actions():
+    """Batch 4: announcements are hospital-wide notices, not about one
+    employee, so they have no employee filter value."""
+    from announcements.models import AnnouncementAction
+
+    rows = []
+    for row in AnnouncementAction.objects.select_related("announcement", "acted_by"):
+        rows.append({
+            "timestamp": row.acted_at, "module": "Announcements", "action": row.action,
+            "detail": f"{row.announcement}" + (f" — {row.notes}" if row.notes else ""),
+            "actor": row.acted_by, "employee_ids": set(), "employee_display": "—",
+        })
+    return rows
+
+
 def audit_rows(employee_id=None, module=None, date_from=None, date_to=None):
     """
     Merged, filtered, newest-first list of audit rows across all seven
@@ -113,6 +128,7 @@ def audit_rows(employee_id=None, module=None, date_from=None, date_to=None):
     )
     rows += _rows_from_request_actions(OfficialRequestAction.objects.all(), "Official Request", "request")
     rows += _rows_from_document_events(UploadedDocumentEvent.objects.all())
+    rows += _rows_from_announcement_actions()
 
     if employee_id:
         rows = [r for r in rows if employee_id in r["employee_ids"]]
@@ -135,4 +151,5 @@ MODULE_CHOICES = [
     "Attendance Correction",
     "Official Request",
     "Documents",
+    "Announcements",
 ]

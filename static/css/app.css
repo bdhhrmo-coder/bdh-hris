@@ -680,3 +680,13 @@ a.kpi-card:hover, a.kpi-card:focus-visible { border-color: var(--navy-700); box-
 .as-of { font-size: 0.75rem; color: var(--gray-600); }
 .home-columns { display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; align-items: start; }
 @media (max-width: 900px) { .home-columns { grid-template-columns: 1fr; } }
+
+/* --- Announcements (Batch 4) ------------------------------------------- */
+.announcement-item { padding: 0.65rem 0; border-bottom: 1px solid var(--gray-200); }
+.announcement-item:last-of-type { border-bottom: 0; }
+.announcement-item h3 { margin: 0.2rem 0; font-size: 1rem; }
+.announcement-item p { margin: 0.15rem 0; }
+.announcement-meta { font-size: 0.78rem; color: var(--gray-600); }
+.announcement-filter select { width: auto; }
+.choice-columns ul, .choice-columns > div { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.3rem 1rem; list-style: none; padding: 0; margin: 0.3rem 0 0; }
+.choice-columns label { display: flex; align-items: center; gap: 0.45rem; font-weight: 400; }

@@ -1,0 +1,27 @@
+<div class="card">
+  <div class="split-row" style="justify-content:space-between; gap:0.75rem;">
+    <h2 style="margin:0;">Announcements</h2>
+    <form method="get" class="announcement-filter" hx-get="{% url 'homepage:home' %}" hx-trigger="change"
+          hx-target="#announcement-panel" hx-select="#announcement-panel" hx-swap="outerHTML">
+      <label class="sr-only" for="ann-type">Type</label>
+      <select id="ann-type" name="type">
+        <option value="">All types</option>
+        {% for value, label in announcement_types %}<option value="{{ value }}" {% if announcement_type == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+      <noscript><button type="submit" class="btn-sm">Filter</button></noscript>
+    </form>
+  </div>
+  <div id="announcement-panel" class="results-fade">
+    {% for a in announcements %}
+    <article class="announcement-item">
+      <p class="announcement-meta"><span class="badge badge-pending">{{ a.get_announcement_type_display }}</span>
+        {% if a.reference_no %}{{ a.reference_no }} &middot; {% endif %}Issued {{ a.date_issued|date:"M j, Y" }} &middot; Effective {{ a.effective_date|date:"M j, Y" }}</p>
+      <h3><a href="{% url 'announcements:detail' a.pk %}">{{ a.title }}</a></h3>
+      <p>{{ a.summary|truncatechars:220 }}</p>
+    </article>
+    {% empty %}
+    <p class="empty-note">No announcements{% if announcement_type %} of this type{% endif %}.</p>
+    {% endfor %}
+    <p style="margin:0.5rem 0 0;"><a href="{% url 'announcements:list' %}{% if announcement_type %}?type={{ announcement_type }}{% endif %}">See all announcements</a></p>
+  </div>
+</div>

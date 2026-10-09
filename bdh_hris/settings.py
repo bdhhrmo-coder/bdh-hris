@@ -74,6 +74,7 @@ INSTALLED_APPS = [
     "auditlog",
     "dataimport",
     "homepage",
+    "announcements",
 ]
 
 # CLAUDE.md §13: RA 10173 personnel-record retention period, in years, for a

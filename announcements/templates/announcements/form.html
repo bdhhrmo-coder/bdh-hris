@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{% if a %}Edit{% else %}New{% endif %} announcement — BDH HRIS{% endblock %}
+{% block content %}
+<h1>{% if a %}Edit draft{% else %}New announcement{% endif %}</h1>
+<div class="card" x-data="{ vis: '{{ form.visibility.value|default:'ALL' }}' }">
+  <form method="post" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="msg error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+    {% for field in form %}
+      {% if field.name == "sections" or field.name == "units" %}
+      <div class="field-block" x-show="vis === 'SELECTED'">
+        <span class="field-title">{{ field.label }}</span>
+        <div class="choice-columns">{{ field }}</div>
+        {% for e in field.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+      </div>
+      {% else %}
+      <div class="field-block">
+        <label class="field-title" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} *{% endif %}</label>
+        {% if field.name == "visibility" %}<select name="visibility" id="{{ field.id_for_label }}" x-model="vis">{% for v, l in field.field.choices %}<option value="{{ v }}" {% if field.value == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+        {% else %}{{ field }}{% endif %}
+        {% if field.help_text %}<p class="field-help">{{ field.help_text }}</p>{% endif %}
+        {% if field.name == "pdf" %}<p class="field-help">PDF only, max 10 MB.</p>{% endif %}
+        {% for e in field.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+      </div>
+      {% endif %}
+    {% endfor %}
+    <div class="field-block"><button type="submit">Save draft</button></div>
+  </form>
+</div>
+{% endblock %}

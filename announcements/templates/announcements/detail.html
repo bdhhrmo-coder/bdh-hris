@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% load badges %}
+{% block title %}{{ a.title }} — BDH HRIS{% endblock %}
+{% block content %}
+<p><a href="{% url 'announcements:list' %}">&larr; Announcements</a>{% if can_manage %} &middot; <a href="{% url 'announcements:manage' %}">Manage</a>{% endif %}</p>
+<div class="split-row"><h1>{{ a.title }}</h1>{% if can_manage %}<span class="badge {% if a.status == 'PUBLISHED' %}badge-approved{% elif a.status == 'DRAFT' %}badge-pending{% else %}badge-not-approved{% endif %}">{{ a.get_status_display }}</span>{% endif %}</div>
+<div class="card">
+  <table>
+    <tr><th>Type</th><td>{{ a.get_announcement_type_display }}</td></tr>
+    {% if a.reference_no %}<tr><th>Reference no.</th><td>{{ a.reference_no }}</td></tr>{% endif %}
+    <tr><th>Date issued</th><td>{{ a.date_issued|date:"F j, Y" }}</td></tr>
+    <tr><th>Effective</th><td>{{ a.effective_date|date:"F j, Y" }}</td></tr>
+    {% if a.expiry_date %}<tr><th>Expires</th><td>{{ a.expiry_date|date:"F j, Y" }}</td></tr>{% endif %}
+    <tr><th>For</th><td>{% if a.visibility == "ALL" %}All staff{% else %}{% for s in a.sections.all %}{{ s.name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% if a.sections.exists and a.units.exists %}; {% endif %}{% for u in a.units.all %}{{ u.name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</td></tr>
+  </table>
+  <p style="white-space:pre-line; margin-top:1rem;">{{ a.summary }}</p>
+  {% if a.pdf %}<p><a class="btn btn-secondary" href="{% url 'announcements:pdf' a.pk %}">Open the signed copy (PDF)</a></p>{% endif %}
+  <p class="field-help">The signed original is the authority; this is a notice of it.</p>
+</div>
+{% if can_manage %}
+<div class="card">
+  <h2 style="margin-top:0;">Manage</h2>
+  <div class="row-actions">
+    {% if a.status == "DRAFT" %}
+      <a class="btn btn-secondary" href="{% url 'announcements:edit' a.pk %}">Edit draft</a>
+      <form method="post" action="{% url 'announcements:publish' a.pk %}" data-confirm="Publish this announcement? The staff who can see it will be notified." data-confirm-ok="Publish">{% csrf_token %}<button type="submit">Publish</button></form>
+    {% elif a.status == "PUBLISHED" %}
+      <form method="post" action="{% url 'announcements:archive' a.pk %}" data-confirm="Archive this announcement? It will no longer show to staff." data-confirm-ok="Archive">{% csrf_token %}<button type="submit" class="btn-secondary">Archive</button></form>
+    {% endif %}
+  </div>
+  <h3>History</h3>
+  <table>
+    <tr><th>When</th><th>Action</th><th>By</th><th>Notes</th></tr>
+    {% for h in history %}<tr><td>{{ h.acted_at|date:"M j, Y g:i A" }}</td><td>{{ h.action|capfirst }}</td><td>{% if h.acted_by %}{{ h.acted_by.employee.full_name|default:h.acted_by.username }}{% else %}System{% endif %}</td><td>{{ h.notes|default:"—" }}</td></tr>{% endfor %}
+  </table>
+</div>
+{% endif %}
+{% endblock %}
