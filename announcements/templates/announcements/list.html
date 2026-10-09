@@ -5,7 +5,13 @@
   <h1>Announcements</h1>
   {% if can_manage %}<a class="btn" href="{% url 'announcements:manage' %}">Manage announcements</a>{% endif %}
 </div>
+<nav class="tab-row" aria-label="Announcements">
+  <a href="{% url 'announcements:list' %}" class="tab{% if not archive_tab %} is-active{% endif %}"{% if not archive_tab %} aria-current="page"{% endif %}>Current</a>
+  <a href="{% url 'announcements:list' %}?tab=archive" class="tab{% if archive_tab %} is-active{% endif %}"{% if archive_tab %} aria-current="page"{% endif %}>Archive</a>
+</nav>
+{% if archive_tab %}<p class="field-help">Archived items are kept for reference. They are no longer in effect.</p>{% endif %}
 <form method="get" class="filter-bar card">
+  {% if archive_tab %}<input type="hidden" name="tab" value="archive">{% endif %}
   <label>Type
     <select name="type" onchange="this.form.submit()">
       <option value="">All types</option>
@@ -18,10 +24,11 @@
   {% for a in announcements %}
   <article class="announcement-item">
     <p class="announcement-meta"><span class="badge badge-pending">{{ a.get_announcement_type_display }}</span>
+      {% if not a.in_effect %}<span class="badge badge-not-approved">No longer in effect</span>{% endif %}
       {% if a.reference_no %}{{ a.reference_no }} &middot; {% endif %}Issued {{ a.date_issued|date:"M j, Y" }} &middot; Effective {{ a.effective_date|date:"M j, Y" }}{% if a.expiry_date %} &middot; Until {{ a.expiry_date|date:"M j, Y" }}{% endif %}</p>
     <h3><a href="{% url 'announcements:detail' a.pk %}">{{ a.title }}</a></h3>
     <p>{{ a.summary|truncatechars:300 }}</p>
   </article>
-  {% empty %}<p class="empty-note">No announcements.</p>{% endfor %}
+  {% empty %}<p class="empty-note">{% if archive_tab %}Nothing archived yet.{% else %}No announcements.{% endif %}</p>{% endfor %}
 </div>
 {% endblock %}

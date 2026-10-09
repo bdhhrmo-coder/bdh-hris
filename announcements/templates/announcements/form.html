@@ -19,7 +19,6 @@
         {% if field.name == "visibility" %}<select name="visibility" id="{{ field.id_for_label }}" x-model="vis">{% for v, l in field.field.choices %}<option value="{{ v }}" {% if field.value == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
         {% else %}{{ field }}{% endif %}
         {% if field.help_text %}<p class="field-help">{{ field.help_text }}</p>{% endif %}
-        {% if field.name == "pdf" %}<p class="field-help">PDF only, max 10 MB.</p>{% endif %}
         {% for e in field.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
       </div>
       {% endif %}

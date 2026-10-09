@@ -146,3 +146,36 @@ class AnnouncementTests(TestCase):
         self.assertRedirects(r, reverse("announcements:detail", args=[a.pk]), fetch_redirect_response=False)
         a.refresh_from_db()
         self.assertEqual(a.title, "Office hours")
+
+    def test_archived_stays_viewable_in_archive_tab_not_on_homepage(self):
+        self.post_new(title="Old dress code")
+        a = Announcement.objects.get()
+        services.publish(a, self.hradmin.user)
+        services.archive(a, self.hradmin.user)
+        self.client.force_login(self.labber.user)
+        self.assertNotContains(self.client.get(reverse("homepage:home")), "Old dress code")
+        self.assertNotContains(self.client.get(reverse("announcements:list")), "Old dress code")
+        archive = self.client.get(reverse("announcements:list") + "?tab=archive")
+        self.assertContains(archive, "Old dress code")
+        self.assertContains(archive, "No longer in effect")
+        detail = self.client.get(reverse("announcements:detail", args=[a.pk]))
+        self.assertContains(detail, "No longer in effect")
+
+    def test_archived_selected_section_item_stays_private(self):
+        self.post_new(visibility="SELECTED", sections=[self.lab.pk], title="Lab SOP")
+        a = Announcement.objects.get()
+        services.publish(a, self.hradmin.user)
+        services.archive(a, self.hradmin.user)
+        self.client.force_login(self.pharmer.user)
+        self.assertNotContains(self.client.get(reverse("announcements:list") + "?tab=archive"), "Lab SOP")
+        self.assertEqual(self.client.get(reverse("announcements:detail", args=[a.pk])).status_code, 404)
+
+    @override_settings(ANNOUNCEMENT_PDF_MAX_MB=12)
+    def test_announcement_pdf_limit_is_its_own_setting(self):
+        big = SimpleUploadedFile("Manual.pdf", b"%PDF-1.4 " + b"0" * (11 * 1024 * 1024), content_type="application/pdf")
+        self.post_new(pdf=big, title="Policy manual")  # 11 MB: over the usual 10 MB, under 12
+        self.assertTrue(Announcement.objects.filter(title="Policy manual").exists())
+        too_big = SimpleUploadedFile("Huge.pdf", b"%PDF-1.4 " + b"0" * (13 * 1024 * 1024), content_type="application/pdf")
+        r = self.post_new(pdf=too_big, title="Huge")
+        self.assertContains(r, "maximum is 12 MB")
+        self.assertFalse(Announcement.objects.filter(title="Huge").exists())

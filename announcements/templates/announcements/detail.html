@@ -2,8 +2,9 @@
 {% load badges %}
 {% block title %}{{ a.title }} — BDH HRIS{% endblock %}
 {% block content %}
-<p><a href="{% url 'announcements:list' %}">&larr; Announcements</a>{% if can_manage %} &middot; <a href="{% url 'announcements:manage' %}">Manage</a>{% endif %}</p>
+<p><a href="{% url 'announcements:list' %}{% if a.status == 'ARCHIVED' %}?tab=archive{% endif %}">&larr; Announcements</a>{% if can_manage %} &middot; <a href="{% url 'announcements:manage' %}">Manage</a>{% endif %}</p>
 <div class="split-row"><h1>{{ a.title }}</h1>{% if can_manage %}<span class="badge {% if a.status == 'PUBLISHED' %}badge-approved{% elif a.status == 'DRAFT' %}badge-pending{% else %}badge-not-approved{% endif %}">{{ a.get_status_display }}</span>{% endif %}</div>
+{% if a.status == "ARCHIVED" %}<div class="msg warning"><strong>No longer in effect.</strong> This item was archived{% if a.expiry_date %} (expiry date {{ a.expiry_date|date:"M j, Y" }}){% endif %} and is kept for reference only.</div>{% endif %}
 <div class="card">
   <table>
     <tr><th>Type</th><td>{{ a.get_announcement_type_display }}</td></tr>

@@ -48,12 +48,13 @@ def announcement_list(request):
     acting = get_acting_employee(request.user)
     services.archive_expired()
     t = _type_filter(request)
-    qs = Announcement.visible_to(acting)
+    archive_tab = request.GET.get("tab") == "archive"
+    qs = Announcement.visible_to(acting, Announcement.ARCHIVED if archive_tab else None)
     if t:
         qs = qs.filter(announcement_type=t)
     return render(request, "announcements/list.html", {
         "announcements": qs, "announcement_type": t, "announcement_types": Announcement.TYPE_CHOICES,
-        "can_manage": can_manage(acting),
+        "can_manage": can_manage(acting), "archive_tab": archive_tab,
     })
 
 

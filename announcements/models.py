@@ -67,16 +67,25 @@ class Announcement(models.Model):
         return f"{self.get_announcement_type_display()}: {self.title}"
 
     def is_visible_to(self, employee):
-        if self.status != self.PUBLISHED or employee is None:
+        """Published items, and archived ones (staff can still open them,
+        marked "No longer in effect" - owner decision 2026-10-09). Drafts
+        are never shown to staff."""
+        if self.status == self.DRAFT or employee is None:
             return False
         if self.visibility == self.ALL_STAFF:
             return True
         return (self.sections.filter(pk__in=employee.sections.values("pk")).exists()
                 or self.units.filter(pk__in=employee.units.values("pk")).exists())
 
+    @property
+    def in_effect(self):
+        return self.status == self.PUBLISHED
+
     @classmethod
-    def visible_to(cls, employee):
-        qs = cls.objects.filter(status=cls.PUBLISHED)
+    def visible_to(cls, employee, status=None):
+        """Current (published) items by default; status=ARCHIVED for the
+        Archive tab."""
+        qs = cls.objects.filter(status=status or cls.PUBLISHED)
         if employee is None:
             return qs.none()
         return qs.filter(

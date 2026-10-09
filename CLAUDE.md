@@ -240,7 +240,8 @@ These are decided by the project owner. Do not re-ask or change them without exp
 - `/hris/home/` is everyone's landing page. The watermark image shows **on the homepage only** (`HOME_WATERMARK_IMAGE`, none if unset).
 - KPI cards: Headcount (active, not archived); Absent Today (approved or recorded leave, or approved CTO, covering today — one per person; OB/OT/Travel excluded); Pending leave/CTO; Pending Applications plus "waiting for my action". **Biometric data never drives a homepage count.**
 - Visibility (server-enforced): HR sees everyone with the leave type; AO and COH see everyone as "Leave"/"CTO" only; Supervisors see own sections; employees see only the number / their own requests.
-- Announcements (Office Order, Policy, Activity): managed by the **HR Administrator only**; Draft → Published → Archived (auto-archive on expiry); editable only as a draft; optional signed PDF; all staff or selected sections/units; staff notified on publish; every change in the Audit Log.
+- Announcements (Office Order, Policy, Activity): managed by the **HR Administrator only**; Draft → Published → Archived (auto-archive on expiry); editable only as a draft; optional signed PDF (up to `ANNOUNCEMENT_PDF_MAX_MB`, default 50 MB — higher than the 10 MB limit elsewhere); all staff or selected sections/units; staff notified on publish; every change in the Audit Log.
+- Archived items stay viewable by the same audience on the Announcements page's **Archive** tab, marked "No longer in effect"; the homepage shows current items only (settled 2026-10-09).
 
 ---
 

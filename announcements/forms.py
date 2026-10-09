@@ -1,4 +1,5 @@
 from django import forms
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import UploadedFile
 
@@ -28,12 +29,18 @@ class AnnouncementForm(forms.ModelForm):
         self.fields["sections"].queryset = Section.objects.filter(is_active=True).order_by("name")
         self.fields["units"].queryset = Unit.objects.filter(is_active=True).order_by("name")
         self.fields["pdf"].widget.attrs["accept"] = ".pdf,application/pdf"
+        self.fields["pdf"].help_text = f"PDF only, up to {settings.ANNOUNCEMENT_PDF_MAX_MB} MB."
+        self.fields["expiry_date"].help_text = (
+            "Leave blank for policies and manuals that stay in effect until replaced. After this date the "
+            "item moves to the Archive tab, marked \"No longer in effect\".")
 
     def clean_pdf(self):
         f = self.cleaned_data.get("pdf")
         if isinstance(f, UploadedFile):
             # Same rules as every other upload (CLAUDE.md §10), PDF only here.
-            file_type = validate_upload(f, existing_active_count=0)
+            # Size limit is higher here (policy manuals), set in settings.
+            file_type = validate_upload(f, existing_active_count=0,
+                                        max_size_bytes=settings.ANNOUNCEMENT_PDF_MAX_MB * 1024 * 1024)
             if file_type != UploadedDocument.PDF:
                 raise ValidationError("Only a PDF of the signed copy is accepted here.")
         return f

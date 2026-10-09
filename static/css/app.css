@@ -713,3 +713,9 @@ a.kpi-card:hover, a.kpi-card:focus-visible { border-color: var(--navy-700); box-
 .my-day small { color: var(--gray-600, #6b7280); font-size: .7rem; }
 .my-day span { font-weight: 600; font-size: .7rem; white-space: nowrap; letter-spacing: -.02em; }
 .my-day.weekend { border-color: #c7d2e0; }
+
+/* -- Simple tabs (Announcements: Current / Archive) ---------------------------- */
+.tab-row { display: flex; gap: .25rem; border-bottom: 2px solid var(--gray-200, #e5e7eb); margin: .5rem 0 1rem; }
+.tab-row .tab { padding: .5rem 1rem; text-decoration: none; color: var(--gray-600, #6b7280); font-weight: 600;
+  border-bottom: 3px solid transparent; margin-bottom: -2px; }
+.tab-row .tab.is-active { color: var(--navy-800, #0b2c4d); border-bottom-color: var(--navy-800, #0b2c4d); }

@@ -256,6 +256,10 @@ CSRF_FAILURE_VIEW = "accounts.views.csrf_failure"
 # the month BEFORE the schedule month; HR can change it per schedule.
 SCHEDULE_CUTOFF_DAY = 20
 
+# Announcement attachments (signed Office Orders, policy manuals) may be
+# larger than the 10 MB limit for other uploads (owner decision 2026-10-09).
+ANNOUNCEMENT_PDF_MAX_MB = int(os.environ.get("BDH_HRIS_ANNOUNCEMENT_PDF_MAX_MB", "50"))
+
 HOME_WATERMARK_IMAGE = os.environ.get("BDH_HRIS_HOME_WATERMARK", "images/home-watermark.jpg")
 # Without this, Django shows its own built-in "Logged out" page (the Django
 # administration one), whose "Log in again" link goes to /admin/login/ - a

@@ -32,7 +32,7 @@ def _extension_of(filename):
     return filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
 
 
-def validate_upload(django_file, existing_active_count):
+def validate_upload(django_file, existing_active_count, max_size_bytes=None):
     """
     Raises ValidationError on any violation; otherwise returns the
     detected file_type (UploadedDocument.PDF/JPG/PNG) for the caller to
@@ -43,8 +43,9 @@ def validate_upload(django_file, existing_active_count):
     if existing_active_count >= MAX_FILES_PER_TRANSACTION:
         raise ValidationError(f"This transaction already has {MAX_FILES_PER_TRANSACTION} document(s) attached.")
 
-    if django_file.size > MAX_FILE_SIZE_BYTES:
-        raise ValidationError(f"File is too large — maximum is {MAX_FILE_SIZE_BYTES // (1024 * 1024)} MB.")
+    limit = max_size_bytes or MAX_FILE_SIZE_BYTES  # a caller may allow more (announcement PDFs)
+    if django_file.size > limit:
+        raise ValidationError(f"File is too large — maximum is {limit // (1024 * 1024)} MB.")
 
     ext = _extension_of(django_file.name)
     file_type = EXTENSION_TO_FILE_TYPE.get(ext)
