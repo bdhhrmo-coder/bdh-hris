@@ -212,6 +212,36 @@ These are decided by the project owner. Do not re-ask or change them without exp
   - Modifications to an already-approved schedule: 24–72 hours notice
   - Documented emergency: same-day filing allowed, with written follow-up within 24 hours
 
+### 8.1 Settled with duty schedules (2026-10-09, Batch 5)
+- Partners must hold the **same position**.
+- A must be on duty on date A and B on date B; A must be **off** on date B and B off on date A.
+- **Before the schedule is approved:** file at least **7 days before the schedule's cut-off date**, checked against the submitted schedule. The cut-off is set by HR per schedule (default: the 20th of the month before, `SCHEDULE_CUTOFF_DAY`). **After COH approval:** the 24-hour rule. Emergency: same day.
+- A date with no submitted schedule on file is not checked against a schedule (allowed as before, with a note).
+- At COH approval the swap is written into the schedule (giver → OFF, taker → the shift); every change is kept in the schedule's change history. If the schedule changed since filing, approval stops and the approver is told to return the request.
+
+---
+
+## 8A. Duty Schedules — Form BDH-ADM-AO-01F50, Revision 2 (settled 2026-10-09, Batch 5)
+
+- One schedule per section **or** unit per month; rows = employees, one shift code per day.
+- **Shift codes** are kept by the **HR Administrator** (seeded: 8-5 = 8 h, lunch 12–1; 7A-7P = 12 h; 7P-7A = 12 h night; OFF). Total Hours / Total Days come from the codes.
+- Prepared by the section/unit **Supervisor** (incl. OIC) **or HR**. Entry: monthly grid with dropdowns + "repeat pattern" tool, or the Excel template (F50 layout).
+- Routing (whole schedule): **Prepared → Reviewed (HR) → Recommending approval (AO) → Approved (COH) → Recorded (HR)**. A return needs a remark; the resubmitted schedule restarts at HR review. The preparer never acts on it later (so an HR-prepared schedule is reviewed and recorded by a different HR person).
+- **Locks at COH approval** (the approval date is stored per schedule). Shown in "My Schedule" and staff notified only after HR records it.
+- After approval, changes come only from an approved Exchange of Duty or an HR correction with a reason; both are logged (ScheduleChange, Audit Log).
+- Double-booking (same person on duty in two schedules on one day) is **flagged, not blocked**.
+- Printout: long bond landscape, **whole month on one page**, digital stamps for Prepared / Reviewed / Recommending Approval / Approved plus "Recorded by HR", from the action log (current cycle only).
+- Schedules are planned shifts, not attendance.
+
+---
+
+## 8B. Homepage and Announcements (settled 2026-10-09, Batch 4)
+
+- `/hris/home/` is everyone's landing page. The watermark image shows **on the homepage only** (`HOME_WATERMARK_IMAGE`, none if unset).
+- KPI cards: Headcount (active, not archived); Absent Today (approved or recorded leave, or approved CTO, covering today — one per person; OB/OT/Travel excluded); Pending leave/CTO; Pending Applications plus "waiting for my action". **Biometric data never drives a homepage count.**
+- Visibility (server-enforced): HR sees everyone with the leave type; AO and COH see everyone as "Leave"/"CTO" only; Supervisors see own sections; employees see only the number / their own requests.
+- Announcements (Office Order, Policy, Activity): managed by the **HR Administrator only**; Draft → Published → Archived (auto-archive on expiry); editable only as a draft; optional signed PDF; all staff or selected sections/units; staff notified on publish; every change in the Audit Log.
+
 ---
 
 ## 9. Attendance & Biometric Integration
