@@ -21,6 +21,7 @@ from django.contrib.auth.decorators import login_required
 from django.urls import include, path
 from django.views.generic import RedirectView
 
+from accounts import oic
 from accounts.views import BDHLoginView, BDHPasswordChangeView, home
 
 urlpatterns = [
@@ -34,6 +35,9 @@ urlpatterns = [
     path("hris/home/", include("homepage.urls")),
     path("login/", RedirectView.as_view(pattern_name="login", permanent=False, query_string=True)),
     path("admin/", admin.site.urls),
+    # Batch 7: Officer-in-Charge screen (accounts/oic.py)
+    path("oic/", oic.oic_home, name="oic_home"),
+    path("oic/<int:pk>/end/", oic.oic_end, name="oic_end"),
     path("employees/", include("employees.urls")),
     path("leave/", include("leave.urls")),
     path("cto/", include("cto.urls")),

@@ -77,6 +77,16 @@ class RoleAssignment(models.Model):
     )
     is_active = models.BooleanField(default=True)
 
+    # Batch 7: who entered an OIC designation, and who ended it early (the
+    # OIC screen, accounts/oic.py). Shown in the Audit Log.
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    ended_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    ended_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -89,8 +99,30 @@ class RoleAssignment(models.Model):
             label = f"{label} (OIC)"
         return f"{self.employee} — {label}"
 
+    @staticmethod
+    def in_force_q(on_date=None):
+        """Q filter: active, and on_date (default today) within start/end dates."""
+        from django.db.models import Q
+        from django.utils import timezone
+
+        day = on_date or timezone.localdate()
+        return (
+            Q(is_active=True)
+            & (Q(start_date__isnull=True) | Q(start_date__lte=day))
+            & (Q(end_date__isnull=True) | Q(end_date__gte=day))
+        )
+
+    @property
+    def scope_label(self):
+        label = dict(self.ROLE_CHOICES).get(self.role, self.role)
+        area = self.unit or self.section
+        return f"{label} — {area}" if area else label
+
     def clean(self):
         from django.core.exceptions import ValidationError
+
+        if self.start_date and self.end_date and self.end_date < self.start_date:
+            raise ValidationError("The end date cannot be before the start date.")
 
         if self.is_oic and self.role not in self.OIC_ELIGIBLE_ROLES:
             raise ValidationError(

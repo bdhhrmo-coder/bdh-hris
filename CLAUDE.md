@@ -56,6 +56,8 @@ Implemented as a **custom `Role` model tied to Employee** (not Django's built-in
 
 **OIC coverage:** Ad-hoc delegation triggered by the Supervisor themself (not pre-scheduled by HR Admin). One Supervisor can be designated OIC across multiple sections.
 
+**OIC rules (settled 2026-10-13, Batch 7):** the approver (Supervisor, AO or COH) designates the OIC on the **Officer-in-Charge (OIC)** screen (`/oic/`, `accounts/oic.py`), for one of their own role areas. Only an employee who already holds an active Supervisor role can be OIC. The OIC acts only between the start and end dates (every role assignment's dates are honoured, `RoleAssignment.in_force_q`). While the OIC is in force, the delegator's own assignment for that role and area is set aside (`Employee.active_role_assignments`), so the absent approver cannot act there and is not notified for it. "End now" cancels an upcoming OIC or ends a running one yesterday; nothing is deleted. Designations and early endings appear in the Audit Log (module "OIC Designation").
+
 ---
 
 ## 4. Organizational Structure
@@ -249,6 +251,7 @@ These are decided by the project owner. Do not re-ask or change them without exp
 
 - **Palette** (static/css/app.css `:root`): Royal Blue `#173D72` primary (top bar, headings, primary buttons); Gold `#E5B83F` accent (current-menu marker, highlights — never as text on white); Red `#C9363E` only for errors, returned/rejected status and urgent counts. Status colours: pending amber, approved green, returned/rejected red.
 - **Icons:** Lucide line icons (ISC licence) kept locally in `templates/components/icon_sprite.html`; `{% load ui %}{% icon "name" %}`. Always beside a text label.
+- **Menu additions (Batch 7, 2026-10-13):** My Profile (all), Profile Changes (HR Administrator) and Officer-in-Charge (approvers) under Approvals/My Requests; Import Biometric Attendance and Minor Attendance Correction (HR) under HR Administration.
 - **Menu:** defined in ONE place, `employees/navigation.py` (groups: Home, My Requests, Approvals, Workforce, Reports, HR Administration). Each item names the permission flag that decides visibility; pages keep their own server-side checks. Approvals show waiting counts. Notifications only via the header bell. "File for a Group" stays under My Requests. System Administrator gets "User Accounts and Roles" (Django admin).
 - **Below 1024 px** the menu opens from a "Menu" button in the header (there was previously no menu on phones).
 - Layout widths unchanged: content 1600 px, forms 880 px, tables full width.

@@ -134,6 +134,30 @@ def _rows_from_schedule_events():
     return rows
 
 
+def _rows_from_oic_designations():
+    """Batch 7: OIC designations made on the OIC screen (or in admin), and
+    early endings."""
+    from accounts.models import RoleAssignment
+
+    rows = []
+    for ra in RoleAssignment.objects.filter(is_oic=True).select_related(
+        "employee", "delegated_by__user", "section", "unit", "created_by", "ended_by"
+    ):
+        detail = (f"{ra.employee.full_name} as OIC, {ra.scope_label}, "
+                  f"{ra.start_date or '—'} to {ra.end_date or 'open'}, for {ra.delegated_by.full_name if ra.delegated_by else '—'}")
+        actor = ra.created_by or (ra.delegated_by.user if ra.delegated_by else None)
+        rows.append({
+            "timestamp": ra.created_at, "module": "OIC Designation", "action": "designate", "detail": detail,
+            "actor": actor, "employee_ids": {ra.employee_id}, "employee_display": ra.employee.full_name,
+        })
+        if ra.ended_at:
+            rows.append({
+                "timestamp": ra.ended_at, "module": "OIC Designation", "action": "end early", "detail": detail,
+                "actor": ra.ended_by, "employee_ids": {ra.employee_id}, "employee_display": ra.employee.full_name,
+            })
+    return rows
+
+
 def audit_rows(employee_id=None, module=None, date_from=None, date_to=None):
     """
     Merged, filtered, newest-first list of audit rows across all seven
@@ -153,6 +177,7 @@ def audit_rows(employee_id=None, module=None, date_from=None, date_to=None):
     rows += _rows_from_document_events(UploadedDocumentEvent.objects.all())
     rows += _rows_from_announcement_actions()
     rows += _rows_from_schedule_events()
+    rows += _rows_from_oic_designations()
 
     if employee_id:
         rows = [r for r in rows if employee_id in r["employee_ids"]]
@@ -177,4 +202,5 @@ MODULE_CHOICES = [
     "Documents",
     "Announcements",
     "Duty Schedule",
+    "OIC Designation",
 ]

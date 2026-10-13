@@ -175,8 +175,32 @@ class Employee(models.Model):
         return " ".join(p for p in parts if p)
 
     # --- Role helpers -----------------------------------------------------
-    def active_role_assignments(self):
-        return self.role_assignments.filter(is_active=True)
+    def active_role_assignments(self, on_date=None):
+        """
+        Role assignments in force on `on_date` (default: today).
+
+        Batch 7 (owner, 2026-10-13), OIC rules:
+          - an assignment counts only between its start_date and end_date
+            (blank = no limit), so an OIC starts and ends on its own dates;
+          - while an OIC designation made BY this employee is in force, this
+            employee's own assignment for the same role and the same
+            section/unit is set aside: the absent approver cannot act in the
+            area handed to the OIC (Phase 1 decision).
+        """
+        from accounts.models import RoleAssignment
+
+        qs = self.role_assignments.filter(RoleAssignment.in_force_q(on_date))
+        handed_over = list(
+            RoleAssignment.objects.filter(RoleAssignment.in_force_q(on_date), is_oic=True, delegated_by=self)
+            .values_list("role", "section_id", "unit_id")
+        )
+        if handed_over:
+            keep_out = [
+                ra.pk for ra in qs.filter(is_oic=False)
+                if (ra.role, ra.section_id, ra.unit_id) in handed_over
+            ]
+            qs = qs.exclude(pk__in=keep_out)
+        return qs
 
     def has_role(self, role_code):
         return self.active_role_assignments().filter(role=role_code).exists()

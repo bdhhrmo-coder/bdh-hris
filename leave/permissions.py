@@ -66,9 +66,13 @@ def employees_with_role(role_code):
     """
     from employees.models import Employee
 
-    employee_ids = RoleAssignment.objects.filter(role=role_code, is_active=True).values_list(
+    # Batch 7: same test as has_role (dates in force, OIC hand-over), so an
+    # OIC is notified only during the OIC period and the absent approver
+    # is not notified for the area handed over.
+    candidate_ids = set(RoleAssignment.objects.filter(role=role_code, is_active=True).values_list(
         "employee_id", flat=True
-    )
+    ))
+    employee_ids = [e.pk for e in Employee.objects.filter(pk__in=candidate_ids) if e.has_role(role_code)]
     return Employee.objects.filter(pk__in=employee_ids).distinct()
 
 

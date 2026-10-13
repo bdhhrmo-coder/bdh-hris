@@ -19,8 +19,10 @@ from accounts.models import RoleAssignment
 from auditlog.permissions import can_view_audit_log
 from dashboard.permissions import can_view_dashboard
 
+from accounts.oic import can_designate_oic
+
 from .context_processors import nav_links
-from .permissions import get_acting_employee
+from .permissions import can_review_profile_requests, get_acting_employee
 
 # (group key, group label, group icon, [ (label, url name, icon, flag) ])
 # flag: "all", or a key of the flags dict built in _flags().
@@ -37,6 +39,7 @@ MENU = [
         ("Official Business / Time / Travel / OT", "official_requests:my_requests", "briefcase", "all"),
         ("File for a Group", "official_requests:batch_file", "users-round", "can_file_batch"),
         ("My Schedule", "schedules:mine", "calendar-days", "all"),
+        ("My Profile", "employees:my_profile_edit_request", "user-round", "has_employee"),
     ]),
     ("approvals", "Approvals", "inbox", [
         ("Leave", "leave:leave_queue", "file-text", "approver"),
@@ -44,6 +47,8 @@ MENU = [
         ("Exchange of Duty", "exchange:exchange_queue", "repeat", "approver"),
         ("Attendance Correction", "attendance:correction_queue", "fingerprint", "correction_validator"),
         ("Official Business / Time / Travel / OT", "official_requests:request_queue", "briefcase", "approver"),
+        ("Profile Changes", "employees:profile_edit_request_queue", "clipboard-check", "can_review_profile_requests"),
+        ("Officer-in-Charge (OIC)", "oic_home", "calendar-clock", "can_designate_oic"),
     ]),
     ("workforce", "Workforce", "users", [
         ("Employees", "employees:employee_list", "user-round", "can_list_employees"),
@@ -55,6 +60,8 @@ MENU = [
     ]),
     ("admin", "HR Administration", "settings", [
         ("Data Import", "dataimport:home", "upload", "can_import_data"),
+        ("Import Biometric Attendance", "attendance:biometric_import", "fingerprint", "is_hr"),
+        ("Minor Attendance Correction", "attendance:minor_correction_create", "clipboard-check", "is_hr"),
         ("Manage Announcements", "announcements:manage", "megaphone", "can_manage_announcements"),
         ("Shift Codes", "schedules:shift_codes", "list", "can_manage_announcements"),
         ("User Accounts and Roles", "admin:index", "user-cog", "is_system_admin"),
@@ -73,6 +80,12 @@ def _flags(request, acting):
     f["approver"] = f.get("has_approval_role", False)
     f["correction_validator"] = f.get("has_approval_role", False) or f.get("is_ictu_staff", False)
     f["is_system_admin"] = acting is not None and acting.has_role(RoleAssignment.SYSTEM_ADMINISTRATOR)
+    # Batch 7: pages that had no menu link before.
+    f["has_employee"] = acting is not None
+    f["is_hr"] = acting is not None and (acting.has_role(RoleAssignment.HR_PROCESSOR)
+                                         or acting.has_role(RoleAssignment.HR_ADMINISTRATOR))
+    f["can_review_profile_requests"] = can_review_profile_requests(acting)
+    f["can_designate_oic"] = can_designate_oic(acting)
     f["all"] = True
     return f
 

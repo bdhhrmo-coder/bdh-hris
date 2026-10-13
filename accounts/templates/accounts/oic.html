@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Officer-in-Charge — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Officer-in-Charge (OIC)</h1>
+<p class="muted">Before you go on leave or travel, choose who acts on your approvals. The OIC acts only on the dates you set. During those dates you cannot act on the same area. End it early if you come back sooner.</p>
+
+{% if received %}
+<div class="card">
+  <h2 class="mt-0">You are OIC</h2>
+  <ul class="m-0">
+    {% for ra in received %}
+    <li>{{ ra.scope_label }}, for {{ ra.delegated_by.full_name }}, {{ ra.start_date|date:"M d, Y" }} to {{ ra.end_date|date:"M d, Y" }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="card form-card">
+  <h2 class="mt-0">Designate an OIC</h2>
+  <form method="post" novalidate class="form-2col">
+    {% include "schedules/_form_fields.html" %}
+    <div class="field-block"><button type="submit">Designate OIC</button></div>
+  </form>
+</div>
+
+<h2>My OIC designations</h2>
+<div class="card"><div class="table-scroll">
+<table>
+  <tr><th>OIC</th><th>Area</th><th>From</th><th>To</th><th>Status</th><th></th></tr>
+  {% for row in rows %}
+  <tr>
+    <td>{{ row.ra.employee.full_name }}</td>
+    <td>{{ row.ra.scope_label }}</td>
+    <td>{{ row.ra.start_date|date:"M d, Y" }}</td>
+    <td>{{ row.ra.end_date|date:"M d, Y" }}</td>
+    <td>{{ row.status }}</td>
+    <td>
+      {% if row.status == "In force" or row.status == "Upcoming" %}
+      <form method="post" action="{% url 'oic_end' row.ra.pk %}" class="m-0">
+        {% csrf_token %}
+        <button type="submit" class="btn-secondary" data-confirm="End this OIC now? You will act on this area again.">End now</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="6" class="empty-note">No OIC designations yet.</td></tr>
+  {% endfor %}
+</table>
+</div></div>
+{% endblock %}
