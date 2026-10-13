@@ -44,6 +44,7 @@ def home(request):
         "watermark_url": watermark_url(),
     }
     ctx["waiting_total"] = sum(n for _, n, _ in ctx["waiting"])
+    ctx.update(_role_cards(acting, scope))
     try:
         from announcements.views import homepage_panel
 
@@ -51,6 +52,44 @@ def home(request):
     except ImportError:
         pass
     return render(request, "homepage/home.html", ctx)
+
+
+def _role_cards(acting, scope):
+    """Which Home cards this person gets (Batch 6, owner-approved arrangement,
+    max 5, actions first). Only existing data; the KPI rules are unchanged.
+      HR / AO / COH ("all"):  Waiting for my action, Absent today, Pending applications, Headcount
+      Supervisor ("sections"): Waiting for my action, Absent today, Pending in my sections
+      Everyone else ("self"):  [Waiting - ICTU] / [User accounts - System Administrator],
+                               My pending requests, Absent today (number), My balances, My schedule this week
+    """
+    from accounts.models import RoleAssignment
+    from employees.context_processors import _APPROVAL_ROLES
+
+    is_ictu = acting is not None and acting.has_role(RoleAssignment.ICTU_STAFF)
+    can_act = acting is not None and (is_ictu or any(acting.has_role(r) for r in _APPROVAL_ROLES))
+    personal = scope == "self"
+    ctx = {"show_waiting": can_act, "show_headcount": scope == "all", "show_personal": personal,
+           "show_accounts": acting is not None and acting.has_role(RoleAssignment.SYSTEM_ADMINISTRATOR)}
+    if personal and acting is not None:
+        from leave.balance_cards import balance_cards
+
+        ctx["my_balances"] = balance_cards(acting)
+        ctx["my_week"] = _my_week(acting)
+    return ctx
+
+
+def _my_week(acting):
+    """The next 7 days from RECORDED duty schedules (planned shifts, not
+    attendance). Empty list = no recorded schedule covers this week."""
+    from datetime import timedelta
+
+    from schedules.models import DutySchedule, ScheduleCell
+
+    today = timezone.localdate()
+    cells = (ScheduleCell.objects.filter(row__employee=acting, date__gte=today, date__lt=today + timedelta(days=7),
+                                         row__schedule__status=DutySchedule.RECORDED)
+             .select_related("shift").order_by("date"))
+    return [(c.date, c.shift.code if c.shift_id else "—") for c in cells]
 
 
 def _names_allowed(scope):

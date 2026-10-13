@@ -252,6 +252,9 @@ These are decided by the project owner. Do not re-ask or change them without exp
 - **Menu:** defined in ONE place, `employees/navigation.py` (groups: Home, My Requests, Approvals, Workforce, Reports, HR Administration). Each item names the permission flag that decides visibility; pages keep their own server-side checks. Approvals show waiting counts. Notifications only via the header bell. "File for a Group" stays under My Requests. System Administrator gets "User Accounts and Roles" (Django admin).
 - **Below 1024 px** the menu opens from a "Menu" button in the header (there was previously no menu on phones).
 - Layout widths unchanged: content 1600 px, forms 880 px, tables full width.
+- **Home cards per role** (max 5, actions first; `homepage/views.py _role_cards`; figure rules from 8B unchanged): HR/AO/COH — Waiting for my action, Absent today, Pending applications, Headcount. Supervisor — Waiting, Absent today (own sections), Pending in my sections. Employees (Regular/COSP) — My pending requests, Absent today (number), My balances, My schedule this week; ICTU Staff add Waiting (first); System Administrator adds a "User accounts and roles" card (Django admin) and no approval data.
+- **Dashboard:** 5 "At a glance" tiles (active employees, on leave today, on CTO today, pending applications, absenteeism rate), then sections that fold and remember their state (Workforce, Attendance and leave, Applications, Workforce profile) and Reports. No figure removed or duplicated; printing opens every section.
+- Wide tables on phones/tablets show a "scroll sideways" hint.
 
 ---
 

@@ -184,6 +184,42 @@
     return { top: top, h: h };
   }
 
+  // Folding sections that remember open/closed in this browser (Dashboard,
+  // Batch 6): <details data-remember="key">. Printing opens all of them so
+  // nothing is left out of a printout.
+  document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll("details[data-remember]").forEach(function (d) {
+      var key = "bdh-open-" + d.dataset.remember;
+      try { var v = localStorage.getItem(key); if (v !== null) d.open = v === "1"; } catch (e) { /* fine */ }
+      d.addEventListener("toggle", function () { try { localStorage.setItem(key, d.open ? "1" : "0"); } catch (e) {} });
+    });
+  });
+  window.addEventListener("beforeprint", function () {
+    document.querySelectorAll("details").forEach(function (d) { d.dataset.wasOpen = d.open ? "1" : "0"; d.open = true; });
+  });
+  window.addEventListener("afterprint", function () {
+    document.querySelectorAll("details[data-was-open]").forEach(function (d) { d.open = d.dataset.wasOpen === "1"; });
+  });
+
+  // Wide tables on phones/tablets (Batch 6 Step 4): when a card's table is
+  // wider than the screen, say so - action buttons often sit at the right.
+  function markScrollable() {
+    document.querySelectorAll(".app-main .card, .app-main .table-scroll").forEach(function (box) {
+      var wide = box.querySelector("table") && box.scrollWidth > box.clientWidth + 4;
+      var hint = box.querySelector(":scope > .scroll-hint");
+      if (wide && !hint) {
+        hint = document.createElement("p");
+        hint.className = "scroll-hint";
+        hint.textContent = "Swipe or scroll sideways to see all columns \u2192";
+        box.insertBefore(hint, box.firstChild);
+      } else if (!wide && hint) {
+        hint.remove();
+      }
+    });
+  }
+  document.addEventListener("DOMContentLoaded", markScrollable);
+  window.addEventListener("resize", function () { clearTimeout(markScrollable.t); markScrollable.t = setTimeout(markScrollable, 200); });
+
   // Menu groups (Batch 6): each group remembers open/closed in this browser;
   // the group holding the current page is always open. Saved state is
   // applied before the indicator is placed, so the bar lands on the link.

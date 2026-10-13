@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ui %}
 {% block title %}Dashboard — BDH HRIS{% endblock %}
 {% block content %}
 <h1>Dashboard</h1>
@@ -29,12 +30,34 @@
 
 <p class="muted">Showing <strong class="text-primary">{{ period_label }}</strong>{% if selected_section %} &mdash; {{ selected_section.name }}{% endif %}</p>
 
-<h2 class="section-title">Workforce</h2>
-<div class="kpi-grid">
+<h2 class="section-title">At a glance</h2>
+<div class="kpi-grid dash-top">
   <div class="kpi-tile">
     <div class="kpi-value">{{ workforce.active }}</div>
     <div class="kpi-label">Active employees</div>
   </div>
+  <div class="kpi-tile accent-teal">
+    <div class="kpi-value">{{ on_leave_today }}</div>
+    <div class="kpi-label">On leave today</div>
+  </div>
+  <div class="kpi-tile accent-teal">
+    <div class="kpi-value">{{ on_cto_today }}</div>
+    <div class="kpi-label">On CTO today</div>
+  </div>
+  <div class="kpi-tile accent-amber">
+    <div class="kpi-value">{{ totals.pending }}</div>
+    <div class="kpi-label">Pending applications ({{ period_label }})</div>
+  </div>
+  <div class="kpi-tile {% if absenteeism.over_target %}accent-red{% else %}accent-green{% endif %}">
+    <div class="kpi-value">{% if absenteeism.rate is not None %}{{ absenteeism.rate }}%{% else %}&mdash;{% endif %}</div>
+    <div class="kpi-label">Absenteeism rate (target &le; {{ absenteeism_target }}%)</div>
+  </div>
+</div>
+<p class="field-help">Open a section below for the details. Every figure from the previous Dashboard is still here.</p>
+
+<details class="dash-section" data-remember="dash-workforce">
+  <summary><h2>Workforce</h2>{% icon "chevron-down" "nav-chev" %}</summary>
+<div class="kpi-grid">
   <div class="kpi-tile accent-red">
     <div class="kpi-value">{{ workforce.separated }}</div>
     <div class="kpi-label">Separated ({{ period_label }})</div>
@@ -59,43 +82,15 @@
 {% if workforce.cosp_unassigned %}
 <p class="field-help">{{ workforce.cosp_unassigned }} active COSP employee(s) have no "COSP under" (PGP/LGU) recorded yet, so they are not in either COSP tile.</p>
 {% endif %}
-
-<h2 class="section-title">Attendance and leave ({{ period_label }})</h2>
+</details>
+<details class="dash-section" data-remember="dash-attendance">
+  <summary><h2>Attendance and leave ({{ period_label }})</h2>{% icon "chevron-down" "nav-chev" %}</summary>
 <div class="kpi-grid">
-  <div class="kpi-tile {% if absenteeism.over_target %}accent-red{% else %}accent-green{% endif %}">
-    <div class="kpi-value">{% if absenteeism.rate is not None %}{{ absenteeism.rate }}%{% else %}&mdash;{% endif %}</div>
-    <div class="kpi-label">Absenteeism rate (target &le; {{ absenteeism_target }}%)</div>
-  </div>
   <div class="kpi-tile accent-teal">
     <div class="kpi-value">{% if utilization.rate is not None %}{{ utilization.rate }}%{% else %}&mdash;{% endif %}</div>
     <div class="kpi-label">Leave utilization rate</div>
   </div>
-  <div class="kpi-tile accent-teal">
-    <div class="kpi-value">{{ on_leave_today }}</div>
-    <div class="kpi-label">On leave today</div>
-  </div>
-  <div class="kpi-tile accent-teal">
-    <div class="kpi-value">{{ on_cto_today }}</div>
-    <div class="kpi-label">On CTO today</div>
-  </div>
 </div>
-
-<h2 class="section-title">Applications ({{ period_label }})</h2>
-<div class="kpi-grid">
-  <div class="kpi-tile accent-amber">
-    <div class="kpi-value">{{ totals.pending }}</div>
-    <div class="kpi-label">Pending</div>
-  </div>
-  <div class="kpi-tile accent-green">
-    <div class="kpi-value">{{ totals.approved }}</div>
-    <div class="kpi-label">Approved</div>
-  </div>
-  <div class="kpi-tile accent-red">
-    <div class="kpi-value">{{ totals.not_approved }}</div>
-    <div class="kpi-label">Not approved</div>
-  </div>
-</div>
-
 <div class="card chart-card">
   <h2 class="mt-0">Absenteeism rate by section ({{ period_label }})</h2>
   <p class="field-help">Unplanned absence days &divide; scheduled workdays &times; 100. Target: {{ absenteeism_target }}% or lower (red bars are above target). Scheduled workdays = days with an attendance record; absences covered by approved leave, CTO, Official Business/Time or Travel are not counted as unplanned.</p>
@@ -124,48 +119,19 @@
     <tr><th>All sections</th><th>{{ utilization.used }}</th><th>{{ utilization.earned }}</th><th>{% if utilization.rate is not None %}{{ utilization.rate }}%{% else %}&mdash;{% endif %}</th></tr>
   </table>
 </div>
-
-<div class="card chart-card">
-  <h2 class="mt-0">Sex distribution (active employees)</h2>
-  <div class="split-row">
-    <div class="svg-chart-wrap" style="max-width:380px;">{{ sex_chart }}</div>
-    <table style="max-width:320px;">
-      <tr><th>Sex</th><th>Employees</th></tr>
-      {% for r in sex_rows %}<tr><td>{{ r.label }}</td><td>{{ r.count }}</td></tr>{% endfor %}
-    </table>
+</details>
+<details class="dash-section" data-remember="dash-applications">
+  <summary><h2>Applications ({{ period_label }})</h2>{% icon "chevron-down" "nav-chev" %}</summary>
+<div class="kpi-grid">
+  <div class="kpi-tile accent-green">
+    <div class="kpi-value">{{ totals.approved }}</div>
+    <div class="kpi-label">Approved</div>
   </div>
-  <h3>By section</h3>
-  <table>
-    <tr><th>Section</th>{% for l in sex_labels %}<th>{{ l }}</th>{% endfor %}<th>Total</th></tr>
-    {% for r in sex_by_section %}
-    <tr><td>{{ r.section.name }}</td>{% for c in r.counts %}<td>{{ c }}</td>{% endfor %}<td>{{ r.total }}</td></tr>
-    {% endfor %}
-  </table>
-</div>
-
-<div class="card chart-card">
-  <h2 class="mt-0">Age distribution (active employees)</h2>
-  <div class="svg-chart-wrap">{{ age_chart }}</div>
-  <table>
-    <tr>{% for r in age_rows %}<th>{{ r.label }}</th>{% endfor %}</tr>
-    <tr>{% for r in age_rows %}<td>{{ r.count }}</td>{% endfor %}</tr>
-  </table>
-</div>
-
-<div class="card">
-  <h2 class="mt-0">Highest educational attainment by section (active employees)</h2>
-  <div class="table-scroll">
-  <table>
-    <tr><th>Section</th>{% for c in education_columns %}<th>{{ c }}</th>{% endfor %}<th>Total</th></tr>
-    {% for r in education_rows %}
-    <tr><td>{{ r.section.name }}</td>{% for c in r.counts %}<td>{{ c }}</td>{% endfor %}<td>{{ r.total }}</td></tr>
-    {% endfor %}
-    <tr><th>All active employees</th>{% for c in education_total.counts %}<th>{{ c }}</th>{% endfor %}<th>{{ education_total.total }}</th></tr>
-  </table>
+  <div class="kpi-tile accent-red">
+    <div class="kpi-value">{{ totals.not_approved }}</div>
+    <div class="kpi-label">Not approved</div>
   </div>
-  <p class="field-help">"No record" = no education entry yet. "Not standardized" = an old free-text entry that needs its level picked on the employee's record.</p>
 </div>
-
 <div class="card chart-card">
   <h2 class="mt-0">Applications by status</h2>
   <div class="svg-chart-wrap" style="max-width: 380px;">{{ pie_chart }}</div>
@@ -206,7 +172,50 @@
     {% endfor %}
   </table>
 </div>
+</details>
+<details class="dash-section" data-remember="dash-demographics">
+  <summary><h2>Workforce profile (sex, age, education)</h2>{% icon "chevron-down" "nav-chev" %}</summary>
+<div class="card chart-card">
+  <h2 class="mt-0">Sex distribution (active employees)</h2>
+  <div class="split-row">
+    <div class="svg-chart-wrap" style="max-width:380px;">{{ sex_chart }}</div>
+    <table style="max-width:320px;">
+      <tr><th>Sex</th><th>Employees</th></tr>
+      {% for r in sex_rows %}<tr><td>{{ r.label }}</td><td>{{ r.count }}</td></tr>{% endfor %}
+    </table>
+  </div>
+  <h3>By section</h3>
+  <table>
+    <tr><th>Section</th>{% for l in sex_labels %}<th>{{ l }}</th>{% endfor %}<th>Total</th></tr>
+    {% for r in sex_by_section %}
+    <tr><td>{{ r.section.name }}</td>{% for c in r.counts %}<td>{{ c }}</td>{% endfor %}<td>{{ r.total }}</td></tr>
+    {% endfor %}
+  </table>
+</div>
 
+<div class="card chart-card">
+  <h2 class="mt-0">Age distribution (active employees)</h2>
+  <div class="svg-chart-wrap">{{ age_chart }}</div>
+  <table>
+    <tr>{% for r in age_rows %}<th>{{ r.label }}</th>{% endfor %}</tr>
+    <tr>{% for r in age_rows %}<td>{{ r.count }}</td>{% endfor %}</tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2 class="mt-0">Highest educational attainment by section (active employees)</h2>
+  <div class="table-scroll">
+  <table>
+    <tr><th>Section</th>{% for c in education_columns %}<th>{{ c }}</th>{% endfor %}<th>Total</th></tr>
+    {% for r in education_rows %}
+    <tr><td>{{ r.section.name }}</td>{% for c in r.counts %}<td>{{ c }}</td>{% endfor %}<td>{{ r.total }}</td></tr>
+    {% endfor %}
+    <tr><th>All active employees</th>{% for c in education_total.counts %}<th>{{ c }}</th>{% endfor %}<th>{{ education_total.total }}</th></tr>
+  </table>
+  </div>
+  <p class="field-help">"No record" = no education entry yet. "Not standardized" = an old free-text entry that needs its level picked on the employee's record.</p>
+</div>
+</details>
 <div class="card">
   <h2 class="mt-0">Reports</h2>
   <p class="btn-link-group" style="margin:0 0 0.4rem;">
