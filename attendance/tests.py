@@ -386,9 +386,11 @@ class FormalCorrectionFlowTests(TestCase):
 
     def test_ictu_staff_sidebar_shows_only_the_correction_queue(self):
         self.client.force_login(self.ictu.user)
-        html = self.client.get(reverse("notifications:notification_list")).content.decode()
-        self.assertIn("Attendance Correction Queue", html)
-        self.assertNotIn("Leave Queue", html)
+        # Batch 6: grouped menu - the Approvals group holds only the correction queue.
+        resp = self.client.get(reverse("notifications:notification_list"))
+        approvals = [g for g in resp.context["nav_groups"] if g["key"] == "approvals"]
+        self.assertEqual([i["label"] for i in approvals[0]["items"]], ["Attendance Correction"])
+        self.assertNotIn(reverse("leave:leave_queue"), resp.content.decode())
 
 
 class MultiDateCorrectionTests(TestCase):

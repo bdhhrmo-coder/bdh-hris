@@ -1,4 +1,4 @@
-{% load static %}
+{% load static ui %}
 <!doctype html>
 <html lang="en">
 <head>
@@ -13,8 +13,13 @@
 <body class="{% block body_class %}{% endblock %}">
   {% if user.is_authenticated %}
     {# Batch 4 (owner decision 2026-10-09): no watermark on working screens; the homepage has its own. #}
-    <div class="app-shell">
+    {% include "components/icon_sprite.html" %}
+    <div class="app-shell" x-data="{ navOpen: false }" @keydown.escape.window="navOpen = false">
       <header class="app-topbar">
+        <button type="button" class="menu-button" @click="navOpen = !navOpen" :aria-expanded="navOpen.toString()"
+                aria-controls="app-sidebar">
+          {% icon "menu" %}<span>Menu</span>
+        </button>
         <img class="brand-logo" src="{% static 'images/bdh-logo.png' %}" alt="Bataraza District Hospital">
         <div class="brand-text">
           HRIS
@@ -45,53 +50,28 @@
           </form>
         </div>
       </header>
-      <aside class="app-sidebar">
+      <aside class="app-sidebar" id="app-sidebar" :class="{ 'is-open': navOpen }" aria-label="Main menu">
+        {% comment %}Menu comes from employees/navigation.py (one place to edit). Groups fold open/closed;
+           the one holding the current page opens itself. Batch 6, owner decisions 2026-10-13.{% endcomment %}
         <nav>
-          <a href="{% url 'homepage:home' %}">Home</a>
-          {% if can_view_dashboard %}<a href="{% url 'dashboard:dashboard_home' %}">Dashboard</a>{% endif %}
-          {% if can_list_employees %}<a href="{% url 'employees:employee_list' %}">Employees</a>{% endif %}
-          <a href="{% url 'announcements:list' %}">Announcements</a>
-          <a href="{% url 'schedules:mine' %}">My Schedule</a>
-          {% if can_view_schedules %}<a href="{% url 'schedules:list' %}">Duty Schedules</a>{% endif %}
-          <a href="{% url 'notifications:notification_list' %}">
-            Notifications
-            <span class="count" x-data x-show="$store.notif.count" x-text="$store.notif.label"
-                  {% if not unread_notification_count %}style="display:none"{% endif %}>{{ unread_notification_label }}</span>
-          </a>
-
-          <p class="nav-section-label">My Requests</p>
-          <a href="{% url 'leave:my_applications' %}">Leave</a>
-          <a href="{% url 'cto:my_cto' %}">CTO</a>
-          <a href="{% url 'exchange:my_exchanges' %}">Exchange of Duty</a>
-          <a href="{% url 'attendance:my_attendance' %}">Attendance</a>
-          <a href="{% url 'official_requests:my_requests' %}">Official Business/Time/Travel/OT</a>
-          {% if can_file_batch %}<a href="{% url 'official_requests:batch_file' %}">File for a Group</a>{% endif %}
-
-          {% if has_approval_role %}
-          <p class="nav-section-label">Approvals</p>
-          <a href="{% url 'leave:leave_queue' %}">Leave Queue</a>
-          <a href="{% url 'cto:cto_queue' %}">CTO Queue</a>
-          <a href="{% url 'exchange:exchange_queue' %}">Exchange Queue</a>
-          <a href="{% url 'attendance:correction_queue' %}">Attendance Correction Queue</a>
-          <a href="{% url 'official_requests:request_queue' %}">Requests Queue</a>
-          {% elif is_ictu_staff %}
-          <p class="nav-section-label">Approvals</p>
-          <a href="{% url 'attendance:correction_queue' %}">Attendance Correction Queue</a>
-          {% endif %}
-
-          {% if can_import_data %}
-          <p class="nav-section-label">HR Tools</p>
-          <a href="{% url 'dataimport:home' %}">Data Import</a>
-          {% if can_manage_announcements %}<a href="{% url 'announcements:manage' %}">Manage Announcements</a>
-          <a href="{% url 'schedules:shift_codes' %}">Shift Codes</a>{% endif %}
-          {% endif %}
-
-          {% if can_view_audit_log %}
-          <p class="nav-section-label">Compliance</p>
-          <a href="{% url 'auditlog:audit_log' %}">Audit Log</a>
-          {% endif %}
+          {% for g in nav_groups %}
+          <details class="nav-group" data-group="{{ g.key }}"{% if g.open %} open data-has-current{% endif %}>
+            <summary>
+              {% icon g.icon %}<span class="nav-group-label">{{ g.label }}</span>
+              {% if g.count %}<span class="count" title="Waiting for your action">{{ g.count }}</span>{% endif %}
+              {% icon "chevron-down" "nav-chev" %}
+            </summary>
+            {% for item in g.items %}
+            <a href="{{ item.url }}"{% if item.current %} class="is-current" aria-current="page"{% endif %}>
+              {% icon item.icon %}<span>{{ item.label }}</span>
+              {% if item.count %}<span class="count">{{ item.count }}</span>{% endif %}
+            </a>
+            {% endfor %}
+          </details>
+          {% endfor %}
         </nav>
       </aside>
+      <div class="nav-backdrop" x-show="navOpen" x-transition.opacity @click="navOpen = false" style="display:none"></div>
       <main class="app-main">
   {% else %}
     <main class="guest-main">

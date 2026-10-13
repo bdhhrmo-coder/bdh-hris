@@ -245,6 +245,16 @@ These are decided by the project owner. Do not re-ask or change them without exp
 
 ---
 
+## 8C. Look and Navigation (settled 2026-10-13, Batch 6)
+
+- **Palette** (static/css/app.css `:root`): Royal Blue `#173D72` primary (top bar, headings, primary buttons); Gold `#E5B83F` accent (current-menu marker, highlights — never as text on white); Red `#C9363E` only for errors, returned/rejected status and urgent counts. Status colours: pending amber, approved green, returned/rejected red.
+- **Icons:** Lucide line icons (ISC licence) kept locally in `templates/components/icon_sprite.html`; `{% load ui %}{% icon "name" %}`. Always beside a text label.
+- **Menu:** defined in ONE place, `employees/navigation.py` (groups: Home, My Requests, Approvals, Workforce, Reports, HR Administration). Each item names the permission flag that decides visibility; pages keep their own server-side checks. Approvals show waiting counts. Notifications only via the header bell. "File for a Group" stays under My Requests. System Administrator gets "User Accounts and Roles" (Django admin).
+- **Below 1024 px** the menu opens from a "Menu" button in the header (there was previously no menu on phones).
+- Layout widths unchanged: content 1600 px, forms 880 px, tables full width.
+
+---
+
 ## 9. Attendance & Biometric Integration
 
 - BDH has an existing biometric system; exports are **CSV and Excel**

@@ -14,7 +14,7 @@
 
   Palette: official provincial-government navy (matches the CSC Form 6 /
   Palawan seal letterhead staff already recognize) as the primary color,
-  with a muted teal accent for a more current, less "1990s intranet" feel.
+  (2026-10-13: Royal Blue / Gold / Red brand palette - see :root.)
   Status colors (pending/approved/not-approved) are used consistently
   everywhere a request status appears — dashboard tiles, badges, tables.
 */
@@ -31,10 +31,16 @@
   --space-2: 16px;
   --space-3: 24px;
   --prose-max: 75ch;   /* readable line length for help text and paragraphs */
-  --navy-900: #0b2c4d;
-  --navy-800: #123a63;
-  --navy-700: #1a4b7a;
-  --navy-100: #e8eef5;
+  /* Brand palette (owner decision D1, 2026-10-13): Royal Blue primary, Gold
+     accent, Red only for errors / returned-rejected / urgent counts. The
+     variable names stay "navy-*" so existing rules keep working. */
+  --navy-900: #173d72;   /* Royal Blue: top bar, headings, primary buttons */
+  --navy-800: #1f4e8c;
+  --navy-700: #1e56a0;   /* links (contrast 7:1 on white) */
+  --navy-100: #e8eef8;
+  --gold-500: #e5b83f;   /* accent: current-menu marker, highlights (never text on white) */
+  --gold-100: #fbf3dc;
+  --white: #ffffff;
 
   --teal-600: #157a6e;
   --teal-100: #e3f3f0;
@@ -42,7 +48,7 @@
   --amber-600: #a3690a;
   --amber-100: #fdf1dc;
 
-  --red-700: #a3241f;
+  --red-700: #c9363e;   /* brand Red (contrast 4.9:1 on white) */
   --red-100: #fbe9e8;
 
   --green-700: #1f7a3d;
@@ -87,8 +93,10 @@ h1, h2, h3 {
   font-weight: 600;
   margin: 0 0 0.6em 0;
 }
-h1 { font-size: 1.5rem; }
-h2 { font-size: 1.15rem; margin-top: 1.6em; }
+/* Type scale (Batch 6): page title ~25px, section ~19px, body 15px, help 13px. */
+h1 { font-size: 1.65rem; }
+h2 { font-size: 1.25rem; margin-top: 1.6em; }
+h3 { font-size: 1.05rem; }
 
 /* --- App shell: top bar + sidebar --------------------------------- */
 
@@ -155,7 +163,7 @@ h2 { font-size: 1.15rem; margin-top: 1.6em; }
   height: 18px;
   padding: 0 5px;
   border-radius: 999px;
-  background: #d32f2f;
+  background: var(--red-700);
   color: #fff;
   font-size: 0.68rem;
   font-weight: 700;
@@ -164,14 +172,14 @@ h2 { font-size: 1.15rem; margin-top: 1.6em; }
   box-shadow: 0 0 0 2px var(--navy-900);
 }
 .notification-table tr.is-unread td { font-weight: 600; background: #f3f8fc; }
-.notification-table tr.is-unread td:first-child { box-shadow: inset 3px 0 0 var(--teal-600); }
+.notification-table tr.is-unread td:first-child { box-shadow: inset 3px 0 0 var(--gold-500); }
 .unread-dot {
   display: inline-block;
   width: 8px;
   height: 8px;
   margin-right: 0.45rem;
   border-radius: 50%;
-  background: #d32f2f;
+  background: var(--red-700);
   vertical-align: middle;
 }
 
@@ -245,9 +253,8 @@ h2 { font-size: 1.15rem; margin-top: 1.6em; }
   to { opacity: 1; transform: translateY(0); }
 }
 
-@media (max-width: 860px) {
-  .app-sidebar { display: none; }
-  .app-main { margin-left: 0; }
+@media (max-width: 1023px) {
+  .app-main { margin-left: 0; }   /* the menu becomes a slide-in panel (see "Menu button" below) */
 }
 @media (max-width: 639px) { .app-main { padding-left: var(--space-2); padding-right: var(--space-2); } }
 
@@ -339,7 +346,7 @@ h2 { font-size: 1.15rem; margin-top: 1.6em; }
   color: var(--gray-600);
   margin-top: 0.25rem;
 }
-.kpi-tile.accent-teal   { border-left-color: var(--teal-600); }
+.kpi-tile.accent-teal   { border-left-color: var(--gold-500); }
 .kpi-tile.accent-amber  { border-left-color: var(--amber-600); }
 .kpi-tile.accent-green  { border-left-color: var(--green-700); }
 .kpi-tile.accent-red    { border-left-color: var(--red-700); }
@@ -459,7 +466,7 @@ input[type="checkbox"], input[type="radio"] {
 .field-block { margin-top: 1rem; }
 .field-block > .field-title { display: block; font-weight: 600; color: var(--gray-900); font-size: 0.9rem; }
 .field-block > .field-help { margin: 0.15rem 0 0; font-size: 0.8rem; color: var(--gray-600); }
-.field-error { color: #b71c1c; font-size: 0.82rem; margin-top: 0.25rem; }
+.field-error { color: var(--red-700); font-size: 0.82rem; margin-top: 0.25rem; }
 .time-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
 @media (max-width: 600px) { .time-row { grid-template-columns: 1fr; } .choice-row .choice-hint { display: none; } }
 
@@ -591,7 +598,7 @@ button:active, .btn:active { transform: scale(0.98); }
 }
 .balance-card.is-green  { --bc: #2e8b57; }
 .balance-card.is-yellow { --bc: #d9a400; }
-.balance-card.is-red    { --bc: #c62828; }
+.balance-card.is-red    { --bc: var(--red-700); }
 .balance-card.is-neutral { --bc: #9aa5b1; }
 .balance-card.is-selected { border-color: var(--navy-700); box-shadow: 0 0 0 2px var(--navy-700); }
 .balance-card p { margin: 0; }
@@ -677,7 +684,7 @@ tr.history-return td { background: #fff6dc; }
   pointer-events: none;
   z-index: -1;
 }
-@media (max-width: 860px) {
+@media (max-width: 1023px) {
   .home-watermark { left: 0; }   /* sidebar is hidden on small screens */
 }
 @media (max-aspect-ratio: 1/1) {
@@ -723,9 +730,9 @@ a.kpi-card:hover, a.kpi-card:focus-visible { border-color: var(--navy-700); box-
 .sched-scroll { max-height: 70vh; overflow: auto; }
 .sched-grid { border-collapse: separate; border-spacing: 0; font-size: .8rem; }
 .sched-grid th, .sched-grid td { padding: 2px 3px; text-align: center; border-bottom: 1px solid var(--gray-200, #e5e7eb); white-space: nowrap; }
-.sched-grid thead th { position: sticky; top: 0; background: var(--navy-100, #e8eef6); z-index: 2; }
+.sched-grid thead th { position: sticky; top: 0; background: var(--navy-100, var(--navy-100)); z-index: 2; }
 .sched-grid .sticky-col { position: sticky; left: 0; background: #fff; text-align: left; z-index: 1; min-width: 9.5rem; max-width: 12rem; white-space: normal; }
-.sched-grid thead .sticky-col { z-index: 3; background: var(--navy-100, #e8eef6); }
+.sched-grid thead .sticky-col { z-index: 3; background: var(--navy-100, var(--navy-100)); }
 .sched-grid th.weekend { background: #dfe6f0; }
 .sched-grid select { width: 4.1rem; font-size: .75rem; padding: 1px 2px; min-height: 0; }
 .sched-grid td.num { font-variant-numeric: tabular-nums; }
@@ -742,7 +749,7 @@ a.kpi-card:hover, a.kpi-card:focus-visible { border-color: var(--navy-700); box-
 .tab-row { display: flex; gap: .25rem; border-bottom: 2px solid var(--gray-200, #e5e7eb); margin: .5rem 0 1rem; }
 .tab-row .tab { padding: .5rem 1rem; text-decoration: none; color: var(--gray-600, #6b7280); font-weight: 600;
   border-bottom: 3px solid transparent; margin-bottom: -2px; }
-.tab-row .tab.is-active { color: var(--navy-800, #0b2c4d); border-bottom-color: var(--navy-800, #0b2c4d); }
+.tab-row .tab.is-active { color: var(--navy-800, var(--navy-900)); border-bottom-color: var(--navy-800, var(--navy-900)); }
 
 
 /* -- Page layout helpers (2026-10-09) ----------------------------------------
@@ -793,3 +800,66 @@ a.kpi-card:hover, a.kpi-card:focus-visible { border-color: var(--navy-700); box-
 :root { --form-max: 880px; }
 .form-card { max-width: var(--form-max); }
 .form-2col > p { margin: 0 0 var(--space-2); }     /* no blank gap at the top of the form */
+
+/* -- Icons and grouped menu (Batch 6, 2026-10-13) ------------------------------ */
+.icon { width: 18px; height: 18px; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 2;
+        stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; }
+.app-sidebar nav { position: relative; }
+.nav-group { margin-bottom: var(--space-1); }
+.nav-group > summary {
+  list-style: none; display: flex; align-items: center; gap: 0.5rem; cursor: pointer;
+  padding: 0.5rem 0.75rem; border-radius: var(--radius);
+  font-size: 0.74rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--gray-600);
+}
+.nav-group > summary::-webkit-details-marker { display: none; }
+.nav-group > summary:hover { background: var(--gray-100); color: var(--navy-900); }
+.nav-group > summary .icon { width: 16px; height: 16px; }
+.nav-group > summary .count { margin-left: auto; }
+.nav-group > summary .nav-chev { margin-left: auto; transition: transform var(--transition-fast); }
+.nav-group > summary .count + .nav-chev { margin-left: 0.35rem; }
+.nav-group[open] > summary .nav-chev { transform: rotate(180deg); }
+.nav-group > a { padding-left: 1.1rem; }
+.nav-group > a .icon { color: var(--navy-700); }
+.app-sidebar nav a:focus-visible, .nav-group > summary:focus-visible, .menu-button:focus-visible {
+  outline: 3px solid var(--gold-500); outline-offset: 1px;
+}
+.app-sidebar nav a .count, .nav-group > summary .count {
+  background: var(--red-700); color: #fff; font-size: 0.7rem; font-weight: 700; border-radius: 999px;
+  padding: 0.05rem 0.45rem; letter-spacing: 0; text-transform: none;
+}
+.app-sidebar nav a .count { margin-left: auto; }
+
+/* Menu button + slide-in menu below 1024px (there was no menu at all on phones). */
+.menu-button {
+  display: none; align-items: center; gap: 0.35rem; background: transparent; color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.35); border-radius: var(--radius); padding: 0.35rem 0.6rem;
+  font-size: 0.85rem; font-weight: 600; cursor: pointer;
+}
+.menu-button .icon { width: 20px; height: 20px; }
+.nav-backdrop { position: fixed; inset: var(--topbar-h) 0 0 0; background: rgba(15, 30, 55, 0.35); z-index: 8; }
+@media (max-width: 1023px) {
+  .menu-button { display: inline-flex; }
+  .app-sidebar {
+    display: block !important; z-index: 9; width: min(300px, 85vw);
+    transform: translateX(-105%); transition: transform 200ms ease; box-shadow: var(--shadow-md);
+  }
+  .app-sidebar.is-open { transform: translateX(0); }
+  .app-main { margin-left: 0; }
+}
+@media (min-width: 1024px) { .nav-backdrop { display: none !important; } }
+@media (prefers-reduced-motion: reduce) { .app-sidebar { transition: none; } }
+.app-sidebar nav a span:not(.count) { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 480px) {
+  .app-topbar .brand-text { display: none; }   /* room for Menu, bell, Change password, Log out */
+  .app-topbar .brand-logo { height: 34px; }
+  .menu-button { padding: 0.3rem 0.45rem; }
+}
+
+/* Small shared helpers (Batch 6) - replace one-off inline styles in templates. */
+.mt-0 { margin-top: 0 !important; }
+.mb-0 { margin-bottom: 0 !important; }
+.m-0 { margin: 0 !important; }
+.muted { color: var(--gray-600); }
+.text-danger { color: var(--red-700); }
+.text-primary { color: var(--navy-900); }
+.spread { justify-content: space-between; }

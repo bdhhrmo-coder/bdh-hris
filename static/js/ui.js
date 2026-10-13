@@ -184,17 +184,46 @@
     return { top: top, h: h };
   }
 
+  // Menu groups (Batch 6): each group remembers open/closed in this browser;
+  // the group holding the current page is always open. Saved state is
+  // applied before the indicator is placed, so the bar lands on the link.
+  var GROUPS_KEY = "bdh-nav-groups";
+  function savedGroups() {
+    try { return JSON.parse(localStorage.getItem(GROUPS_KEY) || "{}") || {}; } catch (e) { return {}; }
+  }
+  function saveGroups(nav) {
+    var state = {};
+    nav.querySelectorAll("details.nav-group").forEach(function (d) { state[d.dataset.group] = d.open; });
+    try { localStorage.setItem(GROUPS_KEY, JSON.stringify(state)); } catch (e) { /* not available: fine */ }
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     var nav = document.querySelector(".app-sidebar nav");
     if (!nav) return;
-    var link = currentNavLink(nav);
-    if (!link) return;
-    link.classList.add("is-current");
-    link.setAttribute("aria-current", "page");
-    var prev = null;
-    try { prev = JSON.parse(sessionStorage.getItem("bdh-nav") || "null"); } catch (e) { prev = null; }
-    var pos = placeIndicator(nav, link, prev);
-    try { sessionStorage.setItem("bdh-nav", JSON.stringify(pos)); } catch (e) { /* not available: no slide */ }
+    var saved = savedGroups();
+    nav.querySelectorAll("details.nav-group").forEach(function (d) {
+      if (!d.hasAttribute("data-has-current") && saved[d.dataset.group] !== undefined) d.open = saved[d.dataset.group];
+    });
+    var link = nav.querySelector("a.is-current") || currentNavLink(nav);
+    var pos = null;
+    if (link) {
+      link.classList.add("is-current");
+      link.setAttribute("aria-current", "page");
+      var prev = null;
+      try { prev = JSON.parse(sessionStorage.getItem("bdh-nav") || "null"); } catch (e) { prev = null; }
+      pos = placeIndicator(nav, link, prev);
+      try { sessionStorage.setItem("bdh-nav", JSON.stringify(pos)); } catch (e) { /* not available: no slide */ }
+    }
+    nav.querySelectorAll("details.nav-group").forEach(function (d) {
+      d.addEventListener("toggle", function () {
+        saveGroups(nav);
+        if (link) {  // groups above may have opened/closed: keep the bar on the current link
+          var ind = nav.querySelector(".nav-indicator");
+          if (ind) ind.style.display = link.offsetParent ? "" : "none";
+          if (link.offsetParent) placeIndicator(nav, link, null);
+        }
+      });
+    });
   });
 
   // ---------------------------------------------------------------------

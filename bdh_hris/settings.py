@@ -125,6 +125,7 @@ TEMPLATES = [
                 "dashboard.context_processors.dashboard_link",
                 "auditlog.context_processors.audit_log_link",
                 "employees.context_processors.nav_links",
+                "employees.navigation.sidebar_menu",
             ],
         },
     },
