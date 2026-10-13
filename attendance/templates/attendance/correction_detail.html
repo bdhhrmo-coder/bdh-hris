@@ -6,7 +6,7 @@
   <h1>Attendance correction</h1>
   {% status_badge correction.status correction.get_status_display %}
 </div>
-<p style="color:var(--gray-600); margin-top:0;">
+<p class="muted mt-0">
   {{ correction.employee.full_name }} &middot; {{ correction.get_correction_type_display }}
   {% if correction.validator %}&middot; Validator: {{ correction.validator_label }}{% endif %}
   &middot; Filed {{ correction.submitted_at|date:"M d, Y h:i A" }}
@@ -20,7 +20,7 @@
 {% endif %}
 
 <div class="card">
-  <h2 style="margin-top:0;">Dates ({{ lines|length }})</h2>
+  <h2 class="mt-0">Dates ({{ lines|length }})</h2>
   <div class="table-scroll">
   <table>
     <tr><th>Date</th><th>Correct time</th><th>Reason</th></tr>
@@ -37,7 +37,7 @@
 
 {% if actions %}
 <div class="card">
-  <h2 style="margin-top:0;">Your action (applies to all dates)</h2>
+  <h2 class="mt-0">Your action (applies to all dates)</h2>
   <form method="post" action="{% url 'attendance:correction_action' correction.pk %}" x-data="{ remark: '' }">
     {% csrf_token %}
     <label class="field-title" for="id_notes">Remark <span class="field-help">&mdash; required to return, optional otherwise</span></label>
@@ -59,7 +59,7 @@
 {% endif %}
 
 <div class="card">
-  <h2 style="margin-top:0;">History</h2>
+  <h2 class="mt-0">History</h2>
   <table>
     <tr><th>When</th><th>Action</th><th>By</th><th>Remark</th></tr>
     {% for a in history %}

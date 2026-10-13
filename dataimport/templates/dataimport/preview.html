@@ -2,7 +2,7 @@
 {% block title %}Check import — BDH HRIS{% endblock %}
 {% block content %}
 <h1>Check before saving: {{ title }}</h1>
-<p style="color:var(--gray-600);">File: {{ file_name }} — nothing has been saved yet.</p>
+<p class="muted">File: {{ file_name }} — nothing has been saved yet.</p>
 
 <div class="card">
   {% if error_rows %}
@@ -25,9 +25,9 @@
     <td>{{ p.row }}</td>
     <td>{{ p.employee_id }}</td>
     <td>{{ p.name }}</td>
-    <td>{% if p.errors %}<strong style="color:#b71c1c;">Error</strong>{% else %}{{ p.action|capfirst }}{% endif %}</td>
+    <td>{% if p.errors %}<strong class="text-danger">Error</strong>{% else %}{{ p.action|capfirst }}{% endif %}</td>
     <td>{{ p.changes|join:"; " }}</td>
-    <td style="color:#b71c1c;">{{ p.errors|join:" " }}</td>
+    <td class="text-danger">{{ p.errors|join:" " }}</td>
   </tr>
   {% empty %}
   <tr><td colspan="6" class="empty-note">The sheet has no rows.</td></tr>

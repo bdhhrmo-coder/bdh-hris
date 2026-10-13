@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Manage announcements — BDH HRIS{% endblock %}
 {% block content %}
-<div class="split-row" style="justify-content:space-between;">
+<div class="split-row spread">
   <h1>Manage announcements</h1>
   <a class="btn" href="{% url 'announcements:create' %}">+ New announcement</a>
 </div>
-<p style="color:var(--gray-600);">Encode each announcement from the signed original. Drafts are visible only here; publishing notifies the staff who can see it.</p>
+<p class="muted">Encode each announcement from the signed original. Drafts are visible only here; publishing notifies the staff who can see it.</p>
 <div class="card"><div class="table-scroll">
 <table>
   <tr><th>Issued</th><th>Type</th><th>Title</th><th>Visible to</th><th>Status</th></tr>

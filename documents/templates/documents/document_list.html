@@ -2,10 +2,10 @@
 {% block title %}Documents — BDH HRIS{% endblock %}
 {% block content %}
 <h1>Documents</h1>
-<p style="color:var(--gray-600);">{{ obj }}</p>
+<p class="muted">{{ obj }}</p>
 
 <div class="card">
-  <h2 style="margin-top:0;">Requirements</h2>
+  <h2 class="mt-0">Requirements</h2>
   <table>
     <tr><th>Document</th><th>Mandatory?</th><th>Status</th></tr>
     {% for row in requirement_status %}
@@ -25,7 +25,7 @@
 {% endif %}
 
 <div class="card">
-  <h2 style="margin-top:0;">Uploaded documents</h2>
+  <h2 class="mt-0">Uploaded documents</h2>
   {% if hidden_confidential_count %}
   <div class="locked-note">{{ hidden_confidential_count }} confidential document(s) attached are not shown to you.</div>
   {% endif %}

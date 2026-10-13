@@ -2,7 +2,7 @@
 {% block title %}{% if batch %}Edit group request #{{ batch.pk }}{% else %}File for a group{% endif %} — BDH HRIS{% endblock %}
 {% block content %}
 <h1>{% if batch %}Edit and resubmit group request #{{ batch.pk }}{% else %}File for a group{% endif %}</h1>
-<p style="color:var(--gray-600);">Travel, Official Business, or Authorized OT / rest-day / holiday work for several employees and dates at once. It is saved as one group request; each approver approves or returns the whole group.{% if batch %} After you resubmit, it starts again from the first approval step.{% endif %}</p>
+<p class="muted">Travel, Official Business, or Authorized OT / rest-day / holiday work for several employees and dates at once. It is saved as one group request; each approver approves or returns the whole group.{% if batch %} After you resubmit, it starts again from the first approval step.{% endif %}</p>
 
 {% if latest_return %}
 <div class="msg warning" role="status">
@@ -61,8 +61,8 @@
 
   {% if conflicts %}
   <div class="card conflict-card">
-    <h2 style="margin-top:0;">Conflicts found ({{ conflicts|length }})</h2>
-    <p class="field-help" style="margin-top:0;">These employees already have something on that date. The ticked lines will be removed when you click <strong>Remove ticked and file</strong>. Untick a line only if you have fixed it some other way &mdash; it will be checked again.</p>
+    <h2 class="mt-0">Conflicts found ({{ conflicts|length }})</h2>
+    <p class="field-help mt-0">These employees already have something on that date. The ticked lines will be removed when you click <strong>Remove ticked and file</strong>. Untick a line only if you have fixed it some other way &mdash; it will be checked again.</p>
     <div class="table-scroll">
     <table>
       <tr><th>Remove</th><th>Employee</th><th>Date</th><th>Conflict</th></tr>
@@ -81,7 +81,7 @@
   {% endif %}
 
   <div class="card">
-    <h2 style="margin-top:0;">1. Type and purpose</h2>
+    <h2 class="mt-0">1. Type and purpose</h2>
     <div class="batch-header-grid">
       <label>Type
         <select name="kind" x-model="kind" {% if batch %}disabled{% endif %}>
@@ -103,7 +103,7 @@
   </div>
 
   <div class="card">
-    <h2 style="margin-top:0;">2. Employees <span class="field-help" x-text="'(' + selected.length + ' selected)'"></span></h2>
+    <h2 class="mt-0">2. Employees <span class="field-help" x-text="'(' + selected.length + ' selected)'"></span></h2>
     {% for e in form.employees.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
     <div class="picker-tools">
       <input type="search" x-model="search" placeholder="Search name…" aria-label="Search employees">
@@ -128,7 +128,7 @@
   </div>
 
   <div class="card">
-    <h2 style="margin-top:0;">3. Dates and times</h2>
+    <h2 class="mt-0">3. Dates and times</h2>
     <label class="inline-check"><input type="checkbox" name="apply_same" x-model="applySame"> Apply the same schedule to all selected employees</label>
     <p class="field-help" x-show="!applySame">Each line is for one employee &mdash; choose who on each line.</p>
     <p class="field-help" x-show="workKind">Time start and time end are required for OT / rest-day / holiday work. An end time earlier than the start means the next day.</p>
@@ -176,7 +176,7 @@
 
 {% if my_batches and not batch %}
 <div class="card">
-  <h2 style="margin-top:0;">Group requests I filed</h2>
+  <h2 class="mt-0">Group requests I filed</h2>
   <table>
     <tr><th>#</th><th>Type</th><th>Filed</th><th>Status</th></tr>
     {% for b in my_batches %}

@@ -3,7 +3,7 @@
 {% block content %}
 <p><a href="{% url 'homepage:home' %}">&larr; Home</a></p>
 <h1>{{ title }} <small class="as-of">({{ rows|length }} &middot; as of {{ as_of|date:"M j, Y g:i A" }})</small></h1>
-<p style="color:var(--gray-600);">{{ note }}{% if scope == "sections" %} Showing your sections only.{% endif %}</p>
+<p class="muted">{{ note }}{% if scope == "sections" %} Showing your sections only.{% endif %}</p>
 <div class="card">
 <div class="table-scroll">
 <table>

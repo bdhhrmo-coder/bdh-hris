@@ -7,7 +7,7 @@
 
 {% if pending_my_consent %}
 <div class="card">
-  <h2 style="margin-top:0;">Awaiting your consent</h2>
+  <h2 class="mt-0">Awaiting your consent</h2>
   <table>
     <tr><th>With</th><th>Your date</th><th>Their date</th><th>Reason</th><th>Decision</th></tr>
     {% for r in pending_my_consent %}
@@ -30,7 +30,7 @@
 {% endif %}
 
 <div class="card">
-  <h2 style="margin-top:0;">All my exchange requests</h2>
+  <h2 class="mt-0">All my exchange requests</h2>
   <table>
     <tr><th>Employee A</th><th>Date A</th><th>Employee B</th><th>Date B</th><th>Status</th><th>Filed</th><th>Documents</th><th>Form</th></tr>
     {% for r in requests %}

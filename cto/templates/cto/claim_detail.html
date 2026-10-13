@@ -5,7 +5,7 @@
 <h1>CTO claim</h1>
 
 <div class="card">
-  <p style="margin-top:0;">
+  <p class="mt-0">
     {% if entry.status == "CREDITED" %}<span class="badge badge-approved">Credited</span>{% else %}<span class="badge badge-pending">Draft — not yet credited</span>{% endif %}
   </p>
   <table>
@@ -23,7 +23,7 @@
 </div>
 
 <div class="card">
-  <h2 style="margin-top:0;">Required documents</h2>
+  <h2 class="mt-0">Required documents</h2>
   <table>
     {% for row in requirement_status %}
     <tr>
@@ -40,10 +40,10 @@
 {% if can_act %}
 <div class="card">
   {% if submission_errors %}
-  <h2 style="margin-top:0;">Not ready to submit</h2>
+  <h2 class="mt-0">Not ready to submit</h2>
   <ul>{% for e in submission_errors %}<li>{{ e }}</li>{% endfor %}</ul>
   {% else %}
-  <h2 style="margin-top:0;">Ready to submit</h2>
+  <h2 class="mt-0">Ready to submit</h2>
   {% endif %}
   <form method="post" action="{% url 'cto:claim_submit' entry.pk %}" style="display:inline;">
     {% csrf_token %}

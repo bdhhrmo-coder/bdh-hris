@@ -2,7 +2,7 @@
 {% block title %}Application Summary Report — BDH HRIS{% endblock %}
 {% block content %}
 <h1>Application Summary Report</h1>
-<p style="color:var(--gray-600);">Period: <strong style="color:var(--navy-900);">{{ period_label }}</strong>{% if selected_section %} — {{ selected_section.name }}{% endif %}</p>
+<p class="muted">Period: <strong class="text-primary">{{ period_label }}</strong>{% if selected_section %} — {{ selected_section.name }}{% endif %}</p>
 
 <div class="card">
   <form method="get" class="filter-bar">
@@ -34,7 +34,7 @@
 </p>
 
 <div class="card">
-  <h2 style="margin-top:0;">By request type</h2>
+  <h2 class="mt-0">By request type</h2>
   <table>
     <tr><th>Request type</th><th>Pending</th><th>Approved</th><th>Not approved</th></tr>
     {% for row in type_rows %}
@@ -55,7 +55,7 @@
 </div>
 
 <div class="card">
-  <h2 style="margin-top:0;">By department</h2>
+  <h2 class="mt-0">By department</h2>
   <table>
     <tr><th>Section</th><th>Headcount</th><th>Pending</th><th>Approved</th><th>Not approved</th></tr>
     {% for row in department_rows %}

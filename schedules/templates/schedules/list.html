@@ -1,18 +1,18 @@
 {% extends "base.html" %}
 {% block title %}Duty schedules — BDH HRIS{% endblock %}
 {% block content %}
-<div class="split-row" style="justify-content:space-between;">
+<div class="split-row spread">
   <h1>Duty schedules</h1>
   <div>
     {% if can_manage_codes %}<a class="btn btn-secondary" href="{% url 'schedules:shift_codes' %}">Shift codes</a>{% endif %}
     {% if can_create %}<a class="btn" href="{% url 'schedules:new' %}">+ New schedule</a>{% endif %}
   </div>
 </div>
-<p style="color:var(--gray-600);">Monthly Personnel Work Schedule (F50). Route: Prepared &rarr; Reviewed (HR) &rarr; Recommending approval (AO) &rarr; Approved (COH) &rarr; Recorded (HR). Staff see it in "My Schedule" once HR records it.</p>
+<p class="muted">Monthly Personnel Work Schedule (F50). Route: Prepared &rarr; Reviewed (HR) &rarr; Recommending approval (AO) &rarr; Approved (COH) &rarr; Recorded (HR). Staff see it in "My Schedule" once HR records it.</p>
 
 {% if waiting %}
 <div class="card">
-  <h2 style="margin-top:0;">Waiting for your action ({{ waiting|length }})</h2>
+  <h2 class="mt-0">Waiting for your action ({{ waiting|length }})</h2>
   <div class="table-scroll"><table>
     <tr><th>Section / unit</th><th>Month</th><th>Status</th><th></th></tr>
     {% for s in waiting %}

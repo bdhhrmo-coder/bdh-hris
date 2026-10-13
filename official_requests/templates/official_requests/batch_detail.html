@@ -6,7 +6,7 @@
   <h1>Group request #{{ batch.pk }} &middot; {{ batch.type_label }}</h1>
   {% status_badge batch.status batch.get_status_display %}
 </div>
-<p style="color:var(--gray-600); margin-top:0;">
+<p class="muted mt-0">
   Filed by {{ batch.filed_by.employee.full_name|default:batch.filed_by.username }} ({{ batch.get_filer_role_display }})
   on {{ batch.filed_at|date:"M d, Y h:i A" }}.<br>
   Route: {{ route|join:" → " }}{% if next_step %} &middot; <strong>Next: {{ next_step }}</strong>{% endif %}<br>
@@ -19,7 +19,7 @@
 {% endif %}
 
 <div class="card">
-  <p style="margin-top:0;"><strong>Purpose:</strong> {{ batch.purpose|linebreaksbr }}</p>
+  <p class="mt-0"><strong>Purpose:</strong> {{ batch.purpose|linebreaksbr }}</p>
   {% if batch.destination %}<p><strong>Destination:</strong> {{ batch.destination }}</p>{% endif %}
   <h2>Lines ({{ lines|length }})</h2>
   <div class="table-scroll">
@@ -42,7 +42,7 @@
 
 {% if actions %}
 <div class="card">
-  <h2 style="margin-top:0;">Your action (applies to the whole group)</h2>
+  <h2 class="mt-0">Your action (applies to the whole group)</h2>
   <form method="post" action="{% url 'official_requests:batch_action' batch.pk %}" x-data="{ remark: '' }">
     {% csrf_token %}
     <label class="field-title" for="id_notes">Remark <span class="field-help">&mdash; required to return, optional otherwise</span></label>
@@ -63,7 +63,7 @@
 {% endif %}
 
 <div class="card">
-  <h2 style="margin-top:0;">History</h2>
+  <h2 class="mt-0">History</h2>
   <table>
     <tr><th>When</th><th>Action</th><th>By</th><th>Remark</th></tr>
     {% for a in history %}

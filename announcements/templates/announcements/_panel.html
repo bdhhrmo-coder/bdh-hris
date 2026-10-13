@@ -1,6 +1,6 @@
 <div class="card">
   <div class="split-row" style="justify-content:space-between; gap:0.75rem;">
-    <h2 style="margin:0;">Announcements</h2>
+    <h2 class="m-0">Announcements</h2>
     <form method="get" class="announcement-filter" hx-get="{% url 'homepage:home' %}" hx-trigger="change"
           hx-target="#announcement-panel" hx-select="#announcement-panel" hx-swap="outerHTML">
       <label class="sr-only" for="ann-type">Type</label>

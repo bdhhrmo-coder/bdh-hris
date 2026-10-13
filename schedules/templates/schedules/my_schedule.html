@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}My schedule — BDH HRIS{% endblock %}
 {% block content %}
-<div class="split-row" style="justify-content:space-between;">
+<div class="split-row spread">
   <h1>My schedule — {{ first|date:"F Y" }}</h1>
   <div>
     <a class="btn btn-secondary btn-sm" href="?y={{ prev.year }}&m={{ prev.month }}">&larr; {{ prev|date:"M" }}</a>
@@ -10,8 +10,8 @@
 </div>
 {% for b in blocks %}
 <div class="card">
-  <div class="split-row" style="justify-content:space-between;">
-    <h2 style="margin:0;">{{ b.schedule.area_full_name }}</h2>
+  <div class="split-row spread">
+    <h2 class="m-0">{{ b.schedule.area_full_name }}</h2>
     <span><strong>{{ b.hours|floatformat:"-2" }}</strong> hours · <strong>{{ b.days }}</strong> duty days</span>
   </div>
   <div class="my-days">

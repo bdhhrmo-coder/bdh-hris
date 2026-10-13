@@ -4,7 +4,7 @@
 <p><a href="{% url 'homepage:home' %}">&larr; Home</a></p>
 <h1>{% if scope == "self" %}My pending requests{% elif scope == "sections" %}Pending in my sections{% else %}Pending applications{% endif %}
   <small class="as-of">({{ rows|length }} &middot; as of {{ as_of|date:"M j, Y g:i A" }})</small></h1>
-<p style="color:var(--gray-600);">Requests waiting at an approval step, oldest first. To act on one, use your Approvals queues.</p>
+<p class="muted">Requests waiting at an approval step, oldest first. To act on one, use your Approvals queues.</p>
 <div class="card">
 <div class="table-scroll">
 <table>

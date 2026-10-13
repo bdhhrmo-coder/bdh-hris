@@ -2,7 +2,7 @@
 {% block title %}Edit returned correction — BDH HRIS{% endblock %}
 {% block content %}
 <h1>Edit and resubmit</h1>
-<p style="color:var(--gray-600);">{{ correction.get_correction_type_display }} correction for {{ correction.employee.full_name }}. After you resubmit, it starts again from the first approval step.</p>
+<p class="muted">{{ correction.get_correction_type_display }} correction for {{ correction.employee.full_name }}. After you resubmit, it starts again from the first approval step.</p>
 {% if latest_return %}
 <div class="msg warning" role="status">
   <strong>Returned by {{ latest_return.acted_by.employee.full_name|default:latest_return.acted_by.username }}</strong>

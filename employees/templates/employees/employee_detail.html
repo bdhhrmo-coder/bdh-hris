@@ -38,7 +38,7 @@
   <tr><th>Active</th><td>{% if employee.is_active %}<span class="badge badge-approved">Active</span>{% else %}<span class="badge badge-not-approved">Inactive</span>{% endif %}</td></tr>
 </table>
 {% if can_edit or can_archive and not employee.archived_at %}
-  <p style="margin-bottom:0;" class="row-actions">
+  <p class="row-actions mb-0">
     {% if can_edit %}<a href="{% url 'employees:employee_edit' employee.pk %}" class="btn">Edit this record</a>{% endif %}
     {% if can_archive and not employee.archived_at %}
     <form method="post" action="{% url 'employees:employee_archive' employee.pk %}" style="display:inline;"

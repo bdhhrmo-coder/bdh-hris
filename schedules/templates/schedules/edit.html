@@ -2,7 +2,7 @@
 {% block title %}Edit schedule — {{ schedule }} — BDH HRIS{% endblock %}
 {% block content %}
 <p><a href="{% url 'schedules:detail' schedule.pk %}">&larr; Back to the schedule</a></p>
-<div class="split-row" style="justify-content:space-between;">
+<div class="split-row spread">
   <h1>{{ schedule.area_full_name }} — {{ schedule.month_label }}</h1>
   {% include "schedules/_status_badge.html" with s=schedule %}
 </div>
@@ -21,7 +21,7 @@
   {# Enter key = Save (the first submit button in a form is the default one). #}
   <button type="submit" name="then" value="save" class="sr-only" tabindex="-1" aria-hidden="true">Save</button>
   <div class="card">
-    <h2 style="margin-top:0;">Fill a pattern</h2>
+    <h2 class="mt-0">Fill a pattern</h2>
     <p class="field-help">Example: 3 days of 7A-7P then 3 days OFF, repeated to the end of the month. You can still change any day after.</p>
     <div class="pattern-tool">
       <label>Employee <select x-model="p.row"><option value="all">Everyone</option>
@@ -97,7 +97,7 @@
 </form>
 
 <div class="card">
-  <h2 style="margin-top:0;">Excel</h2>
+  <h2 class="mt-0">Excel</h2>
   <p class="field-help">Download the template (laid out like F50), fill the day columns, then upload it here. Uploading replaces the days in this grid.</p>
   <p><a class="btn btn-secondary" href="{% url 'schedules:excel_template' schedule.pk %}">Download Excel template</a></p>
   <form method="post" action="{% url 'schedules:excel_import' schedule.pk %}" enctype="multipart/form-data" data-working data-upload-text="Reading the schedule…">

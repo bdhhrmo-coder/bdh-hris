@@ -2,7 +2,7 @@
 {% block title %}{{ schedule }} — BDH HRIS{% endblock %}
 {% block content %}
 <p><a href="{% url 'schedules:list' %}">&larr; Duty schedules</a></p>
-<div class="split-row" style="justify-content:space-between;">
+<div class="split-row spread">
   <h1>{{ schedule.area_full_name }} — {{ schedule.month_label }}</h1>
   {% include "schedules/_status_badge.html" with s=schedule %}
 </div>
@@ -25,7 +25,7 @@
 
 {% if actions %}
 <div class="card">
-  <h2 style="margin-top:0;">Your action</h2>
+  <h2 class="mt-0">Your action</h2>
   <form method="post" action="{% url 'schedules:action' schedule.pk %}">
     {% csrf_token %}
     <div class="field-block">
@@ -61,7 +61,7 @@
 
 {% if can_correct %}
 <div class="card">
-  <h2 style="margin-top:0;">HR correction</h2>
+  <h2 class="mt-0">HR correction</h2>
   <p class="field-help">For an approved schedule only. The old value stays in the change history below, and the employee is notified.</p>
   <form method="post" action="{% url 'schedules:correct' schedule.pk %}" class="pattern-tool">
     {% csrf_token %}
@@ -76,7 +76,7 @@
 
 {% if changes %}
 <div class="card">
-  <h2 style="margin-top:0;">Changes after approval</h2>
+  <h2 class="mt-0">Changes after approval</h2>
   <div class="table-scroll"><table>
     <tr><th>When</th><th>Employee</th><th>Date</th><th>From</th><th>To</th><th>Reason</th><th>By</th></tr>
     {% for ch in changes %}
@@ -90,7 +90,7 @@
 {% endif %}
 
 <div class="card">
-  <h2 style="margin-top:0;">History</h2>
+  <h2 class="mt-0">History</h2>
   <div class="table-scroll"><table>
     <tr><th>When</th><th>Action</th><th>By</th><th>Remarks</th></tr>
     {% for h in history %}<tr><td>{{ h.acted_at|date:"M j, Y g:i A" }}</td><td>{{ h.action|capfirst }}</td><td>{{ h.acted_by.employee.full_name|default:h.acted_by.username }}</td><td>{{ h.notes|default:"—" }}</td></tr>{% endfor %}

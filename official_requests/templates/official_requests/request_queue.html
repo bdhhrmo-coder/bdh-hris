@@ -9,8 +9,8 @@
 
 {% if batches %}
 <div class="card">
-<h2 style="margin-top:0;">Group requests</h2>
-<p class="field-help" style="margin-top:0;">Approve or return the whole group. Open one to see every employee and date.</p>
+<h2 class="mt-0">Group requests</h2>
+<p class="field-help mt-0">Approve or return the whole group. Open one to see every employee and date.</p>
 <div class="table-scroll">
 <table>
   <tr><th>#</th><th>Type</th><th>Filed by</th><th>Lines</th><th>Purpose</th><th>Status</th><th></th></tr>
@@ -31,7 +31,7 @@
 {% endif %}
 
 <div class="card">
-<h2 style="margin-top:0;">Individual requests</h2>
+<h2 class="mt-0">Individual requests</h2>
 <table>
   <tr><th>Employee</th><th>Type</th><th>Dates</th><th>Purpose</th><th>Status</th><th>Action</th></tr>
   {% for r in requests %}

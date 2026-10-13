@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Announcements — BDH HRIS{% endblock %}
 {% block content %}
-<div class="split-row" style="justify-content:space-between;">
+<div class="split-row spread">
   <h1>Announcements</h1>
   {% if can_manage %}<a class="btn" href="{% url 'announcements:manage' %}">Manage announcements</a>{% endif %}
 </div>

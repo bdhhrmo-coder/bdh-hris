@@ -27,7 +27,7 @@
   </form>
 </div>
 
-<p style="color:var(--gray-600);">Showing <strong style="color:var(--navy-900);">{{ period_label }}</strong>{% if selected_section %} &mdash; {{ selected_section.name }}{% endif %}</p>
+<p class="muted">Showing <strong class="text-primary">{{ period_label }}</strong>{% if selected_section %} &mdash; {{ selected_section.name }}{% endif %}</p>
 
 <h2 class="section-title">Workforce</h2>
 <div class="kpi-grid">
@@ -97,7 +97,7 @@
 </div>
 
 <div class="card chart-card">
-  <h2 style="margin-top:0;">Absenteeism rate by section ({{ period_label }})</h2>
+  <h2 class="mt-0">Absenteeism rate by section ({{ period_label }})</h2>
   <p class="field-help">Unplanned absence days &divide; scheduled workdays &times; 100. Target: {{ absenteeism_target }}% or lower (red bars are above target). Scheduled workdays = days with an attendance record; absences covered by approved leave, CTO, Official Business/Time or Travel are not counted as unplanned.</p>
   <div class="svg-chart-wrap">{{ absenteeism_chart }}</div>
   <table>
@@ -113,7 +113,7 @@
 </div>
 
 <div class="card chart-card">
-  <h2 style="margin-top:0;">Leave utilization rate by section ({{ period_label }})</h2>
+  <h2 class="mt-0">Leave utilization rate by section ({{ period_label }})</h2>
   <p class="field-help">Leave days used &divide; leave days earned &times; 100, for VL, SL, COSP Leave and Wellness Leave. Earned = each employee's yearly entitlement pro-rated to the period.</p>
   <div class="svg-chart-wrap">{{ utilization_chart }}</div>
   <table>
@@ -126,7 +126,7 @@
 </div>
 
 <div class="card chart-card">
-  <h2 style="margin-top:0;">Sex distribution (active employees)</h2>
+  <h2 class="mt-0">Sex distribution (active employees)</h2>
   <div class="split-row">
     <div class="svg-chart-wrap" style="max-width:380px;">{{ sex_chart }}</div>
     <table style="max-width:320px;">
@@ -144,7 +144,7 @@
 </div>
 
 <div class="card chart-card">
-  <h2 style="margin-top:0;">Age distribution (active employees)</h2>
+  <h2 class="mt-0">Age distribution (active employees)</h2>
   <div class="svg-chart-wrap">{{ age_chart }}</div>
   <table>
     <tr>{% for r in age_rows %}<th>{{ r.label }}</th>{% endfor %}</tr>
@@ -153,7 +153,7 @@
 </div>
 
 <div class="card">
-  <h2 style="margin-top:0;">Highest educational attainment by section (active employees)</h2>
+  <h2 class="mt-0">Highest educational attainment by section (active employees)</h2>
   <div class="table-scroll">
   <table>
     <tr><th>Section</th>{% for c in education_columns %}<th>{{ c }}</th>{% endfor %}<th>Total</th></tr>
@@ -167,17 +167,17 @@
 </div>
 
 <div class="card chart-card">
-  <h2 style="margin-top:0;">Applications by status</h2>
+  <h2 class="mt-0">Applications by status</h2>
   <div class="svg-chart-wrap" style="max-width: 380px;">{{ pie_chart }}</div>
 </div>
 
 <div class="card chart-card">
-  <h2 style="margin-top:0;">Monthly trend</h2>
+  <h2 class="mt-0">Monthly trend</h2>
   <div class="svg-chart-wrap">{{ trend_chart }}</div>
 </div>
 
 <div class="card">
-  <h2 style="margin-top:0;">By request type ({{ period_label }})</h2>
+  <h2 class="mt-0">By request type ({{ period_label }})</h2>
   <table>
     <tr><th>Request type</th><th>Pending</th><th>Approved</th><th>Not approved</th></tr>
     {% for row in type_rows %}
@@ -192,7 +192,7 @@
 </div>
 
 <div class="card">
-  <h2 style="margin-top:0;">By department ({{ period_label }})</h2>
+  <h2 class="mt-0">By department ({{ period_label }})</h2>
   <table>
     <tr><th>Section</th><th>Headcount</th><th>Pending</th><th>Approved</th><th>Not approved</th></tr>
     {% for row in department_rows %}
@@ -208,14 +208,14 @@
 </div>
 
 <div class="card">
-  <h2 style="margin-top:0;">Reports</h2>
+  <h2 class="mt-0">Reports</h2>
   <p class="btn-link-group" style="margin:0 0 0.4rem;">
     <strong>Leave Balance Report</strong> &mdash;
     <a href="{% url 'dashboard:leave_balance_report' %}{% if selected_section %}?section={{ selected_section.pk }}{% endif %}">View</a>
     <a href="{% url 'dashboard:leave_balance_report' %}?format=xlsx{% if selected_section %}&section={{ selected_section.pk }}{% endif %}" data-download="Preparing the report…">Excel</a>
     <a href="{% url 'dashboard:leave_balance_report' %}?format=pdf{% if selected_section %}&section={{ selected_section.pk }}{% endif %}" data-download="Preparing the report…">PDF</a>
   </p>
-  <p class="btn-link-group" style="margin:0;">
+  <p class="btn-link-group m-0">
     <strong>Application Summary Report ({{ period_label }})</strong> &mdash;
     <a href="{% url 'dashboard:application_summary_report' %}?{{ get_params.urlencode }}">View</a>
     <a href="{% url 'dashboard:application_summary_report' %}?{{ get_params.urlencode }}&format=xlsx" data-download="Preparing the report…">Excel</a>
