@@ -54,7 +54,10 @@ def nav_links(request):
         "can_manage_announcements": acting_employee is not None
         and acting_employee.has_role(RoleAssignment.HR_ADMINISTRATOR),
         # Duty schedules (Batch 5): preparers (Supervisor, HR) and approvers (AO, COH).
-        "can_view_schedules": has_approval_role,
+        # View-only: an approver who handed an area to an OIC still sees schedules (Batch 7).
+        "can_view_schedules": acting_employee is not None and any(
+            acting_employee.has_role(role, viewing=True) for role in _APPROVAL_ROLES
+        ),
         # Group filing of Travel / OB / OT (Batch 2, Item 7): Supervisors and HR.
         "can_file_batch": acting_employee is not None and any(
             acting_employee.has_role(role) for role in

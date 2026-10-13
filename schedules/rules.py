@@ -20,14 +20,14 @@ STEPS = {
 RETURNABLE = {S.SUBMITTED, S.REVIEWED, S.RECOMMENDED}
 
 
-def _supervisor_assignments(acting):
-    return acting.active_role_assignments().filter(role=RoleAssignment.SUPERVISOR) if acting else []
+def _supervisor_assignments(acting, viewing=False):
+    return acting.active_role_assignments(viewing=viewing).filter(role=RoleAssignment.SUPERVISOR) if acting else []
 
 
-def supervises_area(acting, section=None, unit=None):
+def supervises_area(acting, section=None, unit=None, viewing=False):
     """Supervisor (incl. OIC) of this section, or of this unit, or of the
     unit's section, or hospital-wide."""
-    for ra in _supervisor_assignments(acting):
+    for ra in _supervisor_assignments(acting, viewing):
         if ra.section_id is None and ra.unit_id is None:
             return True
         if section is not None and ra.section_id == section.pk:
@@ -61,10 +61,10 @@ def can_edit(acting, user, schedule):
 def can_view(acting, user, schedule):
     if acting is None:
         return False
-    if schedule.prepared_by_id == user.pk or is_hr(acting) or is_administrative_officer(acting) \
-            or is_chief_of_hospital(acting):
+    if schedule.prepared_by_id == user.pk or is_hr(acting, True) or is_administrative_officer(acting, True) \
+            or is_chief_of_hospital(acting, True):
         return True
-    if supervises_area(acting, schedule.section, schedule.unit):
+    if supervises_area(acting, schedule.section, schedule.unit, viewing=True):
         return True
     return schedule.is_published and schedule.rows.filter(employee=acting).exists()
 

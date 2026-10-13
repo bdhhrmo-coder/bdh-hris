@@ -15,27 +15,31 @@ from employees.permissions import get_acting_employee  # re-exported for conveni
 from .models import LeaveApplication
 
 
-def _has_active_role(acting_employee, role_code):
+# viewing=True (Batch 7, owner 2026-10-13): use in VIEW-ONLY checks. An
+# approver who has handed an area to an OIC keeps view access to it but
+# cannot act on it; action checks keep the default viewing=False.
+
+def _has_active_role(acting_employee, role_code, viewing=False):
     if acting_employee is None:
         return False
-    return acting_employee.has_role(role_code)
+    return acting_employee.has_role(role_code, viewing=viewing)
 
 
-def is_hr(acting_employee):
-    return _has_active_role(acting_employee, RoleAssignment.HR_PROCESSOR) or _has_active_role(
-        acting_employee, RoleAssignment.HR_ADMINISTRATOR
+def is_hr(acting_employee, viewing=False):
+    return _has_active_role(acting_employee, RoleAssignment.HR_PROCESSOR, viewing) or _has_active_role(
+        acting_employee, RoleAssignment.HR_ADMINISTRATOR, viewing
     )
 
 
-def is_administrative_officer(acting_employee):
-    return _has_active_role(acting_employee, RoleAssignment.ADMINISTRATIVE_OFFICER)
+def is_administrative_officer(acting_employee, viewing=False):
+    return _has_active_role(acting_employee, RoleAssignment.ADMINISTRATIVE_OFFICER, viewing)
 
 
-def is_chief_of_hospital(acting_employee):
-    return _has_active_role(acting_employee, RoleAssignment.CHIEF_OF_HOSPITAL)
+def is_chief_of_hospital(acting_employee, viewing=False):
+    return _has_active_role(acting_employee, RoleAssignment.CHIEF_OF_HOSPITAL, viewing)
 
 
-def is_supervisor_of(acting_employee, target_employee):
+def is_supervisor_of(acting_employee, target_employee, viewing=False):
     """
     True if acting_employee holds an active Supervisor (or OIC-as-Supervisor)
     RoleAssignment whose section/unit overlaps the target's assignments.
@@ -44,7 +48,7 @@ def is_supervisor_of(acting_employee, target_employee):
         return False
     target_section_ids = set(target_employee.sections.values_list("id", flat=True))
     target_unit_ids = set(target_employee.units.values_list("id", flat=True))
-    for ra in acting_employee.active_role_assignments().filter(role=RoleAssignment.SUPERVISOR):
+    for ra in acting_employee.active_role_assignments(viewing=viewing).filter(role=RoleAssignment.SUPERVISOR):
         if ra.section_id is None and ra.unit_id is None:
             return True  # hospital-wide supervisor assignment
         if ra.section_id and ra.section_id in target_section_ids:
@@ -112,9 +116,10 @@ def can_view_application(acting_employee, application):
         return False
     if acting_employee.pk == application.employee_id:
         return True
-    if is_hr(acting_employee) or is_administrative_officer(acting_employee) or is_chief_of_hospital(acting_employee):
+    if is_hr(acting_employee, True) or is_administrative_officer(acting_employee, True) \
+            or is_chief_of_hospital(acting_employee, True):
         return True
-    return is_supervisor_of(acting_employee, application.employee)
+    return is_supervisor_of(acting_employee, application.employee, viewing=True)
 
 
 def visible_applications_for(acting_employee):

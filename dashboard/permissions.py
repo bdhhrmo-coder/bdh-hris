@@ -19,8 +19,8 @@ def can_view_dashboard(acting_employee):
     if acting_employee is None:
         return False
     return (
-        is_hr(acting_employee)
-        or is_administrative_officer(acting_employee)
-        or is_chief_of_hospital(acting_employee)
+        is_hr(acting_employee, True)
+        or is_administrative_officer(acting_employee, True)
+        or is_chief_of_hospital(acting_employee, True)
         or acting_employee.has_role(RoleAssignment.SYSTEM_ADMINISTRATOR)
     )

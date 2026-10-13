@@ -170,3 +170,47 @@ class NewMenuLinksTests(TestCase):
         self.client.force_login(emp.user)
         self.assertEqual(self.client.get(reverse("employees:profile_edit_request_queue")).status_code, 403)
         self.assertEqual(self.client.get(reverse("employees:my_profile_edit_request")).status_code, 200)
+
+
+class ViewOnlyDuringOICTests(TestCase):
+    """Owner, 2026-10-13: the absent approver keeps VIEW-ONLY access to the
+    area handed to the OIC, but cannot act on it."""
+
+    def setUp(self):
+        from leave.models import LeaveApplication, LeaveType
+
+        self.today = timezone.localdate()
+        self.lab = Section.objects.get(name="Laboratory Section")
+        self.head = person("vohead", R.SUPERVISOR, self.lab)
+        self.oic = person("vooic", R.SUPERVISOR, Section.objects.get(name="Pharmacy Section"))
+        self.ao = person("voao", R.ADMINISTRATIVE_OFFICER)
+        self.staff = person("vostaff")
+        self.staff.sections.add(self.lab)
+        R.objects.create(employee=self.oic, role=R.SUPERVISOR, section=self.lab, is_oic=True,
+                         delegated_by=self.head, start_date=self.today, end_date=self.today)
+        R.objects.create(employee=self.oic, role=R.ADMINISTRATIVE_OFFICER, is_oic=True,
+                         delegated_by=self.ao, start_date=self.today, end_date=self.today)
+        ltype = LeaveType.objects.filter(requires_full_routing=True).first()
+        self.app = LeaveApplication.objects.create(
+            employee=self.staff, leave_type=ltype, start_date=self.today, end_date=self.today, number_of_days=1)
+
+    def test_supervisor_can_view_but_not_act(self):
+        from leave.permissions import can_view_application, visible_applications_for
+
+        self.assertTrue(can_view_application(self.head, self.app))
+        self.assertNotIn(self.app, visible_applications_for(self.head))
+        self.assertIn(self.app, visible_applications_for(self.oic))
+
+    def test_ao_keeps_dashboard_and_audit_log_but_no_approvals(self):
+        from auditlog.permissions import can_view_audit_log
+        from dashboard.permissions import can_view_dashboard
+
+        self.assertTrue(can_view_dashboard(self.ao))
+        self.assertTrue(can_view_audit_log(self.ao))
+        self.assertFalse(is_administrative_officer(self.ao))
+        self.client.force_login(self.ao.user)
+        self.assertEqual(self.client.get(reverse("dashboard:dashboard_home")).status_code, 200)
+        groups = self.client.get("/hris/home/").context["nav_groups"]
+        labels = {g["label"]: [i["label"] for i in g["items"]] for g in groups}
+        self.assertIn("Dashboard", labels["Reports"])
+        self.assertEqual(labels["Approvals"], ["Officer-in-Charge (OIC)"])  # only the screen to end it early

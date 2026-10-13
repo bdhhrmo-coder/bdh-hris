@@ -64,7 +64,7 @@ def _areas_for(acting):
 @login_required
 def schedule_list(request):
     acting = _acting(request)
-    see_all = is_hr(acting) or is_administrative_officer(acting) or is_chief_of_hospital(acting)
+    see_all = is_hr(acting, True) or is_administrative_officer(acting, True) or is_chief_of_hospital(acting, True)
     qs = DutySchedule.objects.select_related("section", "unit")
     schedules = [s for s in qs if see_all or rules.can_view(acting, request.user, s)]
     sections, units = _areas_for(acting)

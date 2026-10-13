@@ -18,9 +18,10 @@ def can_view_request(acting_employee, official_request):
         return False
     if acting_employee.pk == official_request.employee_id:
         return True
-    if is_hr(acting_employee) or is_administrative_officer(acting_employee) or is_chief_of_hospital(acting_employee):
+    if is_hr(acting_employee, True) or is_administrative_officer(acting_employee, True) \
+            or is_chief_of_hospital(acting_employee, True):
         return True
-    return is_supervisor_of(acting_employee, official_request.employee)
+    return is_supervisor_of(acting_employee, official_request.employee, viewing=True)
 
 
 def actor_may_advance(acting_employee, official_request):

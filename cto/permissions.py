@@ -26,9 +26,10 @@ def can_view_cto_application(acting_employee, application):
         return False
     if acting_employee.pk == application.employee_id:
         return True
-    if is_hr(acting_employee) or is_administrative_officer(acting_employee) or is_chief_of_hospital(acting_employee):
+    if is_hr(acting_employee, True) or is_administrative_officer(acting_employee, True) \
+            or is_chief_of_hospital(acting_employee, True):
         return True
-    return is_supervisor_of(acting_employee, application.employee)
+    return is_supervisor_of(acting_employee, application.employee, viewing=True)
 
 
 def visible_cto_applications_for(acting_employee):

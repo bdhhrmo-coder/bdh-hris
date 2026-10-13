@@ -34,15 +34,17 @@ LEAVE_DONE = [LeaveApplication.APPROVED, LeaveApplication.RECORDED]
 def scope_for(acting_employee):
     if acting_employee is None:
         return "self"
-    if is_hr(acting_employee) or is_administrative_officer(acting_employee) or is_chief_of_hospital(acting_employee):
+    # View-only scope: an approver who handed an area to an OIC still sees it.
+    if is_hr(acting_employee, True) or is_administrative_officer(acting_employee, True) \
+            or is_chief_of_hospital(acting_employee, True):
         return "all"
-    if acting_employee.has_role("SUPERVISOR"):
+    if acting_employee.has_role("SUPERVISOR", viewing=True):
         return "sections"
     return "self"
 
 
 def shows_leave_type(acting_employee):
-    return acting_employee is not None and is_hr(acting_employee)
+    return acting_employee is not None and is_hr(acting_employee, True)
 
 
 def scoped_employee_ids(acting_employee, scope):
@@ -52,7 +54,7 @@ def scoped_employee_ids(acting_employee, scope):
     if scope == "sections":
         from official_requests.batch import supervised_employees
 
-        return set(supervised_employees(acting_employee).values_list("pk", flat=True))
+        return set(supervised_employees(acting_employee, viewing=True).values_list("pk", flat=True))
     return {acting_employee.pk} if acting_employee else set()
 
 

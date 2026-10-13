@@ -56,9 +56,13 @@ def can_view_transaction(acting_employee, obj):
         return False
     if is_owner(acting_employee, obj):
         return True
-    if _is_hr(acting_employee) or _is_administrative_officer(acting_employee) or _is_chief_of_hospital(acting_employee):
+    # View-only check: an approver who handed this area to an OIC can still see it.
+    if acting_employee.has_role(RoleAssignment.HR_PROCESSOR, viewing=True) \
+            or acting_employee.has_role(RoleAssignment.HR_ADMINISTRATOR, viewing=True) \
+            or acting_employee.has_role(RoleAssignment.ADMINISTRATIVE_OFFICER, viewing=True) \
+            or acting_employee.has_role(RoleAssignment.CHIEF_OF_HOSPITAL, viewing=True):
         return True
-    return any(is_supervisor_of(acting_employee, e) for e in _owned_employees(obj))
+    return any(is_supervisor_of(acting_employee, e, viewing=True) for e in _owned_employees(obj))
 
 
 def _owned_employees(obj):

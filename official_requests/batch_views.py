@@ -143,13 +143,13 @@ def batch_edit(request, pk):
 def can_view_batch(acting_employee, user, batch):
     if acting_employee is None:
         return False
-    if batch.filed_by_id == user.pk or is_hr(acting_employee) or is_administrative_officer(acting_employee) \
-            or is_chief_of_hospital(acting_employee):
+    if batch.filed_by_id == user.pk or is_hr(acting_employee, True) or is_administrative_officer(acting_employee, True) \
+            or is_chief_of_hospital(acting_employee, True):
         return True
     lines = list(batch.lines.select_related("employee"))
     if any(line.employee_id == acting_employee.pk for line in lines):
         return True
-    return any(is_supervisor_of(acting_employee, line.employee) for line in lines)
+    return any(is_supervisor_of(acting_employee, line.employee, viewing=True) for line in lines)
 
 
 @login_required

@@ -175,7 +175,7 @@ class Employee(models.Model):
         return " ".join(p for p in parts if p)
 
     # --- Role helpers -----------------------------------------------------
-    def active_role_assignments(self, on_date=None):
+    def active_role_assignments(self, on_date=None, viewing=False):
         """
         Role assignments in force on `on_date` (default: today).
 
@@ -186,10 +186,15 @@ class Employee(models.Model):
             employee's own assignment for the same role and the same
             section/unit is set aside: the absent approver cannot act in the
             area handed to the OIC (Phase 1 decision).
+          - viewing=True keeps that assignment for VIEW-ONLY checks (owner,
+            2026-10-13): the absent approver can still open records,
+            reports and the dashboard of that area, but cannot act on it.
         """
         from accounts.models import RoleAssignment
 
         qs = self.role_assignments.filter(RoleAssignment.in_force_q(on_date))
+        if viewing:
+            return qs
         handed_over = list(
             RoleAssignment.objects.filter(RoleAssignment.in_force_q(on_date), is_oic=True, delegated_by=self)
             .values_list("role", "section_id", "unit_id")
@@ -202,8 +207,9 @@ class Employee(models.Model):
             qs = qs.exclude(pk__in=keep_out)
         return qs
 
-    def has_role(self, role_code):
-        return self.active_role_assignments().filter(role=role_code).exists()
+    def has_role(self, role_code, viewing=False):
+        """viewing=True: for view-only checks (see active_role_assignments)."""
+        return self.active_role_assignments(viewing=viewing).filter(role=role_code).exists()
 
     def is_system_administrator(self):
         from accounts.models import RoleAssignment

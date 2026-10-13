@@ -129,11 +129,12 @@ def filing_role_for(acting_employee, kind):
     return None
 
 
-def supervised_employees(acting_employee):
-    """Active employees this Supervisor (or OIC) covers."""
+def supervised_employees(acting_employee, viewing=False):
+    """Active employees this Supervisor (or OIC) covers. viewing=True for
+    view-only use (homepage figures), see Employee.active_role_assignments."""
     qs = Employee.objects.filter(is_active=True)
     section_ids, unit_ids = set(), set()
-    for ra in acting_employee.active_role_assignments().filter(role=RoleAssignment.SUPERVISOR):
+    for ra in acting_employee.active_role_assignments(viewing=viewing).filter(role=RoleAssignment.SUPERVISOR):
         if ra.section_id is None and ra.unit_id is None:
             return qs  # hospital-wide assignment
         if ra.section_id:

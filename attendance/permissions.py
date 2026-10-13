@@ -42,11 +42,11 @@ def can_view_correction_request(acting_employee, correction_request):
         return False
     if acting_employee.pk == correction_request.employee_id:
         return True
-    if is_hr(acting_employee) or is_administrative_officer(acting_employee):
+    if is_hr(acting_employee, True) or is_administrative_officer(acting_employee, True):
         return True
     if correction_request.validated_by_ictu and is_ictu_staff(acting_employee):
         return True
-    return is_supervisor_of(acting_employee, correction_request.employee)
+    return is_supervisor_of(acting_employee, correction_request.employee, viewing=True)
 
 
 def visible_correction_requests_for(acting_employee):

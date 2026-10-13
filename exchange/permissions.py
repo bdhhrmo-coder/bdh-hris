@@ -16,14 +16,14 @@ def is_party_to(acting_employee, request):
     return acting_employee is not None and acting_employee.pk in (request.employee_a_id, request.employee_b_id)
 
 
-def is_supervisor_of_either_party(acting_employee, request):
+def is_supervisor_of_either_party(acting_employee, request, viewing=False):
     """A Supervisor of either employee_a or employee_b may endorse — the
     two employees have already given mutual consent by this point, so
     either party's supervisor endorsing is sufficient, keeping this in
     step with how a single Supervisor endorses a single applicant
     elsewhere in the system."""
-    return is_supervisor_of(acting_employee, request.employee_a) or is_supervisor_of(
-        acting_employee, request.employee_b
+    return is_supervisor_of(acting_employee, request.employee_a, viewing) or is_supervisor_of(
+        acting_employee, request.employee_b, viewing
     )
 
 
@@ -34,9 +34,10 @@ def can_view_exchange_request(acting_employee, request):
         return False
     if is_party_to(acting_employee, request):
         return True
-    if is_hr(acting_employee) or is_administrative_officer(acting_employee) or is_chief_of_hospital(acting_employee):
+    if is_hr(acting_employee, True) or is_administrative_officer(acting_employee, True) \
+            or is_chief_of_hospital(acting_employee, True):
         return True
-    return is_supervisor_of_either_party(acting_employee, request)
+    return is_supervisor_of_either_party(acting_employee, request, viewing=True)
 
 
 def visible_exchange_requests_for(acting_employee):
