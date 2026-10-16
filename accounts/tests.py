@@ -149,7 +149,8 @@ class PermanentLoginLinkTests(TestCase):
         self.assertEqual(reverse("login"), "/hris/login/")
         page = self.client.get("/hris/login/")
         self.assertEqual(page.status_code, 200)
-        self.assertContains(page, "Sign In")
+        self.assertContains(page, "Log in")
+        self.assertContains(page, "Version 1.0")  # Batch 9: version under "HRIS"
 
     def test_old_links_lead_to_the_new_login(self):
         for url in ("/", "/hris/", "/login/"):
@@ -191,7 +192,7 @@ class PermanentLoginLinkTests(TestCase):
                         follow=True)
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, "Session expired. Please log in again.")
-        self.assertContains(r, "Sign In")
+        self.assertContains(r, "Log in")
 
     def test_timed_out_session_says_session_expired(self):
         self.client.cookies["sessionid"] = "no-longer-valid"
