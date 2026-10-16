@@ -689,7 +689,7 @@ tr.history-return td { background: #fff6dc; }
    (PAGE_WATERMARK_FIXED) keeps it in the middle of the screen. Cards with a
    white background sit on top of it. */
 .page-watermark {
-  --wm-size: 300px;
+  --wm-size: 420px;
   position: absolute;
   top: calc(var(--topbar-h) + (100vh - var(--topbar-h)) / 2);
   left: calc(var(--sidebar-w) + (100% - var(--sidebar-w)) / 2);
@@ -717,7 +717,7 @@ tr.history-return td { background: #fff6dc; }
   .page-watermark { left: 50%; }
 }
 @media (max-width: 639px) {
-  .page-watermark { --wm-size: 160px; }
+  .page-watermark { --wm-size: 220px; }
 }
 
 @media print {
