@@ -882,3 +882,9 @@ a.kpi-card:hover, a.kpi-card:focus-visible { border-color: var(--navy-700); box-
 .scroll-hint { position: sticky; left: 0; margin: 0 0 var(--space-1); font-size: 0.8rem; font-weight: 600; color: var(--navy-700); }
 @media (min-width: 1200px) { .kpi-grid.dash-top { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 @media (min-width: 1024px) { .dash-section .kpi-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); } }
+
+/* Batch 8: label/value table on the leave application details page */
+.detail-table { width: 100%; border-collapse: collapse; }
+.detail-table th { text-align: left; width: 34%; padding: 0.45rem 0.75rem 0.45rem 0; color: var(--gray-600); font-weight: 600; vertical-align: top; }
+.detail-table td { padding: 0.45rem 0; vertical-align: top; }
+.detail-table tr + tr th, .detail-table tr + tr td { border-top: 1px solid var(--gray-200, #e5e7eb); }

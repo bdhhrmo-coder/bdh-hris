@@ -170,8 +170,10 @@ class LeaveApplication(models.Model):
         "employees.Employee", on_delete=models.CASCADE, related_name="leave_applications"
     )
     leave_type = models.ForeignKey(LeaveType, on_delete=models.PROTECT, related_name="applications")
-    start_date = models.DateField()
-    end_date = models.DateField()
+    # Blank only for "Other purpose" (monetization / terminal leave), where the
+    # CSC form has no inclusive dates - see LeaveApplicationForm.clean().
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
     number_of_days = models.DecimalField(
         max_digits=5,
         decimal_places=2,
@@ -182,6 +184,52 @@ class LeaveApplication(models.Model):
     )
     status = models.CharField(max_length=25, choices=STATUS_CHOICES, default=SUBMITTED)
 
+    # --- CSC Form No. 6 (Revised 2020), 6.B Details of Leave and 6.D (Batch 8) ---
+    # Which fields apply to which leave type: DETAIL_FIELDS_BY_TYPE below.
+    LOCATION_PH = "PH"
+    LOCATION_ABROAD = "ABROAD"
+    LOCATION_CHOICES = [(LOCATION_PH, "Within the Philippines"), (LOCATION_ABROAD, "Abroad (Specify)")]
+    SICK_HOSPITAL = "HOSPITAL"
+    SICK_OUTPATIENT = "OUTPATIENT"
+    SICK_CHOICES = [(SICK_HOSPITAL, "In Hospital (Specify Illness)"), (SICK_OUTPATIENT, "Out Patient (Specify Illness)")]
+    STUDY_MASTERS = "MASTERS"
+    STUDY_BAR = "BAR_BOARD"
+    STUDY_CHOICES = [(STUDY_MASTERS, "Completion of Master's Degree"), (STUDY_BAR, "BAR/Board Examination Review")]
+    PURPOSE_MONETIZATION = "MONETIZATION"
+    PURPOSE_TERMINAL = "TERMINAL"
+    PURPOSE_CHOICES = [(PURPOSE_MONETIZATION, "Monetization of Leave Credits"), (PURPOSE_TERMINAL, "Terminal Leave")]
+    COMMUTATION_NOT_REQUESTED = "NOT_REQUESTED"
+    COMMUTATION_REQUESTED = "REQUESTED"
+    COMMUTATION_CHOICES = [(COMMUTATION_NOT_REQUESTED, "Not Requested"), (COMMUTATION_REQUESTED, "Requested")]
+    # Wellness Leave purposes, as listed in CSC MC No. 1, s. 2026 (CSC Res. No. 2501292).
+    WELLNESS_MENTAL = "MENTAL_HEALTH"
+    WELLNESS_PHYSICAL = "PHYSICAL"
+    WELLNESS_BREAK = "GENERAL_BREAK"
+    WELLNESS_CHOICES = [(WELLNESS_MENTAL, "Mental Health Care"), (WELLNESS_PHYSICAL, "Physical Wellness Activities"),
+                        (WELLNESS_BREAK, "General Break from Work")]
+
+    location = models.CharField("Location", max_length=10, choices=LOCATION_CHOICES, blank=True)
+    location_detail = models.CharField("Place", max_length=200, blank=True)
+    sick_leave_type = models.CharField("Sick leave", max_length=12, choices=SICK_CHOICES, blank=True)
+    illness = models.CharField("Illness", max_length=200, blank=True)
+    study_purpose = models.CharField("Study leave purpose", max_length=12, choices=STUDY_CHOICES, blank=True)
+    other_purpose = models.CharField("Other purpose", max_length=15, choices=PURPOSE_CHOICES, blank=True)
+    commutation = models.CharField("6.D Commutation", max_length=15, choices=COMMUTATION_CHOICES,
+                                   default=COMMUTATION_NOT_REQUESTED)
+    wellness_reason = models.CharField("Wellness Leave reason", max_length=15, choices=WELLNESS_CHOICES, blank=True)
+
+    # leave_type.code -> the 6.B fields that type uses (all others are cleared on save).
+    DETAIL_FIELDS_BY_TYPE = {
+        "VL": ["location", "location_detail", "other_purpose"],
+        "SPL": ["location", "location_detail"],
+        "SL": ["sick_leave_type", "illness", "other_purpose"],
+        "SPECIAL_WOMEN": ["illness"],
+        "STUDY": ["study_purpose"],
+        "WELLNESS": ["wellness_reason"],
+    }
+    ALL_DETAIL_FIELDS = ["location", "location_detail", "sick_leave_type", "illness", "study_purpose",
+                         "other_purpose", "wellness_reason"]
+
     submitted_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -189,10 +237,42 @@ class LeaveApplication(models.Model):
         ordering = ["-submitted_at"]
 
     def __str__(self):
-        return f"{self.employee} — {self.leave_type.code} {self.start_date} to {self.end_date} ({self.status})"
+        return f"{self.employee} — {self.leave_type.code} {self.dates_label} ({self.status})"
 
     def is_terminal(self):
         return self.status in self.TERMINAL_STATUSES
+
+    @property
+    def dates_label(self):
+        if self.start_date and self.end_date:
+            if self.start_date == self.end_date:
+                return f"{self.start_date:%b %d, %Y}"
+            return f"{self.start_date:%b %d, %Y} to {self.end_date:%b %d, %Y}"
+        return "Not applicable"
+
+    def details_6b(self):
+        """[(label, value)] of the 6.B details that were entered, for screens."""
+        rows = []
+        if self.location:
+            place = f": {self.location_detail}" if self.location_detail else ""
+            rows.append(("Vacation/Special Privilege Leave",
+                         ("Within the Philippines" if self.location == self.LOCATION_PH else "Abroad") + place))
+        if self.sick_leave_type:
+            rows.append(("Sick Leave", f"{self.get_sick_leave_type_display().split(' (')[0]}: {self.illness}"))
+        elif self.illness:
+            rows.append(("Special Leave Benefits for Women", f"Illness: {self.illness}"))
+        if self.study_purpose:
+            rows.append(("Study Leave", self.get_study_purpose_display()))
+        if self.other_purpose:
+            rows.append(("Other purpose", self.get_other_purpose_display()))
+        if self.wellness_reason:
+            rows.append(("Wellness Leave reason", self.get_wellness_reason_display()))
+        return rows
+
+    def is_editable_by_filer(self):
+        """The filer may correct the application before anyone acts on it,
+        or after it is returned (Batch 8)."""
+        return self.status in (self.SUBMITTED, self.RETURNED)
 
 
 class LeaveApplicationAction(models.Model):

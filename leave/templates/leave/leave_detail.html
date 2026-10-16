@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% load badges documents_tags %}
+{% block title %}Leave application — BDH HRIS{% endblock %}
+{% block content %}
+{% if a.employee.user_id == request.user.pk %}<p><a href="{% url 'leave:my_applications' %}">&larr; My leave applications</a></p>
+{% else %}<p><a href="{% url 'leave:leave_queue' %}">&larr; Leave queue</a></p>{% endif %}
+<div class="split-row spread">
+  <h1>{{ a.leave_type.name }}</h1>
+  {% status_badge a.status a.get_status_display %}
+</div>
+<div class="card form-card">
+  <table class="detail-table">
+    <tr><th>Employee</th><td>{{ a.employee.full_name }} ({{ a.employee.employee_id }}){% if a.employee.position %} &middot; {{ a.employee.position }}{% endif %}</td></tr>
+    <tr><th>Date filed</th><td>{{ a.submitted_at|date:"M d, Y" }}</td></tr>
+    <tr><th>6.A Type of leave</th><td>{{ a.leave_type.name }}</td></tr>
+    {% for label, value in a.details_6b %}
+    <tr><th>{% if forloop.first %}6.B {% endif %}{{ label }}</th><td>{{ value }}</td></tr>
+    {% endfor %}
+    <tr><th>6.C Working days</th><td>{{ a.number_of_days|floatformat:"-2" }}</td></tr>
+    <tr><th>Inclusive dates</th><td>{{ a.dates_label }}</td></tr>
+    {% if not a.leave_type.requires_full_routing %}<tr><th>6.D Commutation</th><td>{{ a.get_commutation_display }}</td></tr>{% endif %}
+    {% if a.justification %}<tr><th>Justification</th><td>{{ a.justification|linebreaksbr }}</td></tr>{% endif %}
+  </table>
+  <p class="row-actions">
+    {% if a.leave_type.requires_full_routing %}
+      <a class="btn btn-secondary" href="{% url 'leave:print_cosp_leave_form' a.pk %}" target="_blank">Print COSP Leave Form</a>
+    {% else %}
+      <a class="btn btn-secondary" href="{% url 'leave:print_csc_form6' a.pk %}" target="_blank">Print CSC Form 6</a>
+    {% endif %}
+    <a class="btn btn-secondary" href="{% documents_url a %}">Documents</a>
+    {% if can_edit %}<a class="btn" href="{% url 'leave:leave_edit' a.pk %}">{% if a.status == "RETURNED" %}Edit and resubmit{% else %}Edit{% endif %}</a>{% endif %}
+  </p>
+</div>
+<h2>History</h2>
+<div class="card"><div class="table-scroll">
+<table>
+  <tr><th>When</th><th>Action</th><th>By</th><th>Remarks</th></tr>
+  {% for h in history %}
+  <tr><td>{{ h.acted_at|date:"M d, Y g:i A" }}</td><td>{{ h.action|capfirst }}</td>
+      <td>{{ h.acted_by.employee.full_name|default:h.acted_by.username }}</td><td>{{ h.notes|default:"—" }}</td></tr>
+  {% endfor %}
+</table>
+</div></div>
+{% endblock %}

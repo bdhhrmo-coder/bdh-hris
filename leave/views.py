@@ -25,6 +25,16 @@ from .permissions import (
 )
 
 
+def _render_form(request, form, acting_employee, application=None):
+    import json
+
+    selected = form["leave_type"].value() or ""
+    return render(request, "leave/leave_apply.html", {
+        "form": form, "cards": balance_cards(acting_employee), "selected_type": str(selected),
+        "type_codes": json.dumps(form.type_codes()), "application": application,
+    })
+
+
 @login_required
 def leave_apply(request):
     acting_employee = get_acting_employee(request.user)
@@ -49,9 +59,55 @@ def leave_apply(request):
     else:
         form = LeaveApplicationForm(employee=acting_employee)
 
-    selected = form["leave_type"].value() or ""
-    return render(request, "leave/leave_apply.html",
-                  {"form": form, "cards": balance_cards(acting_employee), "selected_type": str(selected)})
+    return _render_form(request, form, acting_employee)
+
+
+@login_required
+def leave_edit(request, pk):
+    """Batch 8: the filer corrects their own application before anyone acts
+    on it (Submitted), or after it is returned. A returned application is
+    resubmitted and starts again from the first step, as with attendance
+    corrections. No approval rule changes."""
+    acting_employee = get_acting_employee(request.user)
+    application = get_object_or_404(LeaveApplication, pk=pk)
+    if acting_employee is None or application.employee_id != acting_employee.pk:
+        raise PermissionDenied("Only the employee who filed this application can edit it.")
+    if not application.is_editable_by_filer():
+        messages.error(request, "This application can no longer be edited: it is already being processed.")
+        return redirect("leave:leave_detail", pk=pk)
+
+    if request.method == "POST":
+        form = LeaveApplicationForm(request.POST, instance=application, employee=acting_employee)
+        if form.is_valid():
+            was_returned = application.status == LeaveApplication.RETURNED
+            application = form.save(commit=False)
+            application.status = LeaveApplication.SUBMITTED
+            application.save()
+            LeaveApplicationAction.objects.create(
+                application=application, action="resubmit" if was_returned else "edit",
+                resulting_status=application.status, acted_by=request.user,
+            )
+            if was_returned:
+                notify_status_change(application)
+            messages.success(request, "Leave application resubmitted." if was_returned else "Leave application updated.")
+            return redirect("leave:leave_detail", pk=application.pk)
+    else:
+        form = LeaveApplicationForm(instance=application, employee=acting_employee)
+    return _render_form(request, form, acting_employee, application)
+
+
+@login_required
+def leave_detail(request, pk):
+    acting_employee = get_acting_employee(request.user)
+    application = get_object_or_404(LeaveApplication.objects.select_related("employee", "leave_type"), pk=pk)
+    if not can_view_application(acting_employee, application):
+        raise PermissionDenied("You are not authorized to view this application.")
+    return render(request, "leave/leave_detail.html", {
+        "a": application,
+        "history": application.actions.select_related("acted_by__employee"),
+        "can_edit": acting_employee is not None and application.employee_id == acting_employee.pk
+        and application.is_editable_by_filer(),
+    })
 
 
 @login_required
@@ -85,7 +141,9 @@ def _finalize_success(application, actor_user):
     """
     leave_type = application.leave_type
     if leave_type.balance_tracking != LeaveType.TRACKING_UNTRACKED:
-        available = compute_available_balance(application.employee, leave_type, as_of_date=application.start_date)
+        # Monetization / terminal leave has no inclusive dates: use the filing date.
+        as_of = application.start_date or application.submitted_at.date()
+        available = compute_available_balance(application.employee, leave_type, as_of_date=as_of)
         if available is not None and application.number_of_days > available:
             return (
                 f"Insufficient {leave_type.name} balance: {available} day(s) available, "
@@ -96,7 +154,7 @@ def _finalize_success(application, actor_user):
             leave_type=leave_type,
             transaction_type=LeaveCreditTransaction.USED,
             days=-application.number_of_days,
-            transaction_date=application.start_date,
+            transaction_date=as_of,
             leave_application=application,
             created_by=actor_user,
         )

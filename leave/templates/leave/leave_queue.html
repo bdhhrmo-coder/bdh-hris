@@ -8,9 +8,9 @@
   <tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th>Form</th><th>Action</th></tr>
   {% for a in applications %}
   <tr>
-    <td>{{ a.employee.full_name }}</td>
+    <td><a href="{% url 'leave:leave_detail' a.pk %}">{{ a.employee.full_name }}</a></td>
     <td>{{ a.leave_type.name }}</td>
-    <td>{{ a.start_date }} to {{ a.end_date }}</td>
+    <td>{{ a.dates_label }}</td>
     <td>{{ a.number_of_days }}</td>
     <td>{% status_badge a.status a.get_status_display %}</td>
     <td>

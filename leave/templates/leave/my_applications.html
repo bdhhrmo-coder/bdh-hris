@@ -9,8 +9,8 @@
   <tr><th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th>Submitted</th><th>Form</th><th>Documents</th></tr>
   {% for a in applications %}
   <tr>
-    <td>{{ a.leave_type.name }}</td>
-    <td>{{ a.start_date }} to {{ a.end_date }}</td>
+    <td><a href="{% url 'leave:leave_detail' a.pk %}">{{ a.leave_type.name }}</a></td>
+    <td>{{ a.dates_label }}</td>
     <td>{{ a.number_of_days }}</td>
     <td>{% status_badge a.status a.get_status_display %}</td>
     <td>{{ a.submitted_at|date:"Y-m-d" }}</td>

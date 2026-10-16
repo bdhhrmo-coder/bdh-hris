@@ -1,9 +1,20 @@
 {% extends "base.html" %}
-{% block title %}Apply for leave — BDH HRIS{% endblock %}
+{% block title %}{% if application %}Edit leave application{% else %}Apply for leave{% endif %} — BDH HRIS{% endblock %}
 {% block content %}
-<div x-data="{ sel: '{{ selected_type }}' }"
-     @change="if ($event.target.name === 'leave_type') sel = $event.target.value">
+<div x-data="{ sel: '{{ selected_type }}', codes: {{ type_codes }}, purpose: '{{ form.other_purpose.value|default_if_none:'' }}',
+              get code() { return this.codes[this.sel] || '' } }"
+     @change="if ($event.target.name === 'leave_type') { sel = $event.target.value; purpose = '';
+                $root.querySelectorAll('input[name=other_purpose]').forEach(i => i.checked = false);
+                const n = $root.querySelector('input[name=commutation][value=NOT_REQUESTED]'); if (n) n.checked = true }
+              if ($event.target.name === 'other_purpose') { purpose = $event.target.value;
+                const r = $root.querySelector('input[name=commutation][value=REQUESTED]'); if (r) r.checked = true }">
+{% if application %}
+<p><a href="{% url 'leave:leave_detail' application.pk %}">&larr; Back to the application</a></p>
+<h1>Edit leave application</h1>
+{% if application.status == "RETURNED" %}<div class="msg info">This application was returned. Correct it and resubmit; it starts again from the first step.</div>{% endif %}
+{% else %}
 <h1>Apply for leave</h1>
+{% endif %}
 
 <section class="balance-panel" aria-labelledby="balances-title">
   <h2 id="balances-title" class="balance-panel-title">My balances <small>as of {% now "M j, Y" %}</small></h2>
@@ -28,10 +39,46 @@
 </section>
 
 <div class="card form-card">
-  <form method="post" class="form-2col">
+  <form method="post" class="form-2col" novalidate>
     {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Submit</button>
+    {% if form.non_field_errors %}<div class="msg error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+    {% include "leave/_field.html" with f=form.leave_type required=True %}
+
+    <div class="mt-0" x-show="['VL','SPL','SL','SPECIAL_WOMEN','STUDY','WELLNESS'].includes(code)" x-cloak>
+      <p class="field-title m-0"><strong>6.B Details of leave</strong></p>
+      <p class="field-help">As on CSC Form No. 6. Only the part for the leave type you chose is shown.</p>
+    </div>
+    <div x-show="code === 'VL' || code === 'SPL'" x-cloak>
+      {% include "leave/_field.html" with f=form.location radios=True required=True %}
+      {% include "leave/_field.html" with f=form.location_detail help="Required if abroad (country or place). Optional within the Philippines." %}
+    </div>
+    <div x-show="code === 'SL'" x-cloak>
+      {% include "leave/_field.html" with f=form.sick_leave_type radios=True required=True %}
+    </div>
+    <div x-show="code === 'SL' || code === 'SPECIAL_WOMEN'" x-cloak>
+      {% include "leave/_field.html" with f=form.illness required=True help="This prints on the CSC form. It is treated as a confidential HR record." %}
+    </div>
+    <div x-show="code === 'STUDY'" x-cloak>
+      {% include "leave/_field.html" with f=form.study_purpose radios=True required=True %}
+    </div>
+    <div x-show="code === 'WELLNESS'" x-cloak>
+      {% include "leave/_field.html" with f=form.wellness_reason radios=True required=True help="Required (CSC MC No. 1, s. 2026). The reason is a confidential HR record." %}
+    </div>
+    <div x-show="code === 'VL' || code === 'SL'" x-cloak>
+      {% include "leave/_field.html" with f=form.other_purpose radios=True help="Only for monetization of leave credits or terminal leave. Leave blank for an ordinary leave." %}
+      <p class="field-help" x-show="purpose" x-cloak>For monetization or terminal leave, the inclusive dates may be left blank and commutation is marked Requested.</p>
+      <button type="button" class="btn-secondary" x-show="purpose" x-cloak
+              @click="purpose=''; $root.querySelectorAll('input[name=other_purpose]').forEach(i => i.checked = false)">Clear other purpose</button>
+    </div>
+
+    {% include "leave/_field.html" with f=form.start_date %}
+    {% include "leave/_field.html" with f=form.end_date %}
+    {% include "leave/_field.html" with f=form.number_of_days required=True %}
+    <div x-show="code && code !== 'COSP_LEAVE'" x-cloak>
+      {% include "leave/_field.html" with f=form.commutation radios=True %}
+    </div>
+    {% include "leave/_field.html" with f=form.justification %}
+    <button type="submit">{% if application.status == "RETURNED" %}Resubmit{% elif application %}Save changes{% else %}Submit{% endif %}</button>
   </form>
 </div>
 </div>

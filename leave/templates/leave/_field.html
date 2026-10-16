@@ -1,0 +1,6 @@
+<div class="field-block">
+  <label class="field-title" for="{{ f.id_for_label }}">{{ f.label }}{% if required %} *{% endif %}</label>
+  {% if radios %}<div class="choice-columns">{{ f }}</div>{% else %}{{ f }}{% endif %}
+  {% if help %}<p class="field-help">{{ help }}</p>{% elif f.help_text %}<p class="field-help">{{ f.help_text }}</p>{% endif %}
+  {% for e in f.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+</div>
