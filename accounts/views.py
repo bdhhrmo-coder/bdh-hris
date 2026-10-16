@@ -65,6 +65,7 @@ class BDHLoginView(LoginView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["login_banner"] = getattr(settings, "LOGIN_BANNER_IMAGE", "")  # Batch 9: display only
+        context["hris_version"] = getattr(settings, "HRIS_VERSION", "")
         return context
 
     def get_redirect_url(self):

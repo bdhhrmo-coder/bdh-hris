@@ -22,6 +22,7 @@
     <div class="login-brand">
       <img src="{% static 'images/bdh-logo.png' %}" alt="Bataraza District Hospital seal">
       <h1>HRIS</h1>
+      {% if hris_version %}<p class="login-version">Version {{ hris_version }}</p>{% endif %}
       <p class="login-tagline">RIGHT CARE, RIGHT HERE</p>
     </div>
 
