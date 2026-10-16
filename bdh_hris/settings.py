@@ -122,6 +122,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "notifications.context_processors.unread_notification_count",
                 "homepage.context_processors.greeting",
+                "homepage.context_processors.page_watermark",
                 "dashboard.context_processors.dashboard_link",
                 "auditlog.context_processors.audit_log_link",
                 "employees.context_processors.nav_links",
@@ -250,9 +251,6 @@ LOGIN_REDIRECT_URL = "notifications:notification_list"
 # page with "Session expired. Please log in again." instead.
 CSRF_FAILURE_VIEW = "accounts.views.csrf_failure"
 
-# Homepage watermark (Batch 4, owner decision 2026-10-09): shown on the
-# homepage ONLY. A path inside the static folder; blank (or a missing file)
-# means no watermark.
 # Duty schedules (Batch 5): default Exchange-of-Duty cut-off = this day of
 # the month BEFORE the schedule month; HR can change it per schedule.
 SCHEDULE_CUTOFF_DAY = 20
@@ -261,7 +259,18 @@ SCHEDULE_CUTOFF_DAY = 20
 # larger than the 10 MB limit for other uploads (owner decision 2026-10-09).
 ANNOUNCEMENT_PDF_MAX_MB = int(os.environ.get("BDH_HRIS_ANNOUNCEMENT_PDF_MAX_MB", "50"))
 
-HOME_WATERMARK_IMAGE = os.environ.get("BDH_HRIS_HOME_WATERMARK", "images/home-watermark.jpg")
+# Homepage background photo (Batch 10, 2026-10-16; was the Batch 4 watermark):
+# shown on the homepage only, under a light overlay. A path inside the static
+# folder; blank (or a missing file) means no photo.
+HOME_WATERMARK_IMAGE = os.environ.get("BDH_HRIS_HOME_WATERMARK", "images/homepage-bg.jpg")
+
+# Faint BDH logo + "RIGHT CARE, RIGHT HERE" behind every other logged-in page
+# (Batch 10, owner request 2026-10-16). Not on the homepage or login page,
+# never printed. PAGE_WATERMARK turns it on/off everywhere; with
+# PAGE_WATERMARK_FIXED it stays in place while the page scrolls (default:
+# it scrolls with the page).
+PAGE_WATERMARK = os.environ.get("BDH_HRIS_PAGE_WATERMARK", "1") == "1"
+PAGE_WATERMARK_FIXED = os.environ.get("BDH_HRIS_PAGE_WATERMARK_FIXED", "0") == "1"
 # Login page banner (Batch 9, split layout): a static file path. Replace the
 # file, or point BDH_HRIS_LOGIN_BANNER at another image under static/.
 LOGIN_BANNER_IMAGE = os.environ.get("BDH_HRIS_LOGIN_BANNER", "images/login-banner.jpg")

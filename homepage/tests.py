@@ -139,21 +139,37 @@ class HomepageTests(TestCase):
         self.assertContains(page, "Good ")
         self.assertContains(page, TODAY.strftime("%Y"))
 
-    def test_watermark_on_homepage_only(self):
+    def test_photo_on_homepage_logo_watermark_on_other_pages(self):
+        # Batch 10: the homepage shows its photo, not the logo watermark.
         home = self.page(self.staff).content.decode()
-        self.assertIn("home-watermark", home)
-        self.assertIn("home-watermark.jpg", home)
+        self.assertIn("home-background", home)
+        self.assertIn("homepage-bg", home)
+        self.assertNotIn("page-watermark", home)
+        # Every other logged-in page shows the faint logo and tagline.
         for name in ("leave:leave_apply", "notifications:notification_list"):
-            self.assertNotIn("watermark", self.page(self.staff, name).content.decode())
+            page = self.page(self.staff, name).content.decode()
+            self.assertIn('class="page-watermark"', page)
+            self.assertIn("RIGHT CARE, RIGHT HERE", page)
+            self.assertNotIn("home-background", page)
         self.client.logout()
-        self.assertNotIn("watermark", self.client.get("/hris/login/").content.decode())
+        login = self.client.get("/hris/login/").content.decode()
+        self.assertNotIn("page-watermark", login)
+        self.assertNotIn("home-background", login)
+
+    @override_settings(PAGE_WATERMARK=False)
+    def test_one_setting_turns_the_logo_watermark_off(self):
+        self.assertNotIn("page-watermark", self.page(self.staff, "leave:leave_apply").content.decode())
+
+    @override_settings(PAGE_WATERMARK_FIXED=True)
+    def test_fixed_watermark_setting(self):
+        self.assertIn('class="page-watermark is-fixed"', self.page(self.staff, "leave:leave_apply").content.decode())
 
     @override_settings(HOME_WATERMARK_IMAGE="")
     def test_no_image_set_means_no_watermark(self):
         page = self.page(self.staff)
         self.assertEqual(page.status_code, 200)
-        self.assertNotIn("home-watermark", page.content.decode())
+        self.assertNotIn("home-background", page.content.decode())
 
     @override_settings(HOME_WATERMARK_IMAGE="images/does-not-exist.png")
     def test_missing_image_file_means_no_watermark(self):
-        self.assertNotIn("home-watermark", self.page(self.staff).content.decode())
+        self.assertNotIn("home-background", self.page(self.staff).content.decode())
