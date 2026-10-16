@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Home — BDH HRIS{% endblock %}
+{% block page_background %}
+{# Batch 10: the homepage shows its photo (under a light overlay) instead of the logo watermark. #}
+{% if watermark_url %}<div class="home-background" aria-hidden="true" style="--home-photo: url('{{ watermark_url }}')"></div>{% endif %}
+{% endblock %}
 {% block content %}
-{% if watermark_url %}<div class="home-watermark" aria-hidden="true" style="background-image:url('{{ watermark_url }}')"></div>{% endif %}
 
 <div class="home-hero">
   <h1>{{ header_greeting }}{% if request.user.employee %}, {{ request.user.employee.first_name }}{% endif %}</h1>

@@ -667,28 +667,61 @@ tr.history-return td { background: #fff6dc; }
 @media (max-width: 900px) { .app-topbar .header-date { display: none; } }
 
 /* --- Homepage (Batch 4) -------------------------------------------------- */
-/* The watermark is the homepage's own background layer (owner decision
-   2026-10-09): faint, behind everything, never catches clicks. */
-.home-watermark {
-  /* Homepage background picture, in the content area beside the sidebar.
-     Wide screens: fills the area ("cover"); the picture is about as wide
-     as the area, so only a thin edge is trimmed and it is not zoomed in.
-     Tall phone screens: also fills the screen, centred on the BDH logo
-     (the left part of the picture) so the logo shows in full. */
+/* Homepage background photo (Batch 10, 2026-10-16). Fills the content area
+   beside the sidebar ("cover": never stretched), under a light overlay so
+   text stays readable; cards and panels keep their solid white. Behind
+   everything, never catches clicks, never printed. */
+.home-background {
+  --home-overlay: rgba(248, 250, 252, 0.85);   /* about 85% light neutral; raise or lower here */
   position: fixed;
-  top: var(--topbar-h); right: 0; bottom: 0; left: 216px;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  opacity: 0.35;
+  top: var(--topbar-h); right: 0; bottom: 0; left: var(--sidebar-w);
+  background: linear-gradient(var(--home-overlay), var(--home-overlay)), var(--home-photo) center / cover no-repeat;
   pointer-events: none;
   z-index: -1;
 }
 @media (max-width: 1023px) {
-  .home-watermark { left: 0; }   /* sidebar is hidden on small screens */
+  .home-background { left: 0; }   /* sidebar is hidden on small screens */
 }
-@media (max-aspect-ratio: 1/1) {
-  .home-watermark { background-position: 15% center; }
+
+/* Faint BDH logo + tagline behind every other logged-in page (Batch 10).
+   Centred in the content area beside the sidebar. Default: placed in the
+   middle of the first screen and scrolls with the page; ".is-fixed"
+   (PAGE_WATERMARK_FIXED) keeps it in the middle of the screen. Cards with a
+   white background sit on top of it. */
+.page-watermark {
+  --wm-size: 420px;
+  position: absolute;
+  top: calc(var(--topbar-h) + (100vh - var(--topbar-h)) / 2);
+  left: calc(var(--sidebar-w) + (100% - var(--sidebar-w)) / 2);
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  opacity: 0.06;
+  pointer-events: none;
+  user-select: none;
+  z-index: -1;
+}
+.page-watermark.is-fixed { position: fixed; }
+.page-watermark img { width: var(--wm-size); height: auto; display: block; filter: grayscale(1); }
+.page-watermark span {
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-size: calc(var(--wm-size) * 0.09);
+  letter-spacing: 0.18em;
+  white-space: nowrap;
+  color: var(--navy-900);
+}
+@media (max-width: 1023px) {
+  .page-watermark { left: 50%; }
+}
+@media (max-width: 639px) {
+  .page-watermark { --wm-size: 220px; }
+}
+
+@media print {
+  .home-background, .page-watermark { display: none !important; }
 }
 .home-hero { margin-bottom: var(--space-3); }
 .home-hero h1 { margin: 0; }

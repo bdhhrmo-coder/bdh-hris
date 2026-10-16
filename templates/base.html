@@ -12,7 +12,17 @@
 </head>
 <body class="{% block body_class %}{% endblock %}">
   {% if user.is_authenticated %}
-    {# Batch 4 (owner decision 2026-10-09): no watermark on working screens; the homepage has its own. #}
+    {% comment %}Batch 10 (owner request 2026-10-16): faint BDH logo + tagline behind every logged-in
+       page, set by PAGE_WATERMARK / PAGE_WATERMARK_FIXED. The homepage replaces this block with its
+       photo. Decoration only: hidden from screen readers, never clickable, never printed.{% endcomment %}
+    {% block page_background %}
+    {% if page_watermark %}
+    <div class="page-watermark{% if page_watermark_fixed %} is-fixed{% endif %}" aria-hidden="true">
+      <img src="{% static 'images/bdh-logo.png' %}" alt="">
+      <span>RIGHT CARE, RIGHT HERE</span>
+    </div>
+    {% endif %}
+    {% endblock %}
     {% include "components/icon_sprite.html" %}
     <div class="app-shell" x-data="{ navOpen: false }" @keydown.escape.window="navOpen = false">
       <header class="app-topbar">
