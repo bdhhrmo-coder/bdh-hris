@@ -1,177 +1,145 @@
 /*
-  Login page only (templates/registration/login.html). Kept separate from
-  app.css so the rest of the system isn't loading glass/gradient rules it
-  never uses.
+  Login page only (templates/registration/login.html). Batch 9 (2026-10-16):
+  split layout - BDH banner on the left (55%), the form on a plain white
+  panel on the right (45%). Tablets and phones: the banner becomes a short
+  strip on top. No watermark on this page (owner decision).
 
-  Animation is CSS-only (no particle/canvas JS) — a single slow-moving
-  gradient plus two soft blurred blobs, animating only `transform` and
-  `background-position` (GPU-friendly, no layout thrashing) so it stays
-  light on older hospital workstations. Everything respects
-  prefers-reduced-motion.
+  Spacing uses one scale: 8 / 16 / 24 / 32 px. Colours come from app.css
+  (:root) - no new brand colours.
+
+  The banner is shown whole (object-fit: contain), never cropped or
+  stretched, so the seal and the hospital name are always readable. The
+  space around it is filled from the banner itself: on desktop its top and
+  bottom edges are extended; on tablets/phones a blurred copy fills the
+  sides. No empty bands.
 */
 
 body.login-page {
   margin: 0;
   min-height: 100vh;
-  background: var(--navy-900); /* shown only until the photo loads */
-  overflow-x: hidden;
-  position: relative;
-}
-
-/* Background photo of the hospital, fixed behind everything. Done as a
-   fixed layer (not background-attachment: fixed) so it also works on
-   phones/tablets, where "fixed" backgrounds are ignored or jumpy. */
-body.login-page::before,
-body.login-page::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-}
-body.login-page::before {
-  background: url("../images/bdh-building.jpg") center / cover no-repeat;
-}
-/* The original navy-to-teal gradient, now semi-transparent over the photo:
-   keeps the BDH colours, softens the photo so it stays subtle, and keeps the
-   white card and its text easy to read. */
-body.login-page::after {
-  background: linear-gradient(135deg, rgba(11, 44, 77, 0.86) 0%, rgba(26, 75, 122, 0.74) 45%, rgba(21, 122, 110, 0.66) 100%);
-  background-size: 200% 200%;
-  animation: bg-pan 18s ease-in-out infinite;
-}
-
-@keyframes bg-pan {
-  0%   { background-position: 0% 50%; }
-  50%  { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-
-/* Soft floating blobs, purely decorative (aria-hidden in the markup). */
-.login-blob {
-  position: fixed;
-  border-radius: 50%;
-  filter: blur(60px);
-  opacity: 0.35;
-  pointer-events: none;
-  z-index: 0;
-}
-.login-blob-a {
-  width: 420px; height: 420px;
-  background: #ffffff;
-  top: -120px; left: -100px;
-  animation: float-a 22s ease-in-out infinite;
-}
-.login-blob-b {
-  width: 360px; height: 360px;
-  background: var(--gold-100);
-  bottom: -140px; right: -80px;
-  animation: float-b 26s ease-in-out infinite;
-}
-
-@keyframes float-a {
-  0%, 100% { transform: translate(0, 0); }
-  50%      { transform: translate(40px, 30px); }
-}
-@keyframes float-b {
-  0%, 100% { transform: translate(0, 0); }
-  50%      { transform: translate(-30px, -40px); }
+  background: #fff;
 }
 
 body.login-page .guest-main {
-  position: relative;
-  z-index: 1;
   max-width: none;
   margin: 0;
-  padding: 2rem 1rem;
+  padding: 0;
+}
+
+.login-split {
+  display: grid;
+  grid-template-columns: 55fr 45fr;
   min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* --- Banner ------------------------------------------------------------ */
+
+.login-banner {
+  position: relative;
+  overflow: hidden;
+  background: #002456; /* the banner's own edge colour, shown while it loads */
+}
+.login-banner::before {          /* blurred fill behind the whole banner */
+  content: "";
+  position: absolute;
+  inset: -40px;
+  background: var(--banner) center / cover no-repeat;
+  filter: blur(48px) brightness(0.55);   /* tablets/phones; replaced on desktop below */
+}
+.login-banner img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  z-index: 1;
+}
+
+/* Desktop: the panel is taller than the banner, so the banner's own top
+   and bottom edges are stretched out to fill the space above and below it
+   (no blurred ghost of the seal, no visible seam). */
+@media (min-width: 1024px) {
+  .login-banner::before,
+  .login-banner::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    filter: blur(6px);
+  }
+  .login-banner::before { inset: -8px 0 50% 0; background: var(--banner) top center / 100% 4000% no-repeat; }
+  .login-banner::after  { inset: 50% 0 -8px 0; background: var(--banner) bottom center / 100% 4000% no-repeat; }
+}
+
+/* --- Form panel -------------------------------------------------------- */
+
+.login-panel {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 48px;
+  background: #fff;
 }
-
-/* --- The glass card --------------------------------------------------- */
 
 .login-card {
   width: 100%;
-  max-width: 400px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 16px;
-  box-shadow: 0 20px 50px rgba(6, 24, 44, 0.35);
-  padding: 2.25rem 2rem 2rem;
+  max-width: 384px;
 }
 
-/* Entrance (Batch 3 Item 3) - only on a fresh page load (the template
-   adds .entrance on GET only, never after a failed login): the logo fades
-   in, the panel rises a few pixels, then the tagline appears. ~0.4 s. */
+/* Entrance on a fresh page load only (template adds .entrance on GET). */
 .login-card.entrance { animation: card-in 300ms 80ms cubic-bezier(.2, .7, .2, 1) both; }
 .login-card.entrance .login-brand img { animation: logo-in 200ms ease-out both; }
 .login-card.entrance .login-tagline { animation: tagline-in 160ms 280ms ease-out both; }
+@keyframes card-in { from { transform: translateY(8px); } to { transform: none; } }
 @keyframes logo-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
 @keyframes tagline-in { from { opacity: 0; } to { opacity: 1; } }
 
-@supports (backdrop-filter: blur(14px)) or (-webkit-backdrop-filter: blur(14px)) {
-  .login-card {
-    background: rgba(255, 255, 255, 0.78);
-    backdrop-filter: blur(14px) saturate(140%);
-    -webkit-backdrop-filter: blur(14px) saturate(140%);
-  }
-}
-
-@keyframes card-in {
-  from { transform: translateY(10px); }
-  to   { transform: translateY(0); }
-}
-
-.login-brand {
-  text-align: center;
-  margin-bottom: 1.5rem;
-}
+.login-brand { text-align: center; margin-bottom: 32px; }
 .login-brand img {
-  width: 84px;
+  width: 88px;
   height: auto;
   display: block;
-  margin: 0 auto 0.75rem;
-}
-.login-tagline {
-  margin: 0 0 0.85rem;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  color: var(--navy-700);
+  margin: 0 auto 16px;
 }
 .login-brand h1 {
-  font-size: 1.2rem;
-  line-height: 1.3;
-  margin: 0 0 0.25rem;
+  margin: 0 0 8px;
+  font-size: 1.75rem;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
   color: var(--navy-900);
 }
-.login-brand p {
+.login-tagline {
   margin: 0;
-  font-size: 0.85rem;
-  color: var(--gray-600);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--navy-700);
 }
 
-.login-card form { margin-top: 1.4rem; }
-
-.login-field { margin-bottom: 1.1rem; }
+/* Fields: label above, left aligned; inputs and the button are the same height. */
+.login-field { margin-bottom: 16px; }
 .login-field label {
   display: block;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 600;
-  color: var(--gray-600);
-  margin-bottom: 0.3rem;
+  color: var(--gray-900, #1f2937);
+  margin-bottom: 8px;
 }
 .login-field input.input-control {
   width: 100%;
-  padding: 0.65rem 0.8rem;
-  border: 1px solid var(--gray-200);
+  height: 48px;
+  padding: 0 16px;
+  border: 1px solid #8a94a3;   /* 3:1 against white, as WCAG asks for input borders */
   border-radius: 8px;
-  font-size: 0.95rem;
+  font-size: 1rem;              /* 16px: phones do not zoom in on focus */
+  color: var(--gray-900, #1f2937);
   background: #fff;
+  box-sizing: border-box;
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
+.login-field input.input-control::placeholder { color: #6b7280; }
 .login-field input.input-control:focus {
   outline: none;
   border-color: var(--navy-700);
@@ -183,18 +151,17 @@ body.login-page .guest-main {
 }
 
 .password-wrap { position: relative; }
-.password-wrap input.input-control { padding-right: 3rem; }
-/* Eye icon button: 44px-ish touch target on phones, centred on the input. */
+.password-wrap input.input-control { padding-right: 52px; }
 .password-toggle {
   position: absolute;
-  right: 0.2rem;
+  right: 4px;
   top: 50%;
   transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.6rem;
-  height: 2.6rem;
+  width: 40px;
+  height: 40px;
   background: transparent;
   border: none;
   color: var(--gray-600);
@@ -202,7 +169,6 @@ body.login-page .guest-main {
   cursor: pointer;
   border-radius: 6px;
   -webkit-tap-highlight-color: transparent;
-  transition: color 150ms ease, background 150ms ease;
 }
 .password-toggle .eye-icon { display: block; }
 .password-toggle:hover { color: var(--navy-800); background: var(--navy-100); }
@@ -212,23 +178,18 @@ body.login-page .guest-main {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 0.2rem 0 1.3rem;
+  gap: 16px;
+  margin: 0 0 24px;
   font-size: 0.85rem;
 }
 .remember-me {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-weight: 500;
+  gap: 8px;
   color: var(--gray-600);
   cursor: pointer;
 }
-.remember-me input[type="checkbox"] {
-  width: 15px; height: 15px;
-  margin: 0;
-  accent-color: var(--navy-800);
-}
-
+.remember-me input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: var(--navy-800); }
 .forgot-link {
   background: none;
   border: none;
@@ -241,42 +202,55 @@ body.login-page .guest-main {
 }
 .forgot-link:hover { color: var(--navy-900); }
 .forgot-link:focus-visible { outline: 2px solid var(--navy-700); outline-offset: 2px; }
-
 .forgot-note {
   background: var(--navy-100);
   color: var(--navy-800);
-  border: 1px solid #c7d8ea;
   border-radius: 8px;
-  padding: 0.65rem 0.8rem;
-  font-size: 0.82rem;
-  margin: -0.6rem 0 1.1rem;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  margin: -8px 0 24px;
 }
-
-/* --- Submit button + loading state ----------------------------------- */
 
 .login-submit {
   width: 100%;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 0.7rem 1rem;
-  background: var(--navy-800);
+  gap: 8px;
+  padding: 0 16px;
+  background: var(--navy-900);
   color: #fff;
   border: none;
   border-radius: 8px;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 150ms ease, transform 100ms ease, box-shadow 150ms ease;
+  transition: background 150ms ease, box-shadow 150ms ease;
 }
-.login-submit:hover:not(:disabled) {
-  background: var(--navy-700);
-  box-shadow: 0 6px 16px rgba(11, 44, 77, 0.25);
-}
-.login-submit:active:not(:disabled) { transform: scale(0.98); }
-.login-submit:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.login-submit:hover:not(:disabled) { background: var(--navy-800); box-shadow: 0 6px 16px rgba(11, 44, 77, 0.2); }
+.login-submit:focus-visible { outline: 3px solid var(--gold-500); outline-offset: 2px; }
 .login-submit:disabled { opacity: 0.85; cursor: progress; }
+
+/* One style for every message shown here (failed login, session expired). */
+.login-errors:empty { display: none; }
+.login-errors { margin-top: 16px; }
+.login-error {
+  background: #fdecee;
+  color: #8f1d24;
+  border: 1px solid #f2c4c8;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+}
+.login-error + .login-error { margin-top: 8px; }
+
+.login-footer {
+  margin: 32px 0 0;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--gray-600);
+}
 
 .spinner {
   width: 16px; height: 16px;
@@ -286,21 +260,28 @@ body.login-page .guest-main {
   animation: spin 700ms linear infinite;
   display: inline-block;
 }
-
 @keyframes spin { to { transform: rotate(360deg); } }
 
-@media (prefers-reduced-motion: reduce) {
-  body.login-page::after,
-  .login-blob-a, .login-blob-b,
-  .login-card,
-  .login-card.entrance .login-brand img,
-  .login-card.entrance .login-tagline,
-  .spinner {
-    animation: none !important;
-  }
+/* --- Tablets (768-1023 px): banner strip on top, about 30% of the height --- */
+@media (max-width: 1023px) {
+  .login-split { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .login-banner { height: 30vh; height: 30svh; min-height: 180px; }
+  .login-panel { align-items: flex-start; padding: 32px 48px 48px; }
 }
 
-@media (max-width: 480px) {
-  .login-card { padding: 1.75rem 1.25rem 1.5rem; border-radius: 12px; }
-  .login-blob-a, .login-blob-b { display: none; }
+/* --- Phones (below 768 px): shorter strip, form full width with 16 px sides --- */
+@media (max-width: 767px) {
+  .login-banner { height: 22vh; height: 22svh; min-height: 140px; }
+  .login-panel { padding: 24px 16px 32px; }
+  .login-card { max-width: none; }
+  .login-brand { margin-bottom: 24px; }
+  .login-brand img { width: 64px; }
+  .login-brand h1 { font-size: 1.5rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-card.entrance,
+  .login-card.entrance .login-brand img,
+  .login-card.entrance .login-tagline,
+  .spinner { animation: none !important; }
 }

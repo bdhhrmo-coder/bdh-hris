@@ -262,6 +262,9 @@ SCHEDULE_CUTOFF_DAY = 20
 ANNOUNCEMENT_PDF_MAX_MB = int(os.environ.get("BDH_HRIS_ANNOUNCEMENT_PDF_MAX_MB", "50"))
 
 HOME_WATERMARK_IMAGE = os.environ.get("BDH_HRIS_HOME_WATERMARK", "images/home-watermark.jpg")
+# Login page banner (Batch 9, split layout): a static file path. Replace the
+# file, or point BDH_HRIS_LOGIN_BANNER at another image under static/.
+LOGIN_BANNER_IMAGE = os.environ.get("BDH_HRIS_LOGIN_BANNER", "images/login-banner.jpg")
 # Without this, Django shows its own built-in "Logged out" page (the Django
 # administration one), whose "Log in again" link goes to /admin/login/ - a
 # staff-only login that rejects normal accounts. Send people straight back to

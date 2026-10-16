@@ -9,26 +9,21 @@
 {% block messages %}{% endblock %}{# shown inside the card below #}
 
 {% block content %}
-<div class="login-blob login-blob-a" aria-hidden="true"></div>
-<div class="login-blob login-blob-b" aria-hidden="true"></div>
-
-<div class="login-card{% if request.method == "GET" %} entrance{% endif %}" x-data="{ showPassword: false, submitting: false, showForgot: false }">
-  <div class="login-brand">
-    <img src="{% static 'images/bdh-logo.png' %}" alt="Bataraza District Hospital seal">
-    <p class="login-tagline">RIGHT CARE, RIGHT HERE</p>
-    <h1>BDH Human Resource<br>Information System</h1>
-    <p>Personnel, Attendance &amp; Leave Management</p>
+{# Batch 9: split layout - banner left (top strip on tablets/phones), form right. Display only. #}
+<div class="login-split">
+  {% if login_banner %}
+  <div class="login-banner" style="--banner: url('{% static login_banner %}')">
+    <img src="{% static login_banner %}" alt="Bataraza District Hospital">
   </div>
-
-  {% for message in messages %}
-    <div class="msg {{ message.tags }}" role="status">{{ message }}</div>
-  {% endfor %}
-
-  {% if form.non_field_errors %}
-    <div class="msg error" role="alert" aria-live="polite">
-      {% for error in form.non_field_errors %}{{ error }}{% endfor %}
-    </div>
   {% endif %}
+
+  <section class="login-panel">
+  <div class="login-card{% if request.method == "GET" %} entrance{% endif %}" x-data="{ showPassword: false, submitting: false, showForgot: false }">
+    <div class="login-brand">
+      <img src="{% static 'images/bdh-logo.png' %}" alt="Bataraza District Hospital seal">
+      <h1>HRIS</h1>
+      <p class="login-tagline">RIGHT CARE, RIGHT HERE</p>
+    </div>
 
   <form method="post" action="{% url 'login' %}" @submit="submitting = true" novalidate>
     {% csrf_token %}
@@ -60,6 +55,7 @@
           placeholder="Enter your password"
           autocomplete="current-password"
           required
+          @focus="setTimeout(() => $el.form.querySelector('.login-submit').scrollIntoView({block: 'nearest'}), 350)"
           :type="showPassword ? 'text' : 'password'"
         >
         {# Eye = password hidden (click to show); eye with a slash = password visible (click to hide). #}
@@ -107,10 +103,23 @@
     </p>
 
     <button type="submit" class="login-submit" :disabled="submitting">
-      <span x-show="!submitting">Sign In</span>
+      <span x-show="!submitting">Log in</span>
       <span x-show="submitting" x-cloak class="spinner" aria-hidden="true"></span>
-      <span x-show="submitting" x-cloak>Signing in&hellip;</span>
+      <span x-show="submitting" x-cloak>Logging in&hellip;</span>
     </button>
+
+    <div class="login-errors" aria-live="polite">
+      {% for message in messages %}
+        <div class="login-error" role="status">{{ message }}</div>
+      {% endfor %}
+      {% for error in form.non_field_errors %}
+        <div class="login-error" role="alert">{{ error }}</div>
+      {% endfor %}
+    </div>
   </form>
+
+  <p class="login-footer">Bataraza District Hospital, Barangay Marangas, Bataraza, Palawan</p>
+  </div>
+  </section>
 </div>
 {% endblock %}
