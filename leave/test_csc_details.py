@@ -74,8 +74,7 @@ class ValidationTests(Base):
         self.assertEqual((a.illness, a.wellness_reason, a.study_purpose, a.sick_leave_type), ("", "", "", ""))
 
     def test_monetization_needs_no_dates_and_requests_commutation(self):
-        self.post("VL", location="PH", other_purpose="MONETIZATION", start_date="", end_date="",
-                  number_of_days="10")
+        self.post("VL", location="PH", other_purpose="MONETIZATION", number_of_days="10")  # dates posted are dropped
         a = self.last()
         self.assertEqual((a.start_date, a.end_date, a.commutation), (None, None, "REQUESTED"))
         self.assertEqual(a.dates_label, "Not applicable")

@@ -66,13 +66,15 @@
     </div>
     <div x-show="code === 'VL' || code === 'SL'" x-cloak>
       {% include "leave/_field.html" with f=form.other_purpose radios=True help="Only for monetization of leave credits or terminal leave. Leave blank for an ordinary leave." %}
-      <p class="field-help" x-show="purpose" x-cloak>For monetization or terminal leave, the inclusive dates may be left blank and commutation is marked Requested.</p>
+      <p class="field-help" x-show="purpose" x-cloak>Monetization and terminal leave have no inclusive dates. Commutation is marked Requested.</p>
       <button type="button" class="btn-secondary" x-show="purpose" x-cloak
               @click="purpose=''; $root.querySelectorAll('input[name=other_purpose]').forEach(i => i.checked = false)">Clear other purpose</button>
     </div>
 
-    {% include "leave/_field.html" with f=form.start_date %}
-    {% include "leave/_field.html" with f=form.end_date %}
+    <div class="form-2col m-0" x-show="!purpose">
+      {% include "leave/_field.html" with f=form.start_date %}
+      {% include "leave/_field.html" with f=form.end_date %}
+    </div>
     {% include "leave/_field.html" with f=form.number_of_days required=True %}
     <div x-show="code && code !== 'COSP_LEAVE'" x-cloak>
       {% include "leave/_field.html" with f=form.commutation radios=True %}

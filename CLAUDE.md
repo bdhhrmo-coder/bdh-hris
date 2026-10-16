@@ -171,8 +171,8 @@ Implemented as a **custom `Role` model tied to Employee** (not Django's built-in
 
 ### 6.3.0 CSC Form No. 6 details (Batch 8, 2026-10-16)
 - The leave application collects **6.B Details of Leave** as on the 2020 form: Vacation/Special Privilege Leave (Within the Philippines / Abroad + place; place required if abroad), Sick Leave (In Hospital / Out Patient + illness), Special Leave Benefits for Women (illness), Study Leave (Master's degree / BAR-Board review), and Other Purpose (Monetization / Terminal Leave, offered with VL and SL). Only the fields for the chosen type show and are kept; the required ones are enforced. **6.D Commutation** is collected (Requested is forced for monetization/terminal leave).
-- Monetization / terminal leave may be filed **without inclusive dates** (start/end dates are nullable only in that case); the ledger entry uses the filing date.
-- **Wellness Leave** requires a reason (Mental Health Care / Physical Wellness Activities / General Break from Work, per CSC MC No. 1, s. 2026 / CSC Res. No. 2501292). The 2020 form has no Wellness row, so it prints on the "Others:" line as "Wellness Leave - <reason>".
+- Monetization / terminal leave has **no inclusive dates** (confirmed by the owner, 2026-10-16): the date fields are hidden and cleared (start/end dates are nullable only in that case); commutation is Requested; when HR records it the days are deducted as of the filing date.
+- **Wellness Leave** requires a reason (Mental Health Care / Physical Wellness Activities / General Break from Work, per CSC MC No. 1, s. 2026 / CSC Res. No. 2501292). The 2020 form has no Wellness row, so it prints on the "Others:" line as "Wellness Leave - <reason>" (owner chose to print the reason, 2026-10-16).
 - Each leave application has a details page (`/leave/<id>/`). The filer may edit it while **Submitted** (before anyone acts) or after it is **Returned**; a returned one is resubmitted and starts again from the first step. Routing and approval rules are unchanged.
 
 ### 6.3.1 Paperless Processing (settled 2026-10-06)

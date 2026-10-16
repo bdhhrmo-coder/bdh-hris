@@ -102,9 +102,10 @@ class LeaveApplicationForm(forms.ModelForm):
         if purpose:
             # Monetization / terminal leave: no leave is taken, so the CSC form
             # has no inclusive dates; commutation is necessarily requested.
+            # Confirmed by the project owner (2026-10-16): there are no inclusive dates.
             cleaned["commutation"] = L.COMMUTATION_REQUESTED
-            if bool(start) != bool(end):
-                self.add_error("end_date", "Enter both dates, or leave both blank.")
+            cleaned["start_date"] = cleaned["end_date"] = None
+            start = end = None
         else:
             if not start:
                 self.add_error("start_date", "This field is required.")
