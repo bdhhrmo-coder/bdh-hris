@@ -91,12 +91,7 @@ body.login-page .guest-main {
 /* Entrance on a fresh page load only (template adds .entrance on GET). */
 .login-card.entrance { animation: card-in 300ms 80ms cubic-bezier(.2, .7, .2, 1) both; }
 .login-card.entrance .login-brand img { animation: logo-in 200ms ease-out both; }
-.login-card.entrance .login-version {
-  margin: 0 0 8px;
-  font-size: 0.8rem;
-  color: var(--gray-600);
-}
-.login-tagline { animation: tagline-in 160ms 280ms ease-out both; }
+.login-card.entrance .login-heading { animation: tagline-in 160ms 280ms ease-out both; }
 @keyframes card-in { from { transform: translateY(8px); } to { transform: none; } }
 @keyframes logo-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
 @keyframes tagline-in { from { opacity: 0; } to { opacity: 1; } }
@@ -115,7 +110,12 @@ body.login-page .guest-main {
   letter-spacing: 0.04em;
   color: var(--navy-900);
 }
-.login-tagline {
+.login-version {
+  margin: 0 0 16px;
+  font-size: 0.8rem;
+  color: var(--gray-600);
+}
+.login-heading {
   margin: 0;
   font-size: 0.8rem;
   font-weight: 700;
@@ -271,6 +271,9 @@ body.login-page .guest-main {
 @media (max-width: 1023px) {
   .login-split { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .login-banner { height: 30vh; height: 30svh; min-height: 180px; }
+  /* The strip is wider than the banner, so fill it edge to edge; the name
+     and tagline sit in the middle band and stay visible. */
+  .login-banner img { object-fit: cover; object-position: center 40%; }
   .login-panel { align-items: flex-start; padding: 32px 48px 48px; }
 }
 
@@ -287,6 +290,6 @@ body.login-page .guest-main {
 @media (prefers-reduced-motion: reduce) {
   .login-card.entrance,
   .login-card.entrance .login-brand img,
-  .login-card.entrance .login-tagline,
+  .login-card.entrance .login-heading,
   .spinner { animation: none !important; }
 }
