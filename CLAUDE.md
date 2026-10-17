@@ -322,6 +322,17 @@ Must include:
 
 ---
 
+## 13A. Future Expansion — Integrated HR and Administrative System (owner decisions 2026-10-17)
+
+Planned after HRIS go-live and a stable period; not in scope yet. One system, one database, one employee list; each module its own Django app reusing roles/OIC, routing, digital stamps, documents, notifications, Audit Log and the menu.
+- **HR:** Recruitment and Selection, Performance Management (CSC SPMS), Learning and Development.
+- **Administrative:** Job Order, Trip Request and Vehicle Dispatching, Out-on-Pass (build only after the revised policy is approved), Activity Scheduler.
+- **Travel authority = the existing HRIS Travel request** (OfficialRequest). Do NOT build a separate Travel Authorization module; the administrative side adds only vehicle dispatching (trip, vehicle, driver), linked to the approved Travel request.
+- **Applications are encoded by HR on the hospital network.** No online/public applicant portal (it would need internet exposure and Data Privacy Act work, §13).
+- Suggested order: Activity Scheduler + Out-on-Pass → Job Order + Dispatching → L&D + Recruitment → Performance Management. Existing Google Sheets tools are migrated once, then retired.
+
+---
+
 ## 14. Build Order (Recommended Phasing)
 
 Do not attempt to build this in one pass. Suggested phase order:
