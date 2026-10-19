@@ -32,13 +32,14 @@ if (-not $Url) { $Url = $DefaultUrl }
 $ErrorActionPreference = "Stop"
 
 # Keep the icon in a fixed place, so the shortcut still shows it if this
-# folder is moved or deleted later.
+# folder is moved or deleted later. The Public folder (C:\Users\Public) is
+# readable by every user and is never redirected by Windows (AppData can be,
+# when the script is started from inside a packaged app).
 $iconSource = Join-Path $PSScriptRoot "bdh-hris.ico"
+$iconFolder = Join-Path $env:PUBLIC "BDH-HRIS"
 if ($AllUsers) {
-    $iconFolder = Join-Path $env:ProgramData "BDH-HRIS"
     $desktop = [Environment]::GetFolderPath("CommonDesktopDirectory")
 } else {
-    $iconFolder = Join-Path $env:LOCALAPPDATA "BDH-HRIS"
     $desktop = [Environment]::GetFolderPath("Desktop")
 }
 New-Item -ItemType Directory -Force -Path $iconFolder | Out-Null
