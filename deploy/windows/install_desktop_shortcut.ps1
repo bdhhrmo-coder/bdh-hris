@@ -42,7 +42,9 @@ if ($AllUsers) {
     $desktop = [Environment]::GetFolderPath("Desktop")
 }
 New-Item -ItemType Directory -Force -Path $iconFolder | Out-Null
-$iconPath = Join-Path $iconFolder "bdh-hris.ico"
+# Saved under a name the first version never used: Windows remembers icons
+# by file name, and would keep showing the old blank one.
+$iconPath = Join-Path $iconFolder "bdh-hris-app.ico"
 Copy-Item -Path $iconSource -Destination $iconPath -Force
 
 # Remove the first version of the shortcut (a .url file), if it is there.
