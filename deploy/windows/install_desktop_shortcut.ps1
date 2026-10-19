@@ -1,7 +1,7 @@
 <#
   BDH HRIS - desktop shortcut (Batch 11, 2026-10-19)
 
-  Puts a "BDH HRIS" icon (BDH logo) on the desktop. Double-clicking it opens
+  Puts a "BDH HRIS" icon (the BDH HRIS app icon) on the desktop. Double-clicking it opens
   the HRIS login page in the PC's default browser. It is only a shortcut:
   nothing is installed and no settings are changed.
 
