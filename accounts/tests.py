@@ -151,6 +151,12 @@ class PermanentLoginLinkTests(TestCase):
         self.assertEqual(page.status_code, 200)
         self.assertContains(page, "Log in")
         self.assertContains(page, "Version 1.0")  # Batch 9: version under "HRIS"
+        self.assertContains(page, "images/favicon")  # Batch 11: BDH logo as the browser tab icon
+
+    def test_favicon_address_leads_to_the_bdh_icon(self):
+        r = self.client.get("/favicon.ico")
+        self.assertEqual(r.status_code, 302)
+        self.assertIn("images/favicon", r["Location"])
 
     def test_old_links_lead_to_the_new_login(self):
         for url in ("/", "/hris/", "/login/"):
