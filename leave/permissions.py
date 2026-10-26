@@ -100,6 +100,99 @@ def supervisors_of(target_employee):
     ]
 
 
+# -- No self-approval; next level up (owner decision 2026-10-26) ------------
+#
+# Nobody acts on a request they filed (or, for an Exchange of Duty, a
+# request they are a party to), at any step. Who acts instead:
+#   Supervisor step - a Supervisor one level ABOVE the filer. For an
+#       ordinary employee that is any Supervisor of their section/unit, as
+#       before. For a filer who is a Supervisor themself, only someone with
+#       a broader assignment counts: a unit head's request goes to the
+#       section-wide Supervisor (e.g. the Chief Nurse), never to a fellow
+#       head of the same unit. If there is nobody above, the AO endorses
+#       (hierarchy COH -> AO -> Section Heads); if the AO is the filer, the
+#       COH (the AO's own request goes straight to the COH).
+#   HR / ICTU step  - any other holder of that role.
+#   AO step         - the AO; if the AO is the filer, the COH.
+#   COH step        - the COH, never on their own request.
+# The person who acts is stamped with their own name and position, so the
+# printout shows exactly who endorsed.
+# View-only checks (viewing=True) are not affected.
+
+def _ids(filers):
+    return {f.pk for f in filers}
+
+
+def _supervisor_assignments(employee, viewing=False):
+    return list(employee.active_role_assignments(viewing=viewing).filter(role=RoleAssignment.SUPERVISOR))
+
+
+def _is_next_level_supervisor(candidate, filer, viewing=False):
+    """candidate may endorse filer's request at the Supervisor step."""
+    own = _supervisor_assignments(filer)
+    if not own:
+        return is_supervisor_of(candidate, filer, viewing)
+    if any(ra.section_id is None and ra.unit_id is None for ra in own):
+        return False  # hospital-wide already; nobody above at Supervisor level
+    own_section_ids = {ra.section_id for ra in own if ra.section_id}
+    filer_section_ids = set(filer.sections.values_list("id", flat=True))
+    for ra in _supervisor_assignments(candidate, viewing):
+        if ra.section_id is None and ra.unit_id is None:
+            return True
+        if ra.section_id and ra.section_id in filer_section_ids and ra.section_id not in own_section_ids:
+            return True
+    return False
+
+
+def _with_role_except(role_code, filers):
+    excluded = _ids(filers)
+    return [e for e in employees_with_role(role_code) if e.pk not in excluded]
+
+
+def coh_step_actors(filers):
+    return _with_role_except(RoleAssignment.CHIEF_OF_HOSPITAL, filers)
+
+
+def ao_step_actors(filers):
+    """The AO; the COH instead when the AO is the filer."""
+    return _with_role_except(RoleAssignment.ADMINISTRATIVE_OFFICER, filers) or coh_step_actors(filers)
+
+
+def endorsers_for(filers):
+    """Who acts at the Supervisor step for a request filed by `filers`
+    (one employee, or both parties of an Exchange of Duty). Never a filer;
+    nobody when a filer is the COH (no level above)."""
+    filers = list(filers)
+    if any(f.has_role(RoleAssignment.CHIEF_OF_HOSPITAL) for f in filers):
+        return []
+    found = [
+        s for s in _with_role_except(RoleAssignment.SUPERVISOR, filers)
+        if any(_is_next_level_supervisor(s, f) for f in filers)
+    ]
+    return found or ao_step_actors(filers)
+
+
+def can_endorse(acting_employee, filers):
+    return acting_employee is not None and acting_employee.pk in _ids(endorsers_for(filers))
+
+
+def can_act_hr_step(acting_employee, filers):
+    return is_hr(acting_employee) and acting_employee.pk not in _ids(filers)
+
+
+def can_act_ao_step(acting_employee, filers):
+    return acting_employee is not None and acting_employee.pk in _ids(ao_step_actors(filers))
+
+
+def can_act_coh_step(acting_employee, filers):
+    return acting_employee is not None and acting_employee.pk in _ids(coh_step_actors(filers))
+
+
+def hr_step_actors(filers):
+    excluded = _ids(filers)
+    return [e for e in hr_employees() if e.pk not in excluded]
+
+
 def can_submit_for(acting_employee, target_employee):
     """An employee may only submit a leave application for themselves."""
     return acting_employee is not None and acting_employee.pk == target_employee.pk
@@ -146,10 +239,13 @@ def visible_applications_for(acting_employee):
         )
         qs = qs | data_entry_only | cosp_leave_stage
 
-    if is_administrative_officer(acting_employee):
-        qs = qs | LeaveApplication.objects.filter(
+    ao_ids = [
+        app.pk for app in LeaveApplication.objects.filter(
             leave_type__requires_full_routing=True, status=LeaveApplication.PROCESSED_BY_HR
-        )
+        ).select_related("employee")
+        if can_act_ao_step(acting_employee, [app.employee])
+    ]
+    qs = qs | LeaveApplication.objects.filter(pk__in=ao_ids)
 
     if is_chief_of_hospital(acting_employee):
         qs = qs | LeaveApplication.objects.filter(
@@ -162,8 +258,9 @@ def visible_applications_for(acting_employee):
         leave_type__requires_full_routing=True, status=LeaveApplication.SUBMITTED
     ).select_related("employee")
     supervisor_ids = [
-        app.pk for app in supervisor_candidates if is_supervisor_of(acting_employee, app.employee)
+        app.pk for app in supervisor_candidates if can_endorse(acting_employee, [app.employee])
     ]
     qs = qs | LeaveApplication.objects.filter(pk__in=supervisor_ids)
 
-    return qs.distinct()
+    # Never one's own application, at any step (owner decision 2026-10-26).
+    return qs.exclude(employee=acting_employee).distinct()

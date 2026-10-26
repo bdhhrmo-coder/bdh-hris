@@ -2,8 +2,7 @@
 for the CLAUDE.md §11/§2 in-app-only-for-now rationale. CTO usage has no
 data-entry-only shortcut (unlike leave), so there's one chain, not two."""
 
-from accounts.models import RoleAssignment
-from leave.permissions import employees_with_role, hr_employees, supervisors_of
+from leave.permissions import ao_step_actors, coh_step_actors, endorsers_for, hr_step_actors
 from notifications.services import notify
 
 from .models import CTOUsageApplication
@@ -20,28 +19,29 @@ _OUTCOME_STATUSES = {
 
 def notify_status_change(application):
     status = application.status
+    filers = [application.employee]
 
     if status == CTOUsageApplication.SUBMITTED:
         notify(
-            supervisors_of(application.employee),
+            endorsers_for(filers),
             f"{application.employee} filed a CTO usage application — awaiting your endorsement.",
             _QUEUE_URL,
         )
     elif status == CTOUsageApplication.ENDORSED_BY_SUPERVISOR:
         notify(
-            hr_employees(),
+            hr_step_actors(filers),
             f"A CTO usage application for {application.employee} is ready for HR processing.",
             _QUEUE_URL,
         )
     elif status == CTOUsageApplication.PROCESSED_BY_HR:
         notify(
-            employees_with_role(RoleAssignment.ADMINISTRATIVE_OFFICER),
+            ao_step_actors(filers),
             f"A CTO usage application for {application.employee} is ready for AO recommendation.",
             _QUEUE_URL,
         )
     elif status == CTOUsageApplication.RECOMMENDED_BY_AO:
         notify(
-            employees_with_role(RoleAssignment.CHIEF_OF_HOSPITAL),
+            coh_step_actors(filers),
             f"A CTO usage application for {application.employee} is awaiting your approval.",
             _QUEUE_URL,
         )

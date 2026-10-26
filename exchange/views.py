@@ -9,12 +9,12 @@ from .forms import DutyExchangeRequestForm
 from .models import DutyExchangeRequest, DutyExchangeRequestAction
 from .notifications import notify_status_change
 from .permissions import (
+    can_act_ao_step,
+    can_act_coh_step,
+    can_act_hr_step,
+    can_endorse,
     can_view_exchange_request,
     get_acting_employee,
-    is_administrative_officer,
-    is_chief_of_hospital,
-    is_hr,
-    is_supervisor_of_either_party,
     visible_exchange_requests_for,
 )
 
@@ -129,6 +129,8 @@ def exchange_action(request, pk):
         raise PermissionDenied("No employee record is linked to your account.")
 
     status = exchange_request.status
+    # Neither party acts on their own exchange (owner decision 2026-10-26).
+    filers = [exchange_request.employee_a, exchange_request.employee_b]
 
     def apply_transition(new_status, action_name):
         exchange_request.status = new_status
@@ -141,7 +143,7 @@ def exchange_action(request, pk):
 
     allowed = False
 
-    if status == DutyExchangeRequest.SUBMITTED and is_supervisor_of_either_party(acting_employee, exchange_request):
+    if status == DutyExchangeRequest.SUBMITTED and can_endorse(acting_employee, filers):
         if action == "endorse":
             allowed = True
             apply_transition(DutyExchangeRequest.ENDORSED_BY_SUPERVISOR, "endorse")
@@ -150,7 +152,7 @@ def exchange_action(request, pk):
             apply_transition(
                 DutyExchangeRequest.REJECTED if action == "reject" else DutyExchangeRequest.RETURNED, action
             )
-    elif status == DutyExchangeRequest.ENDORSED_BY_SUPERVISOR and is_hr(acting_employee):
+    elif status == DutyExchangeRequest.ENDORSED_BY_SUPERVISOR and can_act_hr_step(acting_employee, filers):
         if action == "process":
             allowed = True
             apply_transition(DutyExchangeRequest.PROCESSED_BY_HR, "process")
@@ -159,7 +161,7 @@ def exchange_action(request, pk):
             apply_transition(
                 DutyExchangeRequest.REJECTED if action == "reject" else DutyExchangeRequest.RETURNED, action
             )
-    elif status == DutyExchangeRequest.PROCESSED_BY_HR and is_administrative_officer(acting_employee):
+    elif status == DutyExchangeRequest.PROCESSED_BY_HR and can_act_ao_step(acting_employee, filers):
         if action == "recommend":
             allowed = True
             apply_transition(DutyExchangeRequest.RECOMMENDED_BY_AO, "recommend")
@@ -168,7 +170,7 @@ def exchange_action(request, pk):
             apply_transition(
                 DutyExchangeRequest.REJECTED if action == "reject" else DutyExchangeRequest.RETURNED, action
             )
-    elif status == DutyExchangeRequest.RECOMMENDED_BY_AO and is_chief_of_hospital(acting_employee):
+    elif status == DutyExchangeRequest.RECOMMENDED_BY_AO and can_act_coh_step(acting_employee, filers):
         if action == "approve":
             # Batch 5: the swap is written into the duty schedule(s) at final
             # approval; if the schedule changed since filing, approval stops.

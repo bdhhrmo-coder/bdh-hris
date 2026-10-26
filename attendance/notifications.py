@@ -5,7 +5,7 @@ MINOR path (HR Processor -> HR Administrator, no Supervisor/AO step) and
 the FORMAL path (BDH-ADM-AO-01F10, 2026-10-06: ICTU Staff or HR validates,
 depending on the reason, then the AO approves - no COH step)."""
 
-from leave.permissions import employees_with_role, hr_employees
+from leave.permissions import ao_step_actors, employees_with_role, hr_employees
 from notifications.services import notify
 
 from .models import AttendanceCorrectionRequest
@@ -26,12 +26,18 @@ def _return_remark(correction):
 def notify_status_change(correction):
     from accounts.models import RoleAssignment
 
+    from .permissions import filers_of
+
     status = correction.status
+    filer_ids = {p.pk for p in filers_of(correction)}
+
+    def others(people):
+        return [p for p in people if p.pk not in filer_ids]
 
     if correction.correction_type == AttendanceCorrectionRequest.MINOR:
         if status == AttendanceCorrectionRequest.SUBMITTED:
             notify(
-                employees_with_role(RoleAssignment.HR_ADMINISTRATOR),
+                others(employees_with_role(RoleAssignment.HR_ADMINISTRATOR)),
                 f"A minor attendance correction for {correction.employee} needs authorization.",
                 _QUEUE_URL,
             )
@@ -51,7 +57,7 @@ def notify_status_change(correction):
             )
     else:
         if status == AttendanceCorrectionRequest.SUBMITTED:
-            validators = (
+            validators = others(
                 employees_with_role(RoleAssignment.ICTU_STAFF) if correction.validated_by_ictu else hr_employees()
             )
             dates = correction.lines.count()
@@ -63,19 +69,19 @@ def notify_status_change(correction):
             )
         elif status == AttendanceCorrectionRequest.VALIDATED:
             notify(
-                employees_with_role(RoleAssignment.ADMINISTRATIVE_OFFICER),
+                ao_step_actors(filers_of(correction)),
                 f"A validated attendance correction for {correction.employee} is awaiting your approval.",
                 _QUEUE_URL,
             )
         elif status == AttendanceCorrectionRequest.ENDORSED_BY_SUPERVISOR:
             notify(
-                hr_employees(),
+                others(hr_employees()),
                 f"An attendance correction request for {correction.employee} is ready for HR processing.",
                 _QUEUE_URL,
             )
         elif status == AttendanceCorrectionRequest.PROCESSED_BY_HR:
             notify(
-                employees_with_role(RoleAssignment.ADMINISTRATIVE_OFFICER),
+                ao_step_actors(filers_of(correction)),
                 f"An attendance correction request for {correction.employee} is awaiting your approval.",
                 _QUEUE_URL,
             )

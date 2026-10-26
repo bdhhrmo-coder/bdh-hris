@@ -129,6 +129,10 @@ def minor_correction_create(request):
     if request.method == "POST":
         emp_form = MinorEmployeeForm(request.POST)
         employee = emp_form.cleaned_data["employee"] if emp_form.is_valid() else None
+        if employee is not None and employee.pk == acting_employee.pk:
+            # Never on one's own attendance (owner decision 2026-10-26).
+            emp_form.add_error("employee", "Another HR staff member must file a correction of your own attendance.")
+            employee = None
         formset = line_formset(request.POST, formal=False, employee=employee)
         if employee is not None and formset.is_valid():
             with transaction.atomic():

@@ -4,6 +4,10 @@ as leave and CTO routing — one role definition for the whole system.
 """
 
 from leave.permissions import (  # noqa: F401 (re-exported for exchange callers)
+    can_act_ao_step,
+    can_act_coh_step,
+    can_act_hr_step,
+    can_endorse,
     get_acting_employee,
     is_administrative_officer,
     is_chief_of_hospital,
@@ -53,8 +57,12 @@ def visible_exchange_requests_for(acting_employee):
     if is_hr(acting_employee):
         qs = qs | DutyExchangeRequest.objects.filter(status=DutyExchangeRequest.ENDORSED_BY_SUPERVISOR)
 
-    if is_administrative_officer(acting_employee):
-        qs = qs | DutyExchangeRequest.objects.filter(status=DutyExchangeRequest.PROCESSED_BY_HR)
+    ao_ids = [
+        req.pk for req in DutyExchangeRequest.objects.filter(status=DutyExchangeRequest.PROCESSED_BY_HR)
+        .select_related("employee_a", "employee_b")
+        if can_act_ao_step(acting_employee, [req.employee_a, req.employee_b])
+    ]
+    qs = qs | DutyExchangeRequest.objects.filter(pk__in=ao_ids)
 
     if is_chief_of_hospital(acting_employee):
         qs = qs | DutyExchangeRequest.objects.filter(status=DutyExchangeRequest.RECOMMENDED_BY_AO)
@@ -63,8 +71,9 @@ def visible_exchange_requests_for(acting_employee):
         status=DutyExchangeRequest.SUBMITTED
     ).select_related("employee_a", "employee_b")
     supervisor_ids = [
-        req.pk for req in supervisor_candidates if is_supervisor_of_either_party(acting_employee, req)
+        req.pk for req in supervisor_candidates if can_endorse(acting_employee, [req.employee_a, req.employee_b])
     ]
     qs = qs | DutyExchangeRequest.objects.filter(pk__in=supervisor_ids)
 
-    return qs.distinct()
+    # Never one's own exchange, at any step (owner decision 2026-10-26).
+    return qs.exclude(employee_a=acting_employee).exclude(employee_b=acting_employee).distinct()

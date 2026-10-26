@@ -2,6 +2,10 @@
 request type in this system."""
 
 from leave.permissions import (  # noqa: F401 (re-exported for callers)
+    can_act_ao_step,
+    can_act_coh_step,
+    can_act_hr_step,
+    can_endorse,
     get_acting_employee,
     is_administrative_officer,
     is_chief_of_hospital,
@@ -32,14 +36,16 @@ def actor_may_advance(acting_employee, official_request):
     target_status = next_status(official_request.request_type, official_request.status)
     if target_status is None:
         return False
+    # Never on one's own request (owner decision 2026-10-26).
+    filers = [official_request.employee]
     if target_status == OfficialRequest.ENDORSED_BY_SUPERVISOR:
-        return is_supervisor_of(acting_employee, official_request.employee)
+        return can_endorse(acting_employee, filers)
     if target_status == OfficialRequest.PROCESSED_BY_HR:
-        return is_hr(acting_employee)
+        return can_act_hr_step(acting_employee, filers)
     if target_status == OfficialRequest.RECOMMENDED_BY_AO:
-        return is_administrative_officer(acting_employee)
+        return can_act_ao_step(acting_employee, filers)
     if target_status == OfficialRequest.APPROVED:
-        return is_chief_of_hospital(acting_employee)
+        return can_act_coh_step(acting_employee, filers)
     return False
 
 
