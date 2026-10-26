@@ -81,7 +81,7 @@ def official_request_counts(start_date, end_date, section=None):
         qs = qs.filter(employee__sections=section).distinct()
     return _bucket(
         qs,
-        {OfficialRequest.APPROVED},
+        {OfficialRequest.APPROVED, OfficialRequest.RECORDED},
         {OfficialRequest.REJECTED, OfficialRequest.RETURNED, OfficialRequest.CANCELLED},
     )
 

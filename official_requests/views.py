@@ -7,7 +7,9 @@ from .forms import OfficialRequestForm
 from .models import OfficialRequest, OfficialRequestAction
 from .notifications import notify_status_change
 from .permissions import actor_may_advance, get_acting_employee, visible_requests_for
-from .routing import action_name_for, next_status
+from accounts.models import RoleAssignment
+
+from .routing import action_name_for, next_status_for
 
 
 @login_required
@@ -21,6 +23,7 @@ def request_apply(request):
         if form.is_valid():
             official_request = form.save(commit=False)
             official_request.employee = acting_employee
+            official_request.recorded_only = acting_employee.has_role(RoleAssignment.CHIEF_OF_HOSPITAL)
             official_request.full_clean()
             official_request.save()
             OfficialRequestAction.objects.create(
@@ -28,7 +31,11 @@ def request_apply(request):
                 acted_by=request.user,
             )
             notify_status_change(official_request)
-            messages.success(request, f"{official_request.get_request_type_display()} request submitted.")
+            if official_request.recorded_only:
+                messages.success(request, f"{official_request.get_request_type_display()} request submitted. "
+                                          "HR will record it; the approval itself is outside BDH (PHO/Capitol).")
+            else:
+                messages.success(request, f"{official_request.get_request_type_display()} request submitted.")
             return redirect("official_requests:my_requests")
     else:
         form = OfficialRequestForm()
@@ -50,7 +57,7 @@ def request_queue(request):
     acting_employee = get_acting_employee(request.user)
     requests = list(visible_requests_for(acting_employee).select_related("employee").order_by("submitted_at", "pk"))  # oldest first: first filed, first acted on (owner, 2026-10-06)
     for r in requests:
-        r.next_action = action_name_for(next_status(r.request_type, r.status))
+        r.next_action = action_name_for(next_status_for(r))
     from . import batch as batch_rules
 
     batches = batch_rules.batches_awaiting(acting_employee, request.user)
@@ -72,7 +79,7 @@ def request_action(request, pk):
     if acting_employee is None:
         raise PermissionDenied("No employee record is linked to your account.")
 
-    target_status = next_status(official_request.request_type, official_request.status)
+    target_status = next_status_for(official_request)
     expected_action = action_name_for(target_status) if target_status else None
 
     allowed = False

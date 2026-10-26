@@ -103,6 +103,11 @@ class BatchForm(forms.Form):
                                             "normal form so it follows the normal route.")
             elif outside:
                 self.add_error("employees", "You can't file for: " + "; ".join(outside) + ".")
+            elif any(e.has_role("CHIEF_OF_HOSPITAL") for e in employees):
+                # Owner decision 2026-10-26: the COH's own requests are only
+                # recorded by HR (approval is outside BDH), via the normal form.
+                self.add_error("employees", "Leave out the Chief of Hospital - the COH files their own request "
+                                            "with the normal form and HR records it (approval is outside BDH).")
             elif kind == "OFFICIAL_BUSINESS" and role in self.rules.HR_ROLES and employees:
                 if not self.rules.common_supervisors(employees, exclude_employee=self.acting_employee):
                     self.add_error("employees", "Official Business filed by HR goes to the employees' Supervisor "

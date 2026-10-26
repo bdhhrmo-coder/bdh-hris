@@ -24,6 +24,7 @@ STEP_META = {
     OR.PROCESSED_BY_HR: "process",
     OR.RECOMMENDED_BY_AO: "recommend",
     OR.APPROVED: "approve",
+    OR.RECORDED: "record",
 }
 
 
@@ -54,6 +55,14 @@ def next_status(request_type, current_status):
     if idx + 1 >= len(steps):
         return None
     return steps[idx + 1]
+
+
+def next_status_for(official_request):
+    """next_status for this request: a COH's own request (recorded_only)
+    goes SUBMITTED -> RECORDED by HR, nothing else (owner 2026-10-26)."""
+    if official_request.recorded_only:
+        return OR.RECORDED if official_request.status == OR.SUBMITTED else None
+    return next_status(official_request.request_type, official_request.status)
 
 
 def action_name_for(status):
