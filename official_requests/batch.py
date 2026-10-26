@@ -37,13 +37,13 @@ from employees.models import Employee
 from exchange.models import DutyExchangeRequest
 from leave.models import LeaveApplication
 from leave.permissions import (
-    employees_with_role,
-    hr_employees,
-    is_administrative_officer,
-    is_chief_of_hospital,
-    is_hr,
-    is_supervisor_of,
-    supervisors_of,
+    ao_step_actors,
+    can_act_ao_step,
+    can_act_coh_step,
+    can_act_hr_step,
+    coh_step_actors,
+    endorsers_for,
+    hr_step_actors,
 )
 from notifications.services import notify
 
@@ -166,17 +166,30 @@ def pickable_employees(acting_employee):
 
 
 def common_supervisors(employees, exclude_employee=None):
-    """Supervisors who cover EVERY employee given (for the OB-by-HR
-    Supervisor endorsement step)."""
+    """Who may endorse for EVERY employee given (the OB-by-HR Supervisor
+    step): each employee's next-level-up endorser (leave.permissions.
+    endorsers_for), never one of the employees or the filer (owner
+    decision 2026-10-26)."""
+    employees = list(employees)
+    excluded = {e.pk for e in employees}
+    if exclude_employee is not None:
+        excluded.add(exclude_employee.pk)
     common = None
     for emp in employees:
-        ids = {s.pk for s in supervisors_of(emp)}
+        ids = {s.pk for s in endorsers_for([emp])} - excluded
         common = ids if common is None else common & ids
         if not common:
             return []
-    if exclude_employee is not None and common:
-        common.discard(exclude_employee.pk)
     return list(Employee.objects.filter(pk__in=common or []))
+
+
+def batch_people(batch):
+    """The filer and every employee on the batch: none of them acts on it."""
+    people = [line.employee for line in batch.active_lines()]
+    filer = getattr(batch.filed_by, "employee", None)
+    if filer is not None:
+        people.append(filer)
+    return people
 
 
 # -- route ----------------------------------------------------------------------
@@ -207,15 +220,19 @@ def may_act(acting_employee, user, batch):
     if acting_employee is None or batch.filed_by_id == user.pk:
         return False  # the filer never acts on their own batch again
     target = next_status(batch)
+    people = batch_people(batch)
+    if acting_employee.pk in {p.pk for p in people}:
+        return False  # never on a batch that includes them (owner decision 2026-10-26)
     if target == R.ENDORSED_BY_SUPERVISOR:
         lines = list(batch.active_lines())
-        return bool(lines) and all(is_supervisor_of(acting_employee, line.employee) for line in lines)
+        return bool(lines) and acting_employee.pk in {
+            s.pk for s in common_supervisors([line.employee for line in lines])}
     if target == R.PROCESSED_BY_HR:
-        return is_hr(acting_employee)
+        return can_act_hr_step(acting_employee, people)
     if target == R.RECOMMENDED_BY_AO:
-        return is_administrative_officer(acting_employee)
+        return can_act_ao_step(acting_employee, people)
     if target == R.APPROVED:
-        return is_chief_of_hospital(acting_employee)
+        return can_act_coh_step(acting_employee, people)
     return False
 
 
@@ -391,18 +408,19 @@ def _url(batch):
 
 def _next_actors(batch):
     target = next_status(batch)
-    filer = getattr(batch.filed_by, "employee", None)
+    involved = batch_people(batch)
     if target == R.ENDORSED_BY_SUPERVISOR:
         people = common_supervisors([line.employee for line in batch.active_lines()])
     elif target == R.PROCESSED_BY_HR:
-        people = list(hr_employees())
+        people = hr_step_actors(involved)
     elif target == R.RECOMMENDED_BY_AO:
-        people = list(employees_with_role(RoleAssignment.ADMINISTRATIVE_OFFICER))
+        people = ao_step_actors(involved)
     elif target == R.APPROVED:
-        people = list(employees_with_role(RoleAssignment.CHIEF_OF_HOSPITAL))
+        people = coh_step_actors(involved)
     else:
         people = []
-    return [p for p in people if filer is None or p.pk != filer.pk]
+    involved_ids = {p.pk for p in involved}
+    return [p for p in people if p.pk not in involved_ids]
 
 
 def _dates_text(lines):

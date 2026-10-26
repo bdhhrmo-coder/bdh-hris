@@ -5,8 +5,7 @@ permissions.actor_may_advance() does — because Official Time and Travel
 each skip one step (§6.2), so a saved status alone doesn't say who acts
 next; routing.py already encodes that."""
 
-from accounts.models import RoleAssignment
-from leave.permissions import employees_with_role, hr_employees, supervisors_of
+from leave.permissions import ao_step_actors, coh_step_actors, endorsers_for, hr_step_actors
 from notifications.services import notify
 
 from .models import OfficialRequest
@@ -18,28 +17,29 @@ def notify_status_change(official_request):
     type_name = official_request.get_request_type_display()
     queue_url = "/official-requests/queue/"
     mine_url = "/official-requests/mine/"
+    filers = [official_request.employee]
 
     if target_status == OfficialRequest.ENDORSED_BY_SUPERVISOR:
         notify(
-            supervisors_of(official_request.employee),
+            endorsers_for(filers),
             f"{official_request.employee} filed a {type_name} request — awaiting your endorsement.",
             queue_url,
         )
     elif target_status == OfficialRequest.PROCESSED_BY_HR:
         notify(
-            hr_employees(),
+            hr_step_actors(filers),
             f"A {type_name} request for {official_request.employee} is ready for HR processing.",
             queue_url,
         )
     elif target_status == OfficialRequest.RECOMMENDED_BY_AO:
         notify(
-            employees_with_role(RoleAssignment.ADMINISTRATIVE_OFFICER),
+            ao_step_actors(filers),
             f"A {type_name} request for {official_request.employee} is ready for AO recommendation.",
             queue_url,
         )
     elif target_status == OfficialRequest.APPROVED:
         notify(
-            employees_with_role(RoleAssignment.CHIEF_OF_HOSPITAL),
+            coh_step_actors(filers),
             f"A {type_name} request for {official_request.employee} is awaiting your approval.",
             queue_url,
         )

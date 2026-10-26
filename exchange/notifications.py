@@ -5,8 +5,7 @@ CONSENT_DECLINED (notify both parties the request is dead). Both parties'
 supervisors are notified at the endorsement step since either one may
 endorse (§8 — see permissions.is_supervisor_of_either_party)."""
 
-from accounts.models import RoleAssignment
-from leave.permissions import employees_with_role, hr_employees, supervisors_of
+from leave.permissions import ao_step_actors, coh_step_actors, endorsers_for, hr_step_actors
 from notifications.services import notify
 
 from .models import DutyExchangeRequest
@@ -30,21 +29,21 @@ def notify_status_change(exchange_request):
         notify(b, f"{a} wants to exchange duty with you on {exchange_request.date_a} — your consent is needed.", _MINE_URL)
     elif status == DutyExchangeRequest.SUBMITTED:
         notify(
-            supervisors_of(a) + supervisors_of(b),
+            endorsers_for([a, b]),
             f"{a} and {b} filed a duty exchange request — awaiting your endorsement.",
             _QUEUE_URL,
         )
     elif status == DutyExchangeRequest.ENDORSED_BY_SUPERVISOR:
-        notify(hr_employees(), f"A duty exchange request between {a} and {b} is ready for HR processing.", _QUEUE_URL)
+        notify(hr_step_actors([a, b]), f"A duty exchange request between {a} and {b} is ready for HR processing.", _QUEUE_URL)
     elif status == DutyExchangeRequest.PROCESSED_BY_HR:
         notify(
-            employees_with_role(RoleAssignment.ADMINISTRATIVE_OFFICER),
+            ao_step_actors([a, b]),
             f"A duty exchange request between {a} and {b} is ready for AO recommendation.",
             _QUEUE_URL,
         )
     elif status == DutyExchangeRequest.RECOMMENDED_BY_AO:
         notify(
-            employees_with_role(RoleAssignment.CHIEF_OF_HOSPITAL),
+            coh_step_actors([a, b]),
             f"A duty exchange request between {a} and {b} is awaiting your approval.",
             _QUEUE_URL,
         )

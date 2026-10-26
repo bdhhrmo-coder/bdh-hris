@@ -6,6 +6,10 @@ the whole system, not two copies that could drift apart.
 """
 
 from leave.permissions import (  # noqa: F401 (re-exported for cto callers)
+    can_act_ao_step,
+    can_act_coh_step,
+    can_act_hr_step,
+    can_endorse,
     get_acting_employee,
     is_administrative_officer,
     is_chief_of_hospital,
@@ -46,8 +50,11 @@ def visible_cto_applications_for(acting_employee):
     if is_hr(acting_employee):
         qs = qs | CTOUsageApplication.objects.filter(status=CTOUsageApplication.ENDORSED_BY_SUPERVISOR)
 
-    if is_administrative_officer(acting_employee):
-        qs = qs | CTOUsageApplication.objects.filter(status=CTOUsageApplication.PROCESSED_BY_HR)
+    ao_ids = [
+        app.pk for app in CTOUsageApplication.objects.filter(status=CTOUsageApplication.PROCESSED_BY_HR)
+        .select_related("employee") if can_act_ao_step(acting_employee, [app.employee])
+    ]
+    qs = qs | CTOUsageApplication.objects.filter(pk__in=ao_ids)
 
     if is_chief_of_hospital(acting_employee):
         qs = qs | CTOUsageApplication.objects.filter(status=CTOUsageApplication.RECOMMENDED_BY_AO)
@@ -56,8 +63,9 @@ def visible_cto_applications_for(acting_employee):
         status=CTOUsageApplication.SUBMITTED
     ).select_related("employee")
     supervisor_ids = [
-        app.pk for app in supervisor_candidates if is_supervisor_of(acting_employee, app.employee)
+        app.pk for app in supervisor_candidates if can_endorse(acting_employee, [app.employee])
     ]
     qs = qs | CTOUsageApplication.objects.filter(pk__in=supervisor_ids)
 
-    return qs.distinct()
+    # Never one's own application, at any step (owner decision 2026-10-26).
+    return qs.exclude(employee=acting_employee).distinct()

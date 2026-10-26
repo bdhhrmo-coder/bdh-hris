@@ -21,8 +21,13 @@ Safety rules built in:
     Administrator manages delegated user access), and "System
     Administrator" can never be given by import. Roles are only ever added,
     never removed, by an import.
-  - "Supervisor" is scoped to the employee's own section(s) in the file -
-    never hospital-wide - so they only see their own staff's requests.
+  - "Supervisor" is scoped to the unit(s) on the row, or - for a section
+    with no unit on the row - to the whole section (owner decision
+    2026-10-26: a unit head supervises that unit only; the Chief Nurse,
+    with no unit, keeps the whole Nursing Service). Never hospital-wide.
+  - The Chief of Hospital and the Administrative Officer may be imported
+    with no section: their authority is hospital-wide (owner decision
+    2026-10-26).
 """
 
 import secrets
@@ -213,14 +218,15 @@ def build_plan(uploaded_file, actor_employee):
                 p.errors.append(f'Section "{sname}" not found (see the "Sections and Units" sheet).')
             else:
                 p.sections.append(section)
-        if p.action == "new" and not p.sections and not split_list(raw["sections"]):
-            p.errors.append("Section(s) is required for a new employee.")
         for uname in split_list(raw["units"]):
             matches = [u for u in units if u.name.lower() == uname.lower()]
             if len(matches) != 1:
                 p.errors.append(f'Unit "{uname}" not found (see the "Sections and Units" sheet).')
             else:
                 p.units.append(matches[0])
+                if p.sections and matches[0].section not in p.sections:
+                    p.errors.append(f'Unit "{matches[0].name}" belongs to {matches[0].section.name}, '
+                                    "which is not in Section(s) on this row.")
         for rname in split_list(raw["roles"]):
             code = _role_code(rname)
             if code is None:
@@ -230,6 +236,11 @@ def build_plan(uploaded_file, actor_employee):
                     p.errors.append(f'Role "{rname}" is not recognised.')
                 continue
             p.roles.append(code)
+        hospital_wide = {RoleAssignment.CHIEF_OF_HOSPITAL, RoleAssignment.ADMINISTRATIVE_OFFICER}
+        if p.action == "new" and not p.sections and not split_list(raw["sections"]) \
+                and not (hospital_wide & set(p.roles)):
+            p.errors.append("Section(s) is required for a new employee "
+                            "(only the Chief of Hospital and the Administrative Officer may have none).")
         if p.roles and not can_assign_roles:
             p.errors.append("Only an HR Administrator may assign roles by import. Leave Additional Role(s) blank.")
         if RoleAssignment.SUPERVISOR in p.roles and not (p.sections or (existing and existing.sections.exists())):
@@ -273,13 +284,23 @@ def _display(value):
     return str(value)
 
 
-def _assign_roles(employee, roles, sections):
+def supervisor_scopes(sections, units):
+    """[(section, unit)] for a Supervisor: each unit on the row (unit head),
+    plus each section on the row that has no unit on the row (whole
+    section, e.g. the Chief Nurse). Owner decision 2026-10-26."""
+    unit_section_ids = {u.section_id for u in units}
+    return [(None, u) for u in units] + [(s, None) for s in sections if s.pk not in unit_section_ids]
+
+
+def _assign_roles(employee, roles, sections, units=()):
     RoleAssignment.objects.get_or_create(employee=employee, role=RoleAssignment.EMPLOYEE, section=None, unit=None,
                                          defaults={"is_active": True})
     for role in roles:
         if role == RoleAssignment.SUPERVISOR:
-            for section in sections or employee.sections.all():
-                RoleAssignment.objects.get_or_create(employee=employee, role=role, section=section, unit=None,
+            sections = list(sections or employee.sections.all())
+            units = list(units or employee.units.all())
+            for section, unit in supervisor_scopes(sections, units):
+                RoleAssignment.objects.get_or_create(employee=employee, role=role, section=section, unit=unit,
                                                      is_oic=False, defaults={"is_active": True})
         elif not employee.has_role(role):
             RoleAssignment.objects.create(employee=employee, role=role)
@@ -313,7 +334,7 @@ def apply_plan(plans, actor_user, source_name):
             emp = Employee.objects.create(employee_id=p.employee_id, **p.values)
             emp.sections.set(p.sections)
             emp.units.set(p.units)
-            _assign_roles(emp, p.roles, p.sections)
+            _assign_roles(emp, p.roles, p.sections, p.units)
             _create_login(emp, p.username, credentials)
             created += 1
             continue
@@ -339,7 +360,7 @@ def apply_plan(plans, actor_user, source_name):
                 ))
                 getattr(emp, attr).set(new_items)
         EmployeeEditHistory.objects.bulk_create(history)
-        _assign_roles(emp, p.roles, p.sections)
+        _assign_roles(emp, p.roles, p.sections, p.units)
         if emp.user is None:
             _create_login(emp, p.username, credentials)
         updated += 1

@@ -16,11 +16,11 @@ from .forms import LeaveApplicationForm
 from .models import LeaveApplication, LeaveApplicationAction, LeaveCreditTransaction, LeaveType
 from .notifications import notify_status_change
 from .permissions import (
+    can_act_ao_step,
+    can_act_coh_step,
+    can_act_hr_step,
+    can_endorse,
     can_view_application,
-    is_administrative_officer,
-    is_chief_of_hospital,
-    is_hr,
-    is_supervisor_of,
     visible_applications_for,
 )
 
@@ -181,6 +181,7 @@ def leave_action(request, pk):
 
     full_routing = application.leave_type.requires_full_routing
     status = application.status
+    filers = [application.employee]  # never acts on their own (owner decision 2026-10-26)
 
     def apply_transition(new_status, action_name):
         application.status = new_status
@@ -195,7 +196,7 @@ def leave_action(request, pk):
     error = None
 
     if not full_routing:
-        if status == LeaveApplication.SUBMITTED and is_hr(acting_employee):
+        if status == LeaveApplication.SUBMITTED and can_act_hr_step(acting_employee, filers):
             if action == "record":
                 error = _finalize_success(application, request.user)
                 if error is None:
@@ -205,7 +206,7 @@ def leave_action(request, pk):
                 allowed = True
                 apply_transition(LeaveApplication.REJECTED, "reject")
     else:
-        if status == LeaveApplication.SUBMITTED and is_supervisor_of(acting_employee, application.employee):
+        if status == LeaveApplication.SUBMITTED and can_endorse(acting_employee, filers):
             if action == "endorse":
                 allowed = True
                 apply_transition(LeaveApplication.ENDORSED_BY_SUPERVISOR, "endorse")
@@ -214,7 +215,7 @@ def leave_action(request, pk):
                 apply_transition(
                     LeaveApplication.REJECTED if action == "reject" else LeaveApplication.RETURNED, action
                 )
-        elif status == LeaveApplication.ENDORSED_BY_SUPERVISOR and is_hr(acting_employee):
+        elif status == LeaveApplication.ENDORSED_BY_SUPERVISOR and can_act_hr_step(acting_employee, filers):
             if action == "process":
                 allowed = True
                 apply_transition(LeaveApplication.PROCESSED_BY_HR, "process")
@@ -223,7 +224,7 @@ def leave_action(request, pk):
                 apply_transition(
                     LeaveApplication.REJECTED if action == "reject" else LeaveApplication.RETURNED, action
                 )
-        elif status == LeaveApplication.PROCESSED_BY_HR and is_administrative_officer(acting_employee):
+        elif status == LeaveApplication.PROCESSED_BY_HR and can_act_ao_step(acting_employee, filers):
             if action == "recommend":
                 allowed = True
                 apply_transition(LeaveApplication.RECOMMENDED_BY_AO, "recommend")
@@ -232,7 +233,7 @@ def leave_action(request, pk):
                 apply_transition(
                     LeaveApplication.REJECTED if action == "reject" else LeaveApplication.RETURNED, action
                 )
-        elif status == LeaveApplication.RECOMMENDED_BY_AO and is_chief_of_hospital(acting_employee):
+        elif status == LeaveApplication.RECOMMENDED_BY_AO and can_act_coh_step(acting_employee, filers):
             if action == "approve":
                 error = _finalize_success(application, request.user)
                 if error is None:

@@ -26,13 +26,14 @@ from .forms import CTOClaimForm, CTOExceptionClaimForm, CTOUsageApplicationForm
 from .models import CTOCreditEntry, CTOCreditTransaction, CTOUsageApplication, CTOUsageApplicationAction
 from .notifications import notify_credit_entry, notify_status_change
 from .permissions import (
+    can_act_ao_step,
+    can_act_coh_step,
+    can_act_hr_step,
+    can_endorse,
     can_view_cto_application,
     get_acting_employee,
-    is_administrative_officer,
-    is_chief_of_hospital,
     is_cto_eligible,
     is_hr,
-    is_supervisor_of,
     visible_cto_applications_for,
 )
 
@@ -89,6 +90,8 @@ def claim_create(request, ot_pk):
     ot_request = get_object_or_404(
         OfficialRequest, pk=ot_pk, request_type=OfficialRequest.OT_RESTDAY_HOLIDAY, status=OfficialRequest.APPROVED
     )
+    if ot_request.employee_id == acting_employee.pk:
+        raise PermissionDenied("Another HR staff member must file your own CTO claim.")
     if not is_cto_eligible(ot_request.employee):
         raise PermissionDenied("CTO is not applicable to the Chief of Hospital.")
 
@@ -140,8 +143,8 @@ def claim_detail(request, pk):
         "filing_window_opens": filing_window_opens(entry.work_date),
         "filing_deadline": date(entry.work_date.year, *settings.CTO_FILING_DEADLINE_MONTH_DAY),
         "is_hr": hr,
-        "can_act": hr and is_draft,
-        "can_discard": hr and is_draft and not _has_documents(entry),
+        "can_act": hr and is_draft and entry.employee_id != acting_employee.pk,
+        "can_discard": hr and is_draft and entry.employee_id != acting_employee.pk and not _has_documents(entry),
     })
 
 
@@ -161,6 +164,8 @@ def claim_submit(request, pk):
     if not is_hr(acting_employee):
         raise PermissionDenied("Only HR may submit CTO claims.")
     entry = get_object_or_404(CTOCreditEntry, pk=pk)
+    if entry.employee_id == acting_employee.pk:
+        raise PermissionDenied("Another HR staff member must submit your own CTO claim.")
 
     errors = credit_claim(entry, request.user, date.today())
     if errors:
@@ -287,6 +292,7 @@ def cto_action(request, pk):
         raise PermissionDenied("No employee record is linked to your account.")
 
     status = application.status
+    filers = [application.employee]  # never acts on their own (owner decision 2026-10-26)
 
     def apply_transition(new_status, action_name):
         application.status = new_status
@@ -300,7 +306,7 @@ def cto_action(request, pk):
     allowed = False
     error = None
 
-    if status == CTOUsageApplication.SUBMITTED and is_supervisor_of(acting_employee, application.employee):
+    if status == CTOUsageApplication.SUBMITTED and can_endorse(acting_employee, filers):
         if action == "endorse":
             allowed = True
             apply_transition(CTOUsageApplication.ENDORSED_BY_SUPERVISOR, "endorse")
@@ -309,7 +315,7 @@ def cto_action(request, pk):
             apply_transition(
                 CTOUsageApplication.REJECTED if action == "reject" else CTOUsageApplication.RETURNED, action
             )
-    elif status == CTOUsageApplication.ENDORSED_BY_SUPERVISOR and is_hr(acting_employee):
+    elif status == CTOUsageApplication.ENDORSED_BY_SUPERVISOR and can_act_hr_step(acting_employee, filers):
         if action == "process":
             allowed = True
             apply_transition(CTOUsageApplication.PROCESSED_BY_HR, "process")
@@ -318,7 +324,7 @@ def cto_action(request, pk):
             apply_transition(
                 CTOUsageApplication.REJECTED if action == "reject" else CTOUsageApplication.RETURNED, action
             )
-    elif status == CTOUsageApplication.PROCESSED_BY_HR and is_administrative_officer(acting_employee):
+    elif status == CTOUsageApplication.PROCESSED_BY_HR and can_act_ao_step(acting_employee, filers):
         if action == "recommend":
             allowed = True
             apply_transition(CTOUsageApplication.RECOMMENDED_BY_AO, "recommend")
@@ -327,7 +333,7 @@ def cto_action(request, pk):
             apply_transition(
                 CTOUsageApplication.REJECTED if action == "reject" else CTOUsageApplication.RETURNED, action
             )
-    elif status == CTOUsageApplication.RECOMMENDED_BY_AO and is_chief_of_hospital(acting_employee):
+    elif status == CTOUsageApplication.RECOMMENDED_BY_AO and can_act_coh_step(acting_employee, filers):
         if action == "approve":
             error = _finalize_success(application, request.user)
             if error is None:
