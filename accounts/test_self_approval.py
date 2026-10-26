@@ -190,3 +190,44 @@ class ImportScopeTests(TestCase):
     def test_unit_outside_the_rows_section_is_an_error(self):
         plans = self.plan([self.row("W1", sections=AFS, units="OR/DR")])
         self.assertIn("not in Section(s)", " ".join(plans[0].errors))
+
+
+class COHOwnRequestTests(TestCase):
+    """Owner decision 2026-10-26 (Option A): the COH's own Travel / Official
+    Business / OT / Official Time is RECORDED by HR, like regular leave;
+    the approval itself happens at the PHO or Capitol."""
+
+    def setUp(self):
+        self.coh = person("cohx", roles=[R.CHIEF_OF_HOSPITAL])
+        self.hr = person("hrx", ["Human Resources Management Section"], roles=[R.HR_PROCESSOR])
+        self.ao = person("aox", roles=[R.ADMINISTRATIVE_OFFICER])
+
+    def test_coh_files_travel_and_hr_records_it(self):
+        c = Client()
+        c.force_login(self.coh.user)
+        c.post(reverse("official_requests:request_apply"), {
+            "request_type": OfficialRequest.TRAVEL, "start_date": "2026-11-20", "end_date": "2026-11-21",
+            "destination": "Puerto Princesa", "purpose": "PHO meeting"})
+        req = OfficialRequest.objects.get(employee=self.coh)
+        self.assertTrue(req.recorded_only)
+        self.assertFalse(actor_may_advance(self.ao, req))
+        self.assertFalse(actor_may_advance(self.coh, req))
+        self.assertTrue(actor_may_advance(self.hr, req))
+        c.force_login(self.hr.user)
+        c.post(reverse("official_requests:request_action", args=[req.pk]), {"action": "record"})
+        req.refresh_from_db()
+        self.assertEqual(req.status, OfficialRequest.RECORDED)
+        self.assertTrue(req.is_terminal())
+
+    def test_ordinary_request_still_routes_normally(self):
+        emp = person("empx", ["Human Resources Management Section"])
+        c = Client()
+        c.force_login(emp.user)
+        c.post(reverse("official_requests:request_apply"), {
+            "request_type": OfficialRequest.OFFICIAL_TIME, "start_date": "2026-11-20", "end_date": "2026-11-20",
+            "purpose": "Seminar"})
+        req = OfficialRequest.objects.get(employee=emp)
+        self.assertFalse(req.recorded_only)
+        c.force_login(self.hr.user)
+        r = c.post(reverse("official_requests:request_action", args=[req.pk]), {"action": "record"})
+        self.assertEqual(r.status_code, 403)

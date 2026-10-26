@@ -99,7 +99,7 @@ def _excused_days(employee_ids, start_date, end_date):
         LeaveApplication.objects.filter(status__in=[LeaveApplication.APPROVED, LeaveApplication.RECORDED]),
         CTOUsageApplication.objects.filter(status=CTOUsageApplication.APPROVED),
         OfficialRequest.objects.filter(
-            status=OfficialRequest.APPROVED,
+            status__in=[OfficialRequest.APPROVED, OfficialRequest.RECORDED],
             request_type__in=[OfficialRequest.OFFICIAL_BUSINESS, OfficialRequest.OFFICIAL_TIME,
                               OfficialRequest.TRAVEL],
         ),

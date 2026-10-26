@@ -51,6 +51,7 @@ class OfficialRequest(models.Model):
     RETURNED = "RETURNED"
     REJECTED = "REJECTED"
     CANCELLED = "CANCELLED"
+    RECORDED = "RECORDED"
     STATUS_CHOICES = [
         (SUBMITTED, "Submitted"),
         (ENDORSED_BY_SUPERVISOR, "Endorsed by Supervisor"),
@@ -60,8 +61,9 @@ class OfficialRequest(models.Model):
         (RETURNED, "Returned"),
         (REJECTED, "Rejected"),
         (CANCELLED, "Cancelled"),
+        (RECORDED, "Recorded (approved outside BDH)"),
     ]
-    TERMINAL_STATUSES = {APPROVED, REJECTED, CANCELLED}
+    TERMINAL_STATUSES = {APPROVED, RECORDED, REJECTED, CANCELLED}
 
     request_type = models.CharField(max_length=25, choices=REQUEST_TYPE_CHOICES)
     employee = models.ForeignKey(
@@ -94,6 +96,14 @@ class OfficialRequest(models.Model):
         "OfficialRequestBatch", on_delete=models.PROTECT, null=True, blank=True, related_name="lines",
     )
     line_note = models.CharField(max_length=255, blank=True, help_text="Optional note for this line of a batch.")
+    # Owner decision 2026-10-26: the Chief of Hospital's own request has no
+    # approver inside BDH (nobody is above the COH). It is RECORDED by HR,
+    # like regular leave; the approval itself happens at the PHO/Capitol.
+    # Set once, when the request is filed.
+    recorded_only = models.BooleanField(
+        default=False,
+        help_text="Chief of Hospital's own request: HR records it; approval is outside BDH (PHO/Capitol).",
+    )
 
     class Meta:
         ordering = ["-submitted_at"]

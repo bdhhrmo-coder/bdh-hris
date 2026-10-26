@@ -9,11 +9,11 @@ from leave.permissions import ao_step_actors, coh_step_actors, endorsers_for, hr
 from notifications.services import notify
 
 from .models import OfficialRequest
-from .routing import next_status
+from .routing import next_status_for
 
 
 def notify_status_change(official_request):
-    target_status = next_status(official_request.request_type, official_request.status)
+    target_status = next_status_for(official_request)
     type_name = official_request.get_request_type_display()
     queue_url = "/official-requests/queue/"
     mine_url = "/official-requests/mine/"
@@ -23,6 +23,12 @@ def notify_status_change(official_request):
         notify(
             endorsers_for(filers),
             f"{official_request.employee} filed a {type_name} request — awaiting your endorsement.",
+            queue_url,
+        )
+    elif target_status == OfficialRequest.RECORDED:
+        notify(
+            hr_step_actors(filers),
+            f"{official_request.employee} filed a {type_name} request for recording (approval is outside BDH).",
             queue_url,
         )
     elif target_status == OfficialRequest.PROCESSED_BY_HR:

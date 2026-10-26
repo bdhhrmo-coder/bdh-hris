@@ -14,7 +14,7 @@ from leave.permissions import (  # noqa: F401 (re-exported for callers)
 )
 
 from .models import OfficialRequest
-from .routing import next_status
+from .routing import next_status_for
 
 
 def can_view_request(acting_employee, official_request):
@@ -33,14 +33,14 @@ def actor_may_advance(acting_employee, official_request):
     step on this request, whatever that step turns out to be."""
     if official_request.batch_id is not None:
         return False  # acted on through its group (batch) request
-    target_status = next_status(official_request.request_type, official_request.status)
+    target_status = next_status_for(official_request)
     if target_status is None:
         return False
     # Never on one's own request (owner decision 2026-10-26).
     filers = [official_request.employee]
     if target_status == OfficialRequest.ENDORSED_BY_SUPERVISOR:
         return can_endorse(acting_employee, filers)
-    if target_status == OfficialRequest.PROCESSED_BY_HR:
+    if target_status in (OfficialRequest.PROCESSED_BY_HR, OfficialRequest.RECORDED):
         return can_act_hr_step(acting_employee, filers)
     if target_status == OfficialRequest.RECOMMENDED_BY_AO:
         return can_act_ao_step(acting_employee, filers)
