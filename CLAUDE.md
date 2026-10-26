@@ -160,6 +160,13 @@ Implemented as a **custom `Role` model tied to Employee** (not Django's built-in
 - Routes (filer's step counts as done): OT/rest/holiday by Supervisor → HR → AO → COH; by HR Admin → AO → COH. Travel by Supervisor or HR → AO → COH. **Official Business by Supervisor → HR → AO → COH; by HR → Supervisor → AO → COH** (the Supervisor still endorses).
 - The filer can never act on their own batch at a later step, even with other roles or OIC. Approved OT creates no CTO (§7.1 unchanged). A regular employee filing their own request keeps the normal route.
 
+**No self-approval; next level up (owner decision 2026-10-26, pilot import):**
+- Nobody acts on a request they filed — or, for an Exchange of Duty, one they are a party to — at **any** step (endorse, process/validate, recommend, approve, record). Applies to COSP leave, regular-leave recording, CTO, Exchange of Duty, attendance corrections (formal and minor), Official Business/Time, Travel, OT and group filings; HR never files or credits their own CTO claim. Queues and notifications leave the filer out.
+- **Supervisor step = one level above the filer** (`leave/permissions.py endorsers_for`): an ordinary employee → any Supervisor of their section/unit; a **unit head** → the section-wide Supervisor (e.g. the Chief Nurse), never a fellow head of the same unit; a **section head** (no one above at Supervisor level) → the **AO**; the **AO's own request → the COH** (at the Supervisor and AO steps). The person who acts is stamped with their own name and position.
+- HR/ICTU steps: any other holder of the role. AO step: the AO, or the COH when the AO is the filer. COH step: never the COH's own request.
+- **Open (to confirm with the owner):** who approves the COH's own Travel/Official Business — today such a request has no approver and stays pending.
+- **Import scope (same date):** a Supervisor with a unit on their import row supervises that unit only; with no unit, the whole section. The COH and AO may be imported with no section (hospital-wide). A unit must belong to a section on the same row.
+
 **⚠️ Critical:** Regular Leave must NOT be routed through the internal approval workflow engine — it's data-entry/monitoring only. Building this into the same generic workflow as other request types risks incorrectly implying internal approval authority that doesn't exist.
 
 ### 6.3 Output Forms
