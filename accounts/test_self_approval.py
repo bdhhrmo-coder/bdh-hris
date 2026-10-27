@@ -231,3 +231,36 @@ class COHOwnRequestTests(TestCase):
         c.force_login(self.hr.user)
         r = c.post(reverse("official_requests:request_action", args=[req.pk]), {"action": "record"})
         self.assertEqual(r.status_code, 403)
+
+
+class RoleAssignmentAdminFormTests(TestCase):
+    """2026-10-27: no separate Chief Nurse role - a Supervisor line with a
+    Section (Chief Nurse / section head) or a Unit (unit head)."""
+
+    def form(self, **data):
+        from accounts.admin import RoleAssignmentForm
+        self.n = getattr(self, "n", 0) + 1
+        emp = person(f"formx{self.n}")
+        base = {"employee": emp.pk, "is_active": True}
+        base.update(data)
+        return RoleAssignmentForm(data=base)
+
+    def test_chief_nurse_is_supervisor_with_section(self):
+        self.assertTrue(self.form(role=R.SUPERVISOR, section=section(NURSING).pk).is_valid())
+
+    def test_unit_head_is_supervisor_with_unit(self):
+        self.assertTrue(self.form(role=R.SUPERVISOR, unit=unit(NURSING, "OR/DR").pk).is_valid())
+
+    def test_supervisor_without_scope_or_with_both_is_refused(self):
+        self.assertFalse(self.form(role=R.SUPERVISOR).is_valid())
+        self.assertFalse(self.form(role=R.SUPERVISOR, section=section(NURSING).pk,
+                                   unit=unit(NURSING, "OR/DR").pk).is_valid())
+
+    def test_hospital_wide_roles_take_no_scope(self):
+        self.assertTrue(self.form(role=R.ADMINISTRATIVE_OFFICER).is_valid())
+        self.assertFalse(self.form(role=R.HR_PROCESSOR, section=section(NURSING).pk).is_valid())
+
+    def test_admin_header_is_branded(self):
+        from django.contrib import admin
+        self.assertIn("BDH HRIS", admin.site.site_header)
+        self.assertEqual(admin.site.site_url, "/hris/home/")
