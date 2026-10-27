@@ -921,3 +921,25 @@ a.kpi-card:hover, a.kpi-card:focus-visible { border-color: var(--navy-700); box-
 .detail-table th { text-align: left; width: 34%; padding: 0.45rem 0.75rem 0.45rem 0; color: var(--gray-600); font-weight: 600; vertical-align: top; }
 .detail-table td { padding: 0.45rem 0; vertical-align: top; }
 .detail-table tr + tr th, .detail-table tr + tr td { border-top: 1px solid var(--gray-200, #e5e7eb); }
+
+/* Test system bar (owner request 2026-10-27). Shown only when BDH_HRIS_TEST_SYSTEM=1
+   (test PC). Fixed to the bottom of the screen so it never covers the top bar or menu,
+   and visible on every page, the login page included. */
+.test-system-bar {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 2000;
+  background: #C9363E;
+  color: #fff;
+  text-align: center;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-size: 0.9rem;
+  padding: 8px 16px;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.2);
+}
+body.is-test-system { padding-bottom: 40px; }
+@media print {
+  .test-system-bar { position: static; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body.is-test-system { padding-bottom: 0; }
+}

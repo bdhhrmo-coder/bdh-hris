@@ -11,6 +11,13 @@ def greeting(request):
     return {"header_greeting": f"Good {part}", "header_today": now}
 
 
+def test_system(request):
+    """Red TEST SYSTEM bar on every page when settings.TEST_SYSTEM is on (test PC only)."""
+    from django.conf import settings
+
+    return {"test_system": getattr(settings, "TEST_SYSTEM", False)}
+
+
 def page_watermark(request):
     """Faint logo and tagline behind logged-in pages (Batch 10). Display only;
     one setting turns it on or off for every page (the homepage swaps it for

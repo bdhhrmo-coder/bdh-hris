@@ -5,14 +5,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <script>document.documentElement.classList.add("js");</script>
-  <title>{% block title %}BDH HRIS{% endblock %}</title>
+  <title>{% if test_system %}[TEST] {% endif %}{% block title %}BDH HRIS{% endblock %}</title>
   <link rel="icon" href="{% static 'images/favicon.ico' %}" sizes="any">
   <link rel="apple-touch-icon" href="{% static 'images/apple-touch-icon.png' %}">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
   <link rel="stylesheet" href="{% static 'css/animations.css' %}">
   {% block extra_head %}{% endblock %}
 </head>
-<body class="{% block body_class %}{% endblock %}">
+<body class="{% block body_class %}{% endblock %}{% if test_system %} is-test-system{% endif %}">
+  {% if test_system %}
+  <div class="test-system-bar" role="status">TEST SYSTEM &mdash; NOT FOR REAL REQUESTS. Records here are not valid.</div>
+  {% endif %}
   {% if user.is_authenticated %}
     {% comment %}Batch 10 (owner request 2026-10-16): faint BDH logo + tagline behind every logged-in
        page, set by PAGE_WATERMARK / PAGE_WATERMARK_FIXED. The homepage replaces this block with its
