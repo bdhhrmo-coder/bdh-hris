@@ -18,7 +18,7 @@
       <a href="{% url 'exchange:print_exchange_form' r.pk %}" target="_blank">Print form</a>
       <form method="post" action="{% url 'exchange:exchange_action' r.pk %}">
         {% csrf_token %}
-        {% if r.status == "SUBMITTED" %}
+        {% if r.status == "SUBMITTED" or r.status == "ENDORSED_BY_UNIT_HEAD" %}
           <button type="submit" name="action" value="endorse">Endorse</button>
           <button type="submit" name="action" value="reject">Reject</button>
           <button type="submit" name="action" value="return">Return</button>

@@ -10,7 +10,7 @@ DutyExchangeRequestAction instead of signature lines. See printouts/.
 
 from leave.pdf_convert import workbook_to_pdf
 from printouts.sheet import FormBuilder
-from printouts.stamps import StepDef, compute_stamps
+from printouts.stamps import StepDef, compute_stamps, with_unit_head_step
 
 FORM_CODE = "BDH-ADM-HR-01F04-C"
 
@@ -65,7 +65,8 @@ def fill_exchange_form(req, printed_by=None):
 
     f.section("3.  CONSENT, ROUTING AND ACTION (digitally processed)")
     f.gap()
-    stamps, stopped = compute_stamps(req.actions.select_related("acted_by__employee"), ROUTING)
+    actions = list(req.actions.select_related("acted_by__employee"))
+    stamps, stopped = compute_stamps(actions, with_unit_head_step(ROUTING, actions, [req.employee_a, req.employee_b]))
     f.stamps(stamps, stopped)
     f.footer(reference_no(req), printed_by)
     return f.finish()

@@ -5,7 +5,7 @@ CONSENT_DECLINED (notify both parties the request is dead). Both parties'
 supervisors are notified at the endorsement step since either one may
 endorse (§8 — see permissions.is_supervisor_of_either_party)."""
 
-from leave.permissions import ao_step_actors, coh_step_actors, endorsers_for, hr_step_actors
+from leave.permissions import ao_step_actors, coh_step_actors, endorsers_for, hr_step_actors, second_endorsers_for
 from notifications.services import notify
 
 from .models import DutyExchangeRequest
@@ -31,6 +31,12 @@ def notify_status_change(exchange_request):
         notify(
             endorsers_for([a, b]),
             f"{a} and {b} filed a duty exchange request — awaiting your endorsement.",
+            _QUEUE_URL,
+        )
+    elif status == DutyExchangeRequest.ENDORSED_BY_UNIT_HEAD:
+        notify(
+            second_endorsers_for([a, b]),
+            f"A duty exchange request between {a} and {b} was endorsed by the unit head — awaiting your endorsement.",
             _QUEUE_URL,
         )
     elif status == DutyExchangeRequest.ENDORSED_BY_SUPERVISOR:

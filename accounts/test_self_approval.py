@@ -82,8 +82,13 @@ class NextLevelUpTests(TestCase):
         self.ao = person("ao", roles=[R.ADMINISTRATIVE_OFFICER])
         self.coh = person("coh", roles=[R.CHIEF_OF_HOSPITAL])
 
-    def test_ordinary_employee_unit_heads_and_section_head_may_endorse(self):
-        self.assertEqual(ids(endorsers_for([self.nurse])), ids([self.chief_nurse, self.head1, self.head2]))
+    def test_ordinary_employee_goes_to_unit_heads_first_then_chief_nurse(self):
+        from leave.permissions import needs_unit_step, second_endorsers_for
+        self.assertEqual(ids(endorsers_for([self.nurse])), ids([self.head1, self.head2]))
+        self.assertEqual(ids(second_endorsers_for([self.nurse])), {self.chief_nurse.pk})
+        self.assertTrue(needs_unit_step([self.nurse]))
+        self.assertFalse(needs_unit_step([self.er_nurse]))   # ER has no unit head: one step
+        self.assertFalse(needs_unit_step([self.head1]))      # a unit head's own request: one step
 
     def test_unit_head_goes_to_the_chief_nurse_not_the_fellow_head_and_never_self(self):
         self.assertEqual(ids(endorsers_for([self.head1])), {self.chief_nurse.pk})
@@ -231,3 +236,154 @@ class COHOwnRequestTests(TestCase):
         c.force_login(self.hr.user)
         r = c.post(reverse("official_requests:request_action", args=[req.pk]), {"action": "record"})
         self.assertEqual(r.status_code, 403)
+
+
+class RoleAssignmentAdminFormTests(TestCase):
+    """2026-10-27: no separate Chief Nurse role - a Supervisor line with a
+    Section (Chief Nurse / section head) or a Unit (unit head)."""
+
+    def form(self, **data):
+        from accounts.admin import RoleAssignmentForm
+        self.n = getattr(self, "n", 0) + 1
+        emp = person(f"formx{self.n}")
+        base = {"employee": emp.pk, "is_active": True}
+        base.update(data)
+        return RoleAssignmentForm(data=base)
+
+    def test_chief_nurse_is_supervisor_with_section(self):
+        self.assertTrue(self.form(role=R.SUPERVISOR, section=section(NURSING).pk).is_valid())
+
+    def test_unit_head_is_supervisor_with_unit(self):
+        self.assertTrue(self.form(role=R.SUPERVISOR, unit=unit(NURSING, "OR/DR").pk).is_valid())
+
+    def test_supervisor_without_scope_or_with_both_is_refused(self):
+        self.assertFalse(self.form(role=R.SUPERVISOR).is_valid())
+        self.assertFalse(self.form(role=R.SUPERVISOR, section=section(NURSING).pk,
+                                   unit=unit(NURSING, "OR/DR").pk).is_valid())
+
+    def test_hospital_wide_roles_take_no_scope(self):
+        self.assertTrue(self.form(role=R.ADMINISTRATIVE_OFFICER).is_valid())
+        self.assertFalse(self.form(role=R.HR_PROCESSOR, section=section(NURSING).pk).is_valid())
+
+    def test_admin_header_is_branded(self):
+        from django.contrib import admin
+        self.assertIn("BDH HRIS", admin.site.site_header)
+        self.assertEqual(admin.site.site_url, "/hris/home/")
+
+
+class TwoLevelEndorsementTests(TestCase):
+    """Owner decision 2026-10-27 (Option B): Nursing requests are endorsed by
+    the unit head, then by the Chief Nurse, before HR."""
+
+    def setUp(self):
+        self.ordr = unit(NURSING, "OR/DR")
+        self.er = unit(NURSING, "ER")
+        self.chief_nurse = person("cn2", [NURSING], sup_sections=[NURSING])
+        self.head = person("head2x", [NURSING], [self.ordr], sup_units=[self.ordr])
+        self.nurse = person("nurse2", [NURSING], [self.ordr])
+        self.nurse_b = person("nurse2b", [NURSING], [self.ordr])
+        self.er_nurse = person("ernurse2", [NURSING], [self.er])
+        self.lab_head = person("labhead2", ["Laboratory Section"], sup_sections=["Laboratory Section"])
+        self.lab_staff = person("labstaff2", ["Laboratory Section"])
+        self.hr = person("hr2x", ["Human Resources Management Section"], roles=[R.HR_PROCESSOR])
+        self.ao = person("ao2x", roles=[R.ADMINISTRATIVE_OFFICER])
+        self.coh = person("coh2x", roles=[R.CHIEF_OF_HOSPITAL])
+
+    def cto(self, emp):
+        return CTOUsageApplication.objects.create(employee=emp, start_date=date(2026, 11, 20),
+                                                  end_date=date(2026, 11, 20), number_of_days=1)
+
+    def act(self, who, app, action="endorse"):
+        c = Client()
+        c.force_login(who.user)
+        r = c.post(reverse("cto:cto_action", args=[app.pk]), {"action": action})
+        app.refresh_from_db()
+        return r.status_code
+
+    def test_cto_goes_unit_head_then_chief_nurse_then_hr(self):
+        app = self.cto(self.nurse)
+        self.assertNotIn(app, visible_cto_applications_for(self.chief_nurse))   # not yet hers
+        self.assertEqual(self.act(self.chief_nurse, app), 403)
+        self.assertIn(app, visible_cto_applications_for(self.head))
+        self.act(self.head, app)
+        self.assertEqual(app.status, CTOUsageApplication.ENDORSED_BY_UNIT_HEAD)
+        self.assertNotIn(app, visible_cto_applications_for(self.head))
+        self.assertNotIn(app, visible_cto_applications_for(self.hr))
+        self.assertIn(app, visible_cto_applications_for(self.chief_nurse))
+        self.act(self.chief_nurse, app)
+        self.assertEqual(app.status, CTOUsageApplication.ENDORSED_BY_SUPERVISOR)
+        self.assertIn(app, visible_cto_applications_for(self.hr))
+        self.assertEqual([a.action for a in app.actions.order_by("acted_at", "pk")], ["endorse_unit", "endorse"])
+
+    def test_chief_nurse_may_return_after_the_unit_head(self):
+        app = self.cto(self.nurse)
+        self.act(self.head, app)
+        self.act(self.chief_nurse, app, "return")
+        self.assertEqual(app.status, CTOUsageApplication.RETURNED)
+
+    def test_single_step_where_there_is_no_unit_head_or_no_units(self):
+        er_app = self.cto(self.er_nurse)
+        self.act(self.chief_nurse, er_app)
+        self.assertEqual(er_app.status, CTOUsageApplication.ENDORSED_BY_SUPERVISOR)
+        head_app = self.cto(self.head)
+        self.act(self.chief_nurse, head_app)
+        self.assertEqual(head_app.status, CTOUsageApplication.ENDORSED_BY_SUPERVISOR)
+        lab_app = self.cto(self.lab_staff)
+        self.act(self.lab_head, lab_app)
+        self.assertEqual(lab_app.status, CTOUsageApplication.ENDORSED_BY_SUPERVISOR)
+
+    def test_cosp_leave_two_steps(self):
+        from leave.models import LeaveApplication, LeaveType
+        lt = LeaveType.objects.filter(requires_full_routing=True).first()
+        app = LeaveApplication.objects.create(employee=self.nurse, leave_type=lt, start_date=date(2026, 11, 20),
+                                              end_date=date(2026, 11, 20), number_of_days=1)
+        c = Client()
+        c.force_login(self.head.user)
+        c.post(reverse("leave:leave_action", args=[app.pk]), {"action": "endorse"})
+        app.refresh_from_db()
+        self.assertEqual(app.status, LeaveApplication.ENDORSED_BY_UNIT_HEAD)
+        c.force_login(self.chief_nurse.user)
+        c.post(reverse("leave:leave_action", args=[app.pk]), {"action": "endorse"})
+        app.refresh_from_db()
+        self.assertEqual(app.status, LeaveApplication.ENDORSED_BY_SUPERVISOR)
+
+    def test_official_business_two_steps(self):
+        req = OfficialRequest.objects.create(employee=self.nurse, request_type=OfficialRequest.OFFICIAL_BUSINESS,
+                                             start_date=date(2026, 11, 20), end_date=date(2026, 11, 20),
+                                             purpose="TEST")
+        self.assertTrue(actor_may_advance(self.head, req))
+        self.assertFalse(actor_may_advance(self.chief_nurse, req))
+        c = Client()
+        c.force_login(self.head.user)
+        c.post(reverse("official_requests:request_action", args=[req.pk]), {"action": "endorse"})
+        req.refresh_from_db()
+        self.assertEqual(req.status, OfficialRequest.ENDORSED_BY_UNIT_HEAD)
+        self.assertFalse(actor_may_advance(self.head, req))
+        self.assertTrue(actor_may_advance(self.chief_nurse, req))
+        c.force_login(self.chief_nurse.user)
+        c.post(reverse("official_requests:request_action", args=[req.pk]), {"action": "endorse"})
+        req.refresh_from_db()
+        self.assertEqual(req.status, OfficialRequest.ENDORSED_BY_SUPERVISOR)
+
+    def test_exchange_two_steps(self):
+        from exchange.permissions import visible_exchange_requests_for
+        ex = DutyExchangeRequest.objects.create(employee_a=self.nurse, employee_b=self.nurse_b,
+                                                date_a=date(2026, 11, 20), date_b=date(2026, 11, 21),
+                                                status=DutyExchangeRequest.SUBMITTED)
+        self.assertIn(ex, visible_exchange_requests_for(self.head))
+        self.assertNotIn(ex, visible_exchange_requests_for(self.chief_nurse))
+        c = Client()
+        c.force_login(self.head.user)
+        c.post(reverse("exchange:exchange_action", args=[ex.pk]), {"action": "endorse"})
+        ex.refresh_from_db()
+        self.assertEqual(ex.status, DutyExchangeRequest.ENDORSED_BY_UNIT_HEAD)
+        self.assertIn(ex, visible_exchange_requests_for(self.chief_nurse))
+
+    def test_printout_has_a_unit_head_stamp(self):
+        from cto.cto_form import ROUTING
+        from printouts.stamps import with_unit_head_step
+        app = self.cto(self.nurse)
+        steps = with_unit_head_step(ROUTING, list(app.actions.all()), [self.nurse])
+        self.assertEqual([s.role_label for s in steps][1:3], ["Unit Head", "Section Head"])
+        lab = self.cto(self.lab_staff)
+        self.assertEqual(with_unit_head_step(ROUTING, [], [self.lab_staff]), ROUTING)

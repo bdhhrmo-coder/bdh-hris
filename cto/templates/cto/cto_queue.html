@@ -18,7 +18,7 @@
       <a href="{% url 'cto:print_cto_form' a.pk %}" target="_blank">Print form</a>
       <form method="post" action="{% url 'cto:cto_action' a.pk %}">
         {% csrf_token %}
-        {% if a.status == "SUBMITTED" %}
+        {% if a.status == "SUBMITTED" or a.status == "ENDORSED_BY_UNIT_HEAD" %}
           <button type="submit" name="action" value="endorse">Endorse</button>
           <button type="submit" name="action" value="reject">Reject</button>
           <button type="submit" name="action" value="return">Return</button>

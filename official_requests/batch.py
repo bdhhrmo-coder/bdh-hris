@@ -43,6 +43,7 @@ from leave.permissions import (
     can_act_hr_step,
     coh_step_actors,
     endorsers_for,
+    second_endorsers_for,
     hr_step_actors,
 )
 from notifications.services import notify
@@ -176,7 +177,11 @@ def common_supervisors(employees, exclude_employee=None):
         excluded.add(exclude_employee.pk)
     common = None
     for emp in employees:
-        ids = {s.pk for s in endorsers_for([emp])} - excluded
+        # Group requests keep ONE Supervisor endorsement: the unit head or the
+        # section head may give it (so a section head can endorse a group that
+        # spans several units). Two-level endorsement applies to individual
+        # requests only (owner decision 2026-10-27).
+        ids = ({s.pk for s in endorsers_for([emp])} | {s.pk for s in second_endorsers_for([emp])}) - excluded
         common = ids if common is None else common & ids
         if not common:
             return []

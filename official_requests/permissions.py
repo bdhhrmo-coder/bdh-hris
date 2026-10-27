@@ -6,6 +6,7 @@ from leave.permissions import (  # noqa: F401 (re-exported for callers)
     can_act_coh_step,
     can_act_hr_step,
     can_endorse,
+    can_endorse_second,
     get_acting_employee,
     is_administrative_officer,
     is_chief_of_hospital,
@@ -38,7 +39,11 @@ def actor_may_advance(acting_employee, official_request):
         return False
     # Never on one's own request (owner decision 2026-10-26).
     filers = [official_request.employee]
+    if target_status == OfficialRequest.ENDORSED_BY_UNIT_HEAD:
+        return can_endorse(acting_employee, filers)
     if target_status == OfficialRequest.ENDORSED_BY_SUPERVISOR:
+        if official_request.status == OfficialRequest.ENDORSED_BY_UNIT_HEAD:
+            return can_endorse_second(acting_employee, filers)
         return can_endorse(acting_employee, filers)
     if target_status in (OfficialRequest.PROCESSED_BY_HR, OfficialRequest.RECORDED):
         return can_act_hr_step(acting_employee, filers)

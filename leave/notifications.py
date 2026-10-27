@@ -12,7 +12,7 @@ LeaveApplicationAction.objects.create() from.
 from notifications.services import notify
 
 from .models import LeaveApplication
-from .permissions import ao_step_actors, coh_step_actors, endorsers_for, hr_step_actors
+from .permissions import ao_step_actors, coh_step_actors, endorsers_for, hr_step_actors, second_endorsers_for
 
 _QUEUE_URL = "/leave/queue/"
 _MINE_URL = "/leave/mine/"
@@ -44,6 +44,13 @@ def notify_status_change(application):
                 f"{application.employee} filed a {leave_type_name} application for recording.",
                 _QUEUE_URL,
             )
+    elif status == LeaveApplication.ENDORSED_BY_UNIT_HEAD:
+        notify(
+            second_endorsers_for(filers),
+            f"A {leave_type_name} application for {application.employee} was endorsed by the unit head — "
+            "awaiting your endorsement.",
+            _QUEUE_URL,
+        )
     elif status == LeaveApplication.ENDORSED_BY_SUPERVISOR:
         notify(
             hr_step_actors(filers),

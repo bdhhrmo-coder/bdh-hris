@@ -54,6 +54,8 @@ Implemented as a **custom `Role` model tied to Employee** (not Django's built-in
 | **System Administrator** | Technical/infra admin: accounts, auth, permissions, backups, monitoring, security | Routine HR transaction processing/approval (only touches HR data when technically necessary and authorized) |
 | **ICTU Staff** | Validates formal attendance corrections whose reason is a biometric/system problem (Offline, Failed Attempt, Wrong Button/Invalid Entry), per the Missed Log Justification Form (added 2026-10-06) | Any other approval or HR data change |
 
+**No "Chief Nurse" or "Unit Head" role (2026-10-27):** both are a **Supervisor** line; the scope decides the reach. Chief Nurse / any section head = Supervisor + Section (Unit blank); unit head = Supervisor + Unit (Section blank); every other role has no scope. The admin role form (`accounts/admin.py`) refuses a Supervisor line with no scope (that would be hospital-wide) and a scope on any other role, and lists each line's scope.
+
 **OIC coverage:** Ad-hoc delegation triggered by the Supervisor themself (not pre-scheduled by HR Admin). One Supervisor can be designated OIC across multiple sections.
 
 **OIC rules (settled 2026-10-13, Batch 7):** the approver (Supervisor, AO or COH) designates the OIC on the **Officer-in-Charge (OIC)** screen (`/oic/`, `accounts/oic.py`), for one of their own role areas. Only an employee who already holds an active Supervisor role can be OIC. The OIC acts only between the start and end dates (every role assignment's dates are honoured, `RoleAssignment.in_force_q`). While the OIC is in force, the delegator's own assignment for that role and area is set aside (`Employee.active_role_assignments`), so the absent approver cannot act there and is not notified for it. The absent approver keeps **view-only** access to that area (records, printouts, documents, schedules, homepage figures, Dashboard, Audit Log) — view checks pass `viewing=True` (`has_role`, `is_hr`/`is_administrative_officer`/`is_chief_of_hospital`, `is_supervisor_of`); action checks and queues never do (owner, 2026-10-13). "End now" cancels an upcoming OIC or ends a running one yesterday; nothing is deleted. Designations and early endings appear in the Audit Log (module "OIC Designation").
@@ -162,6 +164,7 @@ Implemented as a **custom `Role` model tied to Employee** (not Django's built-in
 
 **No self-approval; next level up (owner decision 2026-10-26, pilot import):**
 - Nobody acts on a request they filed — or, for an Exchange of Duty, one they are a party to — at **any** step (endorse, process/validate, recommend, approve, record). Applies to COSP leave, regular-leave recording, CTO, Exchange of Duty, attendance corrections (formal and minor), Official Business/Time, Travel, OT and group filings; HR never files or credits their own CTO claim. Queues and notifications leave the filer out.
+- **Two-level endorsement (owner decision 2026-10-27, Option B; supersedes the single Supervisor step for these cases):** where an ordinary employee's unit has a unit head AND the section has a section-wide Supervisor (Nursing: unit head, then Chief Nurse), the Supervisor step is done twice — `SUBMITTED → ENDORSED_BY_UNIT_HEAD` (unit head, action `endorse_unit`) `→ ENDORSED_BY_SUPERVISOR` (section head) — for COSP leave, CTO, Exchange of Duty, Official Business, Travel and OT. A unit with no head, a section without units/unit heads, and a unit head's own request keep one step. Either level may return. Strict order (owner, 2026-10-27, Option A): the section head cannot act at the unit-head step; an absent unit head designates an OIC. Group (batch) requests keep ONE endorsement, by the unit head or the section head. Forms print a "Unit Head" stamp before "Section Head" when the unit step applies (`printouts/stamps.py with_unit_head_step`). Helpers: `endorsers_for` (first endorsement), `second_endorsers_for`, `needs_unit_step`, `supervisor_step_result`.
 - **Supervisor step = one level above the filer** (`leave/permissions.py endorsers_for`): an ordinary employee → any Supervisor of their section/unit; a **unit head** → the section-wide Supervisor (e.g. the Chief Nurse), never a fellow head of the same unit; a **section head** (no one above at Supervisor level) → the **AO**; the **AO's own request → the COH** (at the Supervisor and AO steps). The person who acts is stamped with their own name and position.
 - HR/ICTU steps: any other holder of the role. AO step: the AO, or the COH when the AO is the filer. COH step: never the COH's own request.
 - **The COH's own Official Business / Official Time / Travel / OT (owner decision 2026-10-26, Option A):** recorded by HR only, like regular leave — `OfficialRequest.recorded_only`, SUBMITTED → RECORDED ("Recorded (approved outside BDH)"); the approval itself is at the PHO/Capitol. The COH cannot be included in a group (batch) filing.
@@ -247,6 +250,15 @@ These are decided by the project owner. Do not re-ask or change them without exp
 - Double-booking (same person on duty in two schedules on one day) is **flagged, not blocked**.
 - Printout: long bond landscape, **whole month on one page**, digital stamps for Prepared / Reviewed / Recommending Approval / Approved plus "Recorded by HR", from the action log (current cycle only).
 - Schedules are planned shifts, not attendance.
+
+---
+
+## 8D. Office Order and pilot (signed by the COH 2026-10-21; owner decisions 2026-10-26)
+
+- The HRIS Office Order is signed (digital signature 2026-10-21). **Pilot: Nursing Service, Laboratory, HRMS and Business Office, Nov 16 - Dec 18, 2026; hospital-wide Jan 11, 2027** (Section 11). Pilot data, training and the pilot Go/No-Go must be ready by Nov 13.
+- **Section mapping (no new sections):** "Business Office" = **Accounting and Finance Section**; **Security Section COSP are placed under General Services Section**.
+- **Returned leave stays editable and resubmittable** (Batch 8 behaviour kept). Office Order Section 6.2 ("files a new, corrected request") is to be corrected in a re-signed copy, together with the blank Order number, the "Oder" typo, the April 27 date and the bracketed [2]/[4]/[3] values.
+- **Dry-run (from Nov 3) runs on the test PC** (DESKTOP-HG74U4I), on a fresh database `bdh_hris_dryrun` (reset 2026-10-26; the previous `bdh_hris` database is kept as a backup). The live server is not used for testing.
 
 ---
 
