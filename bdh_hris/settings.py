@@ -123,6 +123,7 @@ TEMPLATES = [
                 "notifications.context_processors.unread_notification_count",
                 "homepage.context_processors.greeting",
                 "homepage.context_processors.page_watermark",
+                "homepage.context_processors.test_system",
                 "dashboard.context_processors.dashboard_link",
                 "auditlog.context_processors.audit_log_link",
                 "employees.context_processors.nav_links",
@@ -277,6 +278,12 @@ LOGIN_BANNER_IMAGE = os.environ.get("BDH_HRIS_LOGIN_BANNER", "images/login-banne
 
 # Version shown under "HRIS" on the login page (Batch 9). Change it here on each release.
 HRIS_VERSION = os.environ.get("BDH_HRIS_VERSION", "1.0")
+
+# Test system banner (owner request 2026-10-27): set BDH_HRIS_TEST_SYSTEM=1 in the
+# .env of the TEST PC only. Every page (login included) then shows a red "TEST
+# SYSTEM" bar, browser tabs start with "[TEST]", and printed forms carry a
+# "not a valid record" line. Never set it on the live server.
+TEST_SYSTEM = os.environ.get("BDH_HRIS_TEST_SYSTEM", "0") == "1"
 # Without this, Django shows its own built-in "Logged out" page (the Django
 # administration one), whose "Log in again" link goes to /admin/login/ - a
 # staff-only login that rejects normal accounts. Send people straight back to

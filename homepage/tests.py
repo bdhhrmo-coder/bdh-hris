@@ -173,3 +173,16 @@ class HomepageTests(TestCase):
     @override_settings(HOME_WATERMARK_IMAGE="images/does-not-exist.png")
     def test_missing_image_file_means_no_watermark(self):
         self.assertNotIn("home-background", self.page(self.staff).content.decode())
+
+
+class TestSystemBarTests(TestCase):
+    """Owner request 2026-10-27: a red TEST SYSTEM bar only where BDH_HRIS_TEST_SYSTEM=1."""
+
+    def test_bar_only_when_switched_on(self):
+        from django.test import override_settings
+        page = self.client.get("/hris/login/").content.decode()
+        self.assertNotIn("TEST SYSTEM", page)
+        with override_settings(TEST_SYSTEM=True):
+            page = self.client.get("/hris/login/").content.decode()
+        self.assertIn("TEST SYSTEM", page)
+        self.assertIn("<title>[TEST]", page)

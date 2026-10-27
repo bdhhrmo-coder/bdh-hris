@@ -221,6 +221,10 @@ class FormBuilder:
             height=26,
         )
         self.note(f"Reference No.: {reference_no}     ·     {printed}", size=8)
+        from django.conf import settings
+
+        if getattr(settings, "TEST_SYSTEM", False):
+            self.note("TEST SYSTEM PRINTOUT - NOT A VALID RECORD", size=11)
 
     def finish(self):
         self.ws.print_area = f"A1:G{self.row - 1}"
