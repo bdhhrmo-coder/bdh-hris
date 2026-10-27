@@ -19,7 +19,10 @@ from .permissions import (
     can_act_ao_step,
     can_act_coh_step,
     can_act_hr_step,
+    UNIT_STEP,
     can_endorse,
+    can_endorse_second,
+    supervisor_step_result,
     can_view_application,
     visible_applications_for,
 )
@@ -207,6 +210,19 @@ def leave_action(request, pk):
                 apply_transition(LeaveApplication.REJECTED, "reject")
     else:
         if status == LeaveApplication.SUBMITTED and can_endorse(acting_employee, filers):
+            if action == "endorse":
+                allowed = True
+                # Two-level endorsement (2026-10-27): the unit head first, then the section head.
+                if supervisor_step_result(acting_employee, filers) == UNIT_STEP:
+                    apply_transition(LeaveApplication.ENDORSED_BY_UNIT_HEAD, "endorse_unit")
+                else:
+                    apply_transition(LeaveApplication.ENDORSED_BY_SUPERVISOR, "endorse")
+            elif action in ("reject", "return"):
+                allowed = True
+                apply_transition(
+                    LeaveApplication.REJECTED if action == "reject" else LeaveApplication.RETURNED, action
+                )
+        elif status == LeaveApplication.ENDORSED_BY_UNIT_HEAD and can_endorse_second(acting_employee, filers):
             if action == "endorse":
                 allowed = True
                 apply_transition(LeaveApplication.ENDORSED_BY_SUPERVISOR, "endorse")

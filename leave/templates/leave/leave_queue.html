@@ -26,7 +26,7 @@
         {% if a.status == "SUBMITTED" and not a.leave_type.requires_full_routing %}
           <button type="submit" name="action" value="record">Record</button>
           <button type="submit" name="action" value="reject">Reject</button>
-        {% elif a.status == "SUBMITTED" %}
+        {% elif a.status == "SUBMITTED" or a.status == "ENDORSED_BY_UNIT_HEAD" %}
           <button type="submit" name="action" value="endorse">Endorse</button>
           <button type="submit" name="action" value="reject">Reject</button>
           <button type="submit" name="action" value="return">Return</button>

@@ -20,6 +20,7 @@ ROUTING_CONFIG = {
 
 # Which role acts to reach a given status, and the action-name posted for it.
 STEP_META = {
+    OR.ENDORSED_BY_UNIT_HEAD: "endorse",
     OR.ENDORSED_BY_SUPERVISOR: "endorse",
     OR.PROCESSED_BY_HR: "process",
     OR.RECOMMENDED_BY_AO: "recommend",
@@ -62,7 +63,16 @@ def next_status_for(official_request):
     goes SUBMITTED -> RECORDED by HR, nothing else (owner 2026-10-26)."""
     if official_request.recorded_only:
         return OR.RECORDED if official_request.status == OR.SUBMITTED else None
-    return next_status(official_request.request_type, official_request.status)
+    # Two-level endorsement (owner decision 2026-10-27): unit head, then section head.
+    if official_request.status == OR.ENDORSED_BY_UNIT_HEAD:
+        return OR.ENDORSED_BY_SUPERVISOR
+    nxt = next_status(official_request.request_type, official_request.status)
+    if nxt == OR.ENDORSED_BY_SUPERVISOR and official_request.status == OR.SUBMITTED:
+        from leave.permissions import needs_unit_step
+
+        if needs_unit_step([official_request.employee]):
+            return OR.ENDORSED_BY_UNIT_HEAD
+    return nxt
 
 
 def action_name_for(status):

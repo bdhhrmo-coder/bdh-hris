@@ -214,6 +214,7 @@ class CTOUsageApplication(models.Model):
     """
 
     SUBMITTED = "SUBMITTED"
+    ENDORSED_BY_UNIT_HEAD = "ENDORSED_BY_UNIT_HEAD"  # two-level endorsement (2026-10-27)
     ENDORSED_BY_SUPERVISOR = "ENDORSED_BY_SUPERVISOR"
     PROCESSED_BY_HR = "PROCESSED_BY_HR"
     RECOMMENDED_BY_AO = "RECOMMENDED_BY_AO"
@@ -223,6 +224,7 @@ class CTOUsageApplication(models.Model):
     CANCELLED = "CANCELLED"
     STATUS_CHOICES = [
         (SUBMITTED, "Submitted"),
+        (ENDORSED_BY_UNIT_HEAD, "Endorsed by Unit Head"),
         (ENDORSED_BY_SUPERVISOR, "Endorsed by Supervisor"),
         (PROCESSED_BY_HR, "Processed by HR"),
         (RECOMMENDED_BY_AO, "Recommended by AO"),

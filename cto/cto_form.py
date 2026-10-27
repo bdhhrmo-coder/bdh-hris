@@ -9,7 +9,7 @@ CTOUsageApplicationAction instead of signature lines. See printouts/.
 
 from leave.pdf_convert import workbook_to_pdf
 from printouts.sheet import FormBuilder
-from printouts.stamps import StepDef, compute_stamps
+from printouts.stamps import StepDef, compute_stamps, with_unit_head_step
 
 from .balances import compute_available_cto_balance
 
@@ -49,7 +49,8 @@ def fill_cto_form(application, printed_by=None):
 
     f.section("3.  ROUTING AND ACTION (digitally processed)")
     f.gap()
-    stamps, stopped = compute_stamps(application.actions.select_related("acted_by__employee"), ROUTING)
+    actions = list(application.actions.select_related("acted_by__employee"))
+    stamps, stopped = compute_stamps(actions, with_unit_head_step(ROUTING, actions, [application.employee]))
     f.stamps(stamps, stopped)
     f.footer(reference_no(application), printed_by)
     return f.finish()

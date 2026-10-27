@@ -158,22 +158,104 @@ def ao_step_actors(filers):
     return _with_role_except(RoleAssignment.ADMINISTRATIVE_OFFICER, filers) or coh_step_actors(filers)
 
 
+# -- Two-level endorsement (owner decision 2026-10-27, Option B) -------------
+# Where an ordinary employee's unit has a unit head AND the section has a
+# section-wide Supervisor above it (Nursing: unit head, then Chief Nurse),
+# the Supervisor step is done twice, in order:
+#   SUBMITTED --unit head--> ENDORSED_BY_UNIT_HEAD --section head--> ENDORSED_BY_SUPERVISOR
+# A unit with no head, or a section with no section-wide Supervisor, keeps
+# the single Supervisor step. A filer who is a Supervisor (a unit head)
+# has no unit step: their request goes straight to the section head.
+
+def _unit_level_endorsers(filers):
+    """Unit heads (unit-scoped Supervisors, incl. an OIC) of an ordinary filer's unit."""
+    out = []
+    for s in _with_role_except(RoleAssignment.SUPERVISOR, filers):
+        s_units = {ra.unit_id for ra in _supervisor_assignments(s) if ra.unit_id}
+        if not s_units:
+            continue
+        for f in filers:
+            if _supervisor_assignments(f):
+                continue  # a Supervisor's own request has no unit step
+            if s_units & set(f.units.values_list("id", flat=True)):
+                out.append(s)
+                break
+    return out
+
+
+def _covers_at_section_level(candidate, filer):
+    if _supervisor_assignments(filer):
+        return _is_next_level_supervisor(candidate, filer)
+    filer_section_ids = set(filer.sections.values_list("id", flat=True))
+    for ra in _supervisor_assignments(candidate):
+        if ra.section_id is None and ra.unit_id is None:
+            return True
+        if ra.section_id and ra.section_id in filer_section_ids:
+            return True
+    return False
+
+
+def _section_level_endorsers(filers):
+    return [s for s in _with_role_except(RoleAssignment.SUPERVISOR, filers)
+            if any(_covers_at_section_level(s, f) for f in filers)]
+
+
+def _is_coh_filed(filers):
+    return any(f.has_role(RoleAssignment.CHIEF_OF_HOSPITAL) for f in filers)
+
+
 def endorsers_for(filers):
-    """Who acts at the Supervisor step for a request filed by `filers`
-    (one employee, or both parties of an Exchange of Duty). Never a filer;
-    nobody when a filer is the COH (no level above)."""
+    """Who acts FIRST at the Supervisor step for a request filed by `filers`
+    (one employee, or both parties of an Exchange of Duty): the unit head
+    when there is one, otherwise the section-level Supervisor, otherwise the
+    AO (or the COH for the AO's own request). Never a filer; nobody when a
+    filer is the COH (no level above)."""
     filers = list(filers)
-    if any(f.has_role(RoleAssignment.CHIEF_OF_HOSPITAL) for f in filers):
+    if _is_coh_filed(filers):
         return []
-    found = [
-        s for s in _with_role_except(RoleAssignment.SUPERVISOR, filers)
-        if any(_is_next_level_supervisor(s, f) for f in filers)
-    ]
-    return found or ao_step_actors(filers)
+    return _unit_level_endorsers(filers) or _section_level_endorsers(filers) or ao_step_actors(filers)
+
+
+def second_endorsers_for(filers):
+    """Who endorses after the unit head (the section-level Supervisor)."""
+    filers = list(filers)
+    if _is_coh_filed(filers):
+        return []
+    return _section_level_endorsers(filers)
+
+
+def needs_unit_step(filers):
+    """True when the Supervisor step is done twice (unit head, then section head)."""
+    filers = list(filers)
+    return not _is_coh_filed(filers) and bool(_unit_level_endorsers(filers)) \
+        and bool(_section_level_endorsers(filers))
+
+
+UNIT_STEP = "UNIT"              # the endorsement leads to ENDORSED_BY_UNIT_HEAD
+SUPERVISOR_STEP = "SUPERVISOR"  # the endorsement completes the Supervisor step
+
+
+def supervisor_step_result(acting_employee, filers, after_unit_endorsement=False):
+    """What an endorsement by acting_employee does now: UNIT_STEP,
+    SUPERVISOR_STEP, or None when this person may not endorse at this point."""
+    if acting_employee is None:
+        return None
+    filers = list(filers)
+    if after_unit_endorsement:
+        return SUPERVISOR_STEP if acting_employee.pk in _ids(second_endorsers_for(filers)) else None
+    if acting_employee.pk not in _ids(endorsers_for(filers)):
+        return None
+    return UNIT_STEP if needs_unit_step(filers) else SUPERVISOR_STEP
 
 
 def can_endorse(acting_employee, filers):
+    """May act at the FIRST Supervisor endorsement."""
     return acting_employee is not None and acting_employee.pk in _ids(endorsers_for(filers))
+
+
+def can_endorse_second(acting_employee, filers):
+    """May act at the second (section head) endorsement, after the unit head."""
+    return acting_employee is not None and acting_employee.pk in _ids(second_endorsers_for(filers))
 
 
 def can_act_hr_step(acting_employee, filers):
@@ -261,6 +343,15 @@ def visible_applications_for(acting_employee):
         app.pk for app in supervisor_candidates if can_endorse(acting_employee, [app.employee])
     ]
     qs = qs | LeaveApplication.objects.filter(pk__in=supervisor_ids)
+
+    # Second endorsement (section head), after the unit head - 2026-10-27.
+    second_ids = [
+        app.pk for app in LeaveApplication.objects.filter(
+            leave_type__requires_full_routing=True, status=LeaveApplication.ENDORSED_BY_UNIT_HEAD
+        ).select_related("employee")
+        if can_endorse_second(acting_employee, [app.employee])
+    ]
+    qs = qs | LeaveApplication.objects.filter(pk__in=second_ids)
 
     # Never one's own application, at any step (owner decision 2026-10-26).
     return qs.exclude(employee=acting_employee).distinct()

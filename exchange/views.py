@@ -12,7 +12,10 @@ from .permissions import (
     can_act_ao_step,
     can_act_coh_step,
     can_act_hr_step,
+    UNIT_STEP,
     can_endorse,
+    can_endorse_second,
+    supervisor_step_result,
     can_view_exchange_request,
     get_acting_employee,
     visible_exchange_requests_for,
@@ -144,6 +147,19 @@ def exchange_action(request, pk):
     allowed = False
 
     if status == DutyExchangeRequest.SUBMITTED and can_endorse(acting_employee, filers):
+        if action == "endorse":
+            allowed = True
+            # Two-level endorsement (2026-10-27): the unit head first, then the section head.
+            if supervisor_step_result(acting_employee, filers) == UNIT_STEP:
+                apply_transition(DutyExchangeRequest.ENDORSED_BY_UNIT_HEAD, "endorse_unit")
+            else:
+                apply_transition(DutyExchangeRequest.ENDORSED_BY_SUPERVISOR, "endorse")
+        elif action in ("reject", "return"):
+            allowed = True
+            apply_transition(
+                DutyExchangeRequest.REJECTED if action == "reject" else DutyExchangeRequest.RETURNED, action
+            )
+    elif status == DutyExchangeRequest.ENDORSED_BY_UNIT_HEAD and can_endorse_second(acting_employee, filers):
         if action == "endorse":
             allowed = True
             apply_transition(DutyExchangeRequest.ENDORSED_BY_SUPERVISOR, "endorse")

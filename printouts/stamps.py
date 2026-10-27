@@ -90,3 +90,23 @@ def compute_stamps(actions, step_defs):
             when=format_when(stopped_by.acted_at), notes=stopped_by.notes or "",
         )
     return stamps, stopped
+
+
+def with_unit_head_step(step_defs, actions, filers):
+    """Two-level endorsement (owner decision 2026-10-27): add a "Unit Head"
+    stamp before the Supervisor stamp when the unit head endorsed this
+    request, or when its route has a unit-head step. Requests without a
+    unit step print exactly as before."""
+    from leave.permissions import needs_unit_step
+
+    logged = any(a.action == "endorse_unit" for a in actions)
+    if not (logged or needs_unit_step(filers)):
+        return step_defs
+    out = []
+    for step in step_defs:
+        if step.action_code == "endorse":
+            out.append(StepDef("Unit Head", "endorse_unit", "DIGITALLY ENDORSED"))
+            out.append(StepDef("Section Head", "endorse", "DIGITALLY ENDORSED"))
+        else:
+            out.append(step)
+    return out

@@ -5,7 +5,7 @@ permissions.actor_may_advance() does — because Official Time and Travel
 each skip one step (§6.2), so a saved status alone doesn't say who acts
 next; routing.py already encodes that."""
 
-from leave.permissions import ao_step_actors, coh_step_actors, endorsers_for, hr_step_actors
+from leave.permissions import ao_step_actors, coh_step_actors, endorsers_for, hr_step_actors, second_endorsers_for
 from notifications.services import notify
 
 from .models import OfficialRequest
@@ -19,9 +19,10 @@ def notify_status_change(official_request):
     mine_url = "/official-requests/mine/"
     filers = [official_request.employee]
 
-    if target_status == OfficialRequest.ENDORSED_BY_SUPERVISOR:
+    if target_status in (OfficialRequest.ENDORSED_BY_UNIT_HEAD, OfficialRequest.ENDORSED_BY_SUPERVISOR):
+        after_unit = official_request.status == OfficialRequest.ENDORSED_BY_UNIT_HEAD
         notify(
-            endorsers_for(filers),
+            second_endorsers_for(filers) if after_unit else endorsers_for(filers),
             f"{official_request.employee} filed a {type_name} request — awaiting your endorsement.",
             queue_url,
         )

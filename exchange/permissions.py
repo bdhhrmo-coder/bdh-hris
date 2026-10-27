@@ -7,7 +7,11 @@ from leave.permissions import (  # noqa: F401 (re-exported for exchange callers)
     can_act_ao_step,
     can_act_coh_step,
     can_act_hr_step,
+    UNIT_STEP,
     can_endorse,
+    can_endorse_second,
+    second_endorsers_for,
+    supervisor_step_result,
     get_acting_employee,
     is_administrative_officer,
     is_chief_of_hospital,
@@ -74,6 +78,14 @@ def visible_exchange_requests_for(acting_employee):
         req.pk for req in supervisor_candidates if can_endorse(acting_employee, [req.employee_a, req.employee_b])
     ]
     qs = qs | DutyExchangeRequest.objects.filter(pk__in=supervisor_ids)
+
+    # Second endorsement (section head), after the unit head - 2026-10-27.
+    second_ids = [
+        req.pk for req in DutyExchangeRequest.objects.filter(status=DutyExchangeRequest.ENDORSED_BY_UNIT_HEAD)
+        .select_related("employee_a", "employee_b")
+        if can_endorse_second(acting_employee, [req.employee_a, req.employee_b])
+    ]
+    qs = qs | DutyExchangeRequest.objects.filter(pk__in=second_ids)
 
     # Never one's own exchange, at any step (owner decision 2026-10-26).
     return qs.exclude(employee_a=acting_employee).exclude(employee_b=acting_employee).distinct()
