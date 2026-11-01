@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from documents.requirements import requirement_status_for
+from employees.models import Employee
 
 from . import routing
 from .balances import (
@@ -328,19 +329,22 @@ def cto_apply(request):
             start = form.cleaned_data["start_date"]
             end = form.cleaned_data["end_date"]
             days = form.cleaned_data["number_of_days"]
-            plan = plan_allocation(employee, days, today, end)
-
-            if violates_usage_cutoff(end):
-                cutoff = settings.CTO_USAGE_CUTOFF_MONTH_DAY
-                form.add_error("end_date", f"CTO usage cannot extend past {cutoff[0]}/{cutoff[1]} of the year.")
-            elif exceeds_monthly_cap(employee, start, days):
-                form.add_error(None, "This would exceed the 5-CTO-day-per-month usage cap.")
-            elif forms_illegal_consecutive_run(employee, start, end):
-                form.add_error(None, "CTO cannot be taken for 3 or more consecutive days.")
-            elif plan is None:
-                form.add_error(None, "Insufficient CTO balance for these dates.")
-            else:
-                with transaction.atomic():
+            application = None
+            with transaction.atomic():
+                # Lock the employee row so two applications filed at once can't
+                # both pass the balance/cap checks and hold the same credit.
+                Employee.objects.select_for_update().get(pk=employee.pk)
+                plan = plan_allocation(employee, days, today, end)
+                if violates_usage_cutoff(end):
+                    cutoff = settings.CTO_USAGE_CUTOFF_MONTH_DAY
+                    form.add_error("end_date", f"CTO usage cannot extend past {cutoff[0]}/{cutoff[1]} of the year.")
+                elif exceeds_monthly_cap(employee, start, days):
+                    form.add_error(None, "This would exceed the 5-CTO-day-per-month usage cap.")
+                elif forms_illegal_consecutive_run(employee, start, end):
+                    form.add_error(None, "CTO cannot be taken for 3 or more consecutive days.")
+                elif plan is None:
+                    form.add_error(None, "Insufficient CTO balance for these dates.")
+                else:
                     application = form.save(commit=False)
                     application.employee = employee
                     application.full_clean()
@@ -352,6 +356,7 @@ def cto_apply(request):
                         application=application, action="submit",
                         resulting_status=application.status, acted_by=request.user,
                     )
+            if application is not None:
                 notify_status_change(application)
                 messages.success(request, "CTO application submitted.")
                 return redirect("cto:my_cto")

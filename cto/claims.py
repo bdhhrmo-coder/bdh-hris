@@ -64,9 +64,13 @@ def _preview(line, employee):
     )
 
 
+@transaction.atomic
 def add_line(claim, hours_worked, today, ot_line=None, work_date=None, day_type=None):
     """Validate and add one line; raises ValidationError with the reason."""
     employee = claim.employee
+    # Lock the employee row: two lines added at once can't both pass the
+    # 24-hour cap or both take the same OT line.
+    type(employee).objects.select_for_update().get(pk=employee.pk)
     if claim.status not in RoutedRecord.EDITABLE_STATUSES:
         raise ValidationError("Lines can only be changed while the claim is a draft or returned.")
     if not is_cto_eligible(employee):
