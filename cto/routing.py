@@ -37,6 +37,7 @@ from django.utils import timezone
 from accounts.models import RoleAssignment
 from leave.permissions import employees_with_role, hr_employees, supervisors_of
 from notifications.services import notify
+from orgstructure.models import Section
 
 from .models import (
     STEP_AO,
@@ -88,11 +89,24 @@ def unit_heads_of(employee):
     return {ra.employee for ra in _supervisor_assignments().filter(unit_id__in=unit_ids)}
 
 
+def require_nursing_section():
+    """Fail loudly if NURSING_SECTION_NAME matches no section: otherwise
+    every Nursing employee would silently lose the Unit Head / Chief Nurse
+    steps."""
+    if not Section.objects.filter(name=settings.NURSING_SECTION_NAME).exists():
+        raise ValidationError(
+            f'The Nursing section setting (NURSING_SECTION_NAME = "{settings.NURSING_SECTION_NAME}") matches no '
+            "section, so the Nursing route can't be worked out. Ask an HR Administrator to fix the section name "
+            "or the setting before submitting."
+        )
+
+
 def ot_route(filer, filed_as):
     if filed_as == OvertimeRequest.CAPACITY_AO:
         return [STEP_COH]
     if filed_as == OvertimeRequest.CAPACITY_HR:
         return [STEP_AO, STEP_COH]
+    require_nursing_section()
     steps = [STEP_CHIEF_NURSE] if is_nursing_unit_head(filer) else []
     return steps + [STEP_HR, STEP_AO, STEP_COH]
 
@@ -100,6 +114,7 @@ def ot_route(filer, filed_as):
 def claim_route(claim):
     if claim.is_exception():
         return [STEP_AO, STEP_COH]
+    require_nursing_section()
     steps = [STEP_SUPERVISOR]
     if is_nursing(claim.employee):
         steps.append(STEP_CHIEF_NURSE)

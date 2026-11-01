@@ -13,6 +13,7 @@ urlpatterns = [
     path("claims/new-exception/", views.exception_claim_new, name="exception_claim_new"),
     path("claims/<int:pk>/", views.claim_detail, name="claim_detail"),
     path("claims/<int:pk>/action/", views.claim_action, name="claim_action"),
+    path("opening-balances/", views.opening_balances, name="opening_balances"),
     path("mine/", views.my_cto, name="my_cto"),
     path("apply/", views.cto_apply, name="cto_apply"),
     path("queue/", views.cto_queue, name="cto_queue"),

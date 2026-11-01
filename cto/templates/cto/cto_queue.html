@@ -6,6 +6,7 @@
 <p>
   {% if can_file_ot %}<a href="{% url 'cto:ot_new' %}" class="btn">+ File OT request</a>{% endif %}
   {% if can_file_exception %}<a href="{% url 'cto:exception_claim_new' %}" class="btn">+ Exception CTO claim</a>{% endif %}
+  {% if can_enter_opening %}<a href="{% url 'cto:opening_balances' %}" class="btn">Opening CTO balances</a>{% endif %}
 </p>
 
 <div class="card">

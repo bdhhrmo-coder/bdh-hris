@@ -222,7 +222,15 @@ Decided by the project owner in a 2026-11-01 design session; these **replace** t
 - Their pending claims are flagged to approvers and HR. After the last day of service, remaining credit lapses (nightly job) and claims still in the chain lapse with no credit.
 - Clearing the status restores normal rules; CTO already used stays used.
 
-**Configuration:** `CTO_FILING_DEADLINE_MONTH_DAY`, `CTO_USAGE_CUTOFF_MONTH_DAY` and reminder dates in settings; multipliers in the `CTOMultiplierRate` table.
+**Opening balances (Option A, decided 2026-11-01)**
+- Existing CTO credit is entered as **several opening lines per employee**, each with days, date earned and a required reason (may cite the paper record). Never collapsed into one balance at a cutoff.
+- Each line follows the normal rules by its own date earned: year earned = year of the date earned; credit earned on or before Nov 30 needs a carry-over reason if unused after Dec 15; credit earned after Nov 30 carries over without one. A line counts in the balance from the day it is entered.
+- Date earned must be in 2026 (the year of `CTO_OPENING_BALANCE_DATE`). Older credit is not entered here; it goes through an exception claim.
+- HR Administrator only, never for themselves. If no other HR Administrator exists, the AO enters them. No approval chain; every add and void is audit-logged.
+- `CTO_OPENING_BALANCE_DATE` (default Nov 30, 2026) only locks entry. Up to and including that date, a wrong line is voided with a typed reason and re-entered — nothing is edited in place. A line with CTO days already held or used against it can't be voided. After the lock, corrections go through an exception claim (AO, then COH).
+- Implementation: lines are `CTOClaimLine`s on the employee's single opening record (`CTOClaim.is_opening`, one per employee, never routed). See `cto/opening.py`.
+
+**Configuration:** `CTO_FILING_DEADLINE_MONTH_DAY`, `CTO_USAGE_CUTOFF_MONTH_DAY`, `CTO_OPENING_BALANCE_DATE`, `NURSING_SECTION_NAME` and reminder dates in settings; multipliers in the `CTOMultiplierRate` table. If `NURSING_SECTION_NAME` matches no section, OT filing by a Supervisor and claim submission stop with an error asking an HR Administrator to fix it — the Nursing steps are never silently skipped.
 
 ---
 

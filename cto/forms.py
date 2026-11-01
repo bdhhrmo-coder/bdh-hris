@@ -58,6 +58,12 @@ class ManualClaimLineForm(forms.Form):
     day_type = forms.ChoiceField(choices=DAY_TYPE_CHOICES)
 
 
+class OpeningLineForm(forms.Form):
+    days = forms.DecimalField(max_digits=6, decimal_places=2)
+    date_earned = forms.DateField(widget=DATE)
+    reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}), help_text="Cite the paper record.")
+
+
 class CTOUsageApplicationForm(forms.ModelForm):
     class Meta:
         model = CTOUsageApplication

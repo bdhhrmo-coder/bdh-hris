@@ -193,6 +193,11 @@ class CTOClaim(RoutedRecord):
         blank=True, help_text="HR Administrator exception claim (no OT request): required reason."
     )
     filed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    is_opening = models.BooleanField(
+        default=False,
+        help_text="The employee's opening-balance record (CLAUDE.md §7.1 Option A): holds the "
+        "opening lines entered by an HR Administrator. Never routed.",
+    )
     first_filed_on = models.DateField(
         null=True, blank=True,
         help_text="Date of first submission. The Nov 30 filing deadline is judged on this date, "
@@ -201,12 +206,19 @@ class CTOClaim(RoutedRecord):
 
     class Meta:
         ordering = ["-created_at"]
-
-    def __str__(self):
-        return f"CTO claim #{self.pk} — {self.employee}"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["employee"], condition=models.Q(is_opening=True), name="one_opening_record_per_employee"
+            ),
+        ]
 
     def is_exception(self):
         return bool(self.exception_reason.strip())
+
+    def __str__(self):
+        if self.is_opening:
+            return f"CTO opening balance — {self.employee}"
+        return f"CTO claim #{self.pk} — {self.employee}"
 
     def uses_ot_lines(self):
         return self.duty_type == self.DUTY_REGULAR and not self.is_exception()
@@ -235,7 +247,8 @@ class CTOClaimLine(models.Model):
 
     PENDING = "PENDING"
     CREDITED = "CREDITED"
-    STATE_CHOICES = [(PENDING, "Not yet credited"), (CREDITED, "Credited")]
+    VOIDED = "VOIDED"
+    STATE_CHOICES = [(PENDING, "Not yet credited"), (CREDITED, "Credited"), (VOIDED, "Voided")]
 
     claim = models.ForeignKey(CTOClaim, on_delete=models.CASCADE, related_name="lines")
     ot_line = models.ForeignKey(
@@ -252,6 +265,7 @@ class CTOClaimLine(models.Model):
     state = models.CharField(max_length=10, choices=STATE_CHOICES, default=PENDING)
     effective_date = models.DateField(null=True, blank=True)
     year_earned = models.PositiveSmallIntegerField(null=True, blank=True)
+    reason = models.TextField(blank=True, help_text="Opening lines only: required reason / paper-record reference.")
 
     class Meta:
         ordering = ["work_date"]

@@ -955,3 +955,164 @@ class UsageLimitViewTests(TestCase):
         self._apply("2026-10-05", "2026-10-06", "2")
         self._apply("2026-10-07", "2026-10-07", "1")
         self.assertEqual(CTOUsageApplication.objects.count(), 1)
+
+
+class OpeningBalanceTests(TestCase):
+    """CLAUDE.md §7.1 Option A."""
+
+    TODAY = date(2026, 11, 10)
+
+    def setUp(self):
+        self.org = Org()
+        self.emp = self.org.lab_staff
+
+    def _add(self, actor=None, employee=None, days="2", earned=date(2026, 6, 1), reason="Paper CTO card p.3", today=None):
+        from .opening import add_opening_line
+
+        actor = actor or self.org.hr_admin
+        return add_opening_line(actor, employee or self.emp, Decimal(days), earned, reason, actor.user, today or self.TODAY)
+
+    def test_several_lines_each_with_own_date_and_year_count_from_entry(self):
+        a = self._add(days="1.5", earned=date(2026, 3, 2))
+        b = self._add(days="2", earned=date(2026, 9, 14), reason="Logbook Sept")
+        for line in (a, b):
+            self.assertEqual(line.state, CTOClaimLine.CREDITED)
+            self.assertEqual(line.effective_date, self.TODAY)
+            self.assertEqual(line.year_earned, 2026)
+        self.assertEqual(a.claim, b.claim)
+        self.assertTrue(a.claim.is_opening)
+        self.assertEqual(compute_available_cto_balance(self.emp, self.TODAY), Decimal("3.50"))
+        self.assertEqual(compute_available_cto_balance(self.emp, date(2026, 11, 9)), Decimal("0"))
+        self.assertEqual(a.claim.actions.filter(action="opening_line_added").count(), 2)
+
+    def test_reason_required(self):
+        with self.assertRaises(ValidationError):
+            self._add(reason="  ")
+
+    def test_date_earned_must_be_in_2026(self):
+        with self.assertRaises(ValidationError):
+            self._add(earned=date(2025, 12, 20))
+
+    def test_hr_admin_cannot_enter_for_self_and_others_cannot_enter(self):
+        with self.assertRaises(ValidationError):
+            self._add(employee=self.org.hr_admin)
+        for actor in (self.org.hr, self.org.ao, self.org.lab_sup):  # another HR Admin exists for these targets
+            with self.assertRaises(ValidationError):
+                self._add(actor=actor)
+
+    def test_ao_enters_when_no_other_hr_administrator(self):
+        line = self._add(actor=self.org.ao, employee=self.org.hr_admin)
+        self.assertEqual(line.claim.employee, self.org.hr_admin)
+        hr_admin2 = make_employee("hradmin2", "E-HRA2", role=RoleAssignment.HR_ADMINISTRATOR)
+        with self.assertRaises(ValidationError):  # now another HR Admin exists
+            self._add(actor=self.org.ao, employee=self.org.hr_admin)
+        self._add(actor=hr_admin2, employee=self.org.hr_admin)
+
+    def test_void_with_reason_then_re_enter(self):
+        from .opening import void_opening_line
+
+        line = self._add(days="3")
+        with self.assertRaises(ValidationError):
+            void_opening_line(self.org.hr_admin, line, "", self.org.hr_admin.user, self.TODAY)
+        void_opening_line(self.org.hr_admin, line, "Typed 3 instead of 2", self.org.hr_admin.user, self.TODAY)
+        line.refresh_from_db()
+        self.assertEqual(line.state, CTOClaimLine.VOIDED)
+        self.assertEqual(line.credited_days, Decimal("3"))  # not edited in place
+        self._add(days="2")
+        self.assertEqual(compute_available_cto_balance(self.emp, self.TODAY), Decimal("2"))
+        self.assertTrue(line.claim.actions.filter(action="opening_line_voided", notes__contains="Typed 3").exists())
+
+    def test_void_blocked_when_days_are_held_against_the_line(self):
+        from .opening import void_opening_line
+
+        line = self._add(days="2")
+        client = Client()
+        client.force_login(self.emp.user)
+        with on(self.TODAY):
+            client.post(reverse("cto:cto_apply"), {"start_date": "2026-11-20", "end_date": "2026-11-20",
+                                                   "number_of_days": "1"})
+        self.assertTrue(line.allocations.exists())
+        with self.assertRaises(ValidationError):
+            void_opening_line(self.org.hr_admin, line, "wrong", self.org.hr_admin.user, self.TODAY)
+
+    def test_locked_after_the_cutoff_date(self):
+        from .opening import void_opening_line
+
+        line = self._add(today=date(2026, 11, 30))  # the cutoff day itself is still open
+        with self.assertRaises(ValidationError):
+            self._add(today=date(2026, 12, 1))
+        with self.assertRaises(ValidationError):
+            void_opening_line(self.org.hr_admin, line, "late fix", self.org.hr_admin.user, date(2026, 12, 1))
+
+    @override_settings(CTO_OPENING_BALANCE_DATE=date(2026, 10, 31))
+    def test_lock_date_comes_from_settings(self):
+        with self.assertRaises(ValidationError):
+            self._add(today=date(2026, 11, 1))
+
+    def test_one_opening_record_per_employee_in_the_database(self):
+        from django.db import IntegrityError
+
+        self._add()
+        with self.assertRaises(IntegrityError):
+            CTOClaim.objects.create(employee=self.emp, is_opening=True, filed_by=self.org.hr_admin.user,
+                                    status=RoutedRecord.APPROVED)
+
+    def test_opening_record_never_shows_as_a_pending_claim(self):
+        self._add()
+        client = Client()
+        for viewer in (self.org.lab_sup, self.org.hr, self.org.hr_admin, self.org.ao, self.org.coh):
+            client.force_login(viewer.user)
+            response = client.get(reverse("cto:cto_queue"))
+            self.assertEqual(response.context["pending_claims"], [], viewer)
+        client.force_login(self.emp.user)
+        response = client.get(reverse("cto:my_cto"))
+        self.assertFalse(any(c.is_opening for c in response.context["claims"]))
+        self.assertEqual(len(response.context["credit_lines"]), 1)  # shown as credit instead
+
+    def test_opening_lines_show_with_readable_labels_in_audit_log(self):
+        from auditlog.aggregation import audit_rows
+        from .opening import void_opening_line
+
+        line = self._add()
+        void_opening_line(self.org.hr_admin, line, "wrong", self.org.hr_admin.user, self.TODAY)
+        actions = {r["action"] for r in audit_rows(employee_id=self.emp.pk)}
+        self.assertIn("Opening CTO line added", actions)
+        self.assertIn("Opening CTO line voided", actions)
+
+    def test_opening_page(self):
+        client = Client()
+        client.force_login(self.org.hr_admin.user)
+        with on(self.TODAY):
+            response = client.post(reverse("cto:opening_balances"), {
+                "employee": self.emp.pk, "action": "add", "days": "1", "date_earned": "2026-05-04",
+                "reason": "Paper card",
+            })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(client.get(reverse("cto:opening_balances") + f"?employee={self.emp.pk}").status_code, 200)
+        client.force_login(self.emp.user)
+        self.assertEqual(client.get(reverse("cto:opening_balances")).status_code, 403)
+
+
+class NursingSectionSettingTests(TestCase):
+    def setUp(self):
+        self.org = Org()
+
+    @override_settings(NURSING_SECTION_NAME="Nursing Services (renamed)")
+    def test_claim_submission_fails_loudly_when_section_name_matches_nothing(self):
+        ot = approved_ot(self.org, self.org.nurse, date(2026, 10, 5), today=date(2026, 10, 1))
+        claim = CTOClaim.objects.create(employee=self.org.nurse, filed_by=self.org.nurse.user)
+        add_line(claim, Decimal("8"), date(2026, 10, 6), ot_line=ot)
+        upload_all_required(claim, self.org.nurse.user)
+        with self.assertRaises(ValidationError) as ctx:
+            submit_claim(claim, self.org.nurse.user, date(2026, 10, 6))
+        self.assertIn("HR Administrator", str(ctx.exception))
+        claim.refresh_from_db()
+        self.assertEqual(claim.status, RoutedRecord.DRAFT)
+        self.assertIsNone(claim.first_filed_on)
+
+    @override_settings(NURSING_SECTION_NAME="Nursing Services (renamed)")
+    def test_supervisor_ot_filing_fails_loudly_too(self):
+        with self.assertRaises(ValidationError):
+            file_ot(self.org.er_head, "SUPERVISOR", "x", "", [ot_line(self.org.nurse, date(2099, 1, 5))],
+                    self.org.er_head.user, date(2099, 1, 1))
+        self.assertFalse(OvertimeRequest.objects.exists())

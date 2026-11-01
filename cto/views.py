@@ -32,6 +32,7 @@ from .forms import (
     CTOUsageApplicationForm,
     ExceptionClaimForm,
     ManualClaimLineForm,
+    OpeningLineForm,
     OTClaimLineForm,
     OvertimeLineFormSet,
     OvertimeRequestForm,
@@ -47,6 +48,7 @@ from .models import (
     RoutedRecord,
 )
 from .notifications import notify_status_change
+from .opening import add_opening_line, can_enter_opening, entry_is_open, opening_entry_actors, void_opening_line
 from .overtime import file_ot, filing_capacities
 from .permissions import (
     get_acting_employee,
@@ -301,6 +303,49 @@ def claim_action(request, pk):
     return redirect("cto:claim_detail", pk=pk)
 
 
+# --- Opening balances (CLAUDE.md §7.1 Option A) -------------------------
+
+@login_required
+def opening_balances(request):
+    actor = _employee_or_403(request)
+    if not can_enter_opening(actor):
+        raise PermissionDenied("Only an HR Administrator (or the AO when there is no other) enters opening balances.")
+    today = timezone.localdate()
+    target = None
+    pk = request.POST.get("employee") or request.GET.get("employee")
+    if pk:
+        target = get_object_or_404(Employee, pk=pk)
+    form = OpeningLineForm(request.POST or None)
+    if request.method == "POST" and target is not None:
+        try:
+            if request.POST.get("action") == "void":
+                line = get_object_or_404(CTOClaimLine, pk=request.POST.get("line"), claim__employee=target,
+                                         claim__is_opening=True)
+                void_opening_line(actor, line, request.POST.get("void_reason", ""), request.user, today)
+                messages.success(request, "Line voided.")
+            elif form.is_valid():
+                add_opening_line(actor, target, form.cleaned_data["days"], form.cleaned_data["date_earned"],
+                                 form.cleaned_data["reason"], request.user, today)
+                messages.success(request, "Opening line added.")
+            else:
+                raise ValidationError([f"{k}: {', '.join(v)}" for k, v in form.errors.items()])
+        except ValidationError as exc:
+            _show_errors(request, exc)
+        else:
+            return redirect(f"{request.path}?employee={target.pk}")
+    lines = (CTOClaimLine.objects.filter(claim__employee=target, claim__is_opening=True).order_by("work_date", "id")
+             if target else [])
+    return render(request, "cto/opening_balances.html", {
+        "employees": Employee.objects.filter(is_active=True),
+        "target": target,
+        "lines": lines,
+        "form": form,
+        "entry_open": entry_is_open(today),
+        "lock_date": settings.CTO_OPENING_BALANCE_DATE,
+        "may_enter_for_target": target is not None and actor in opening_entry_actors(target),
+    })
+
+
 # --- CTO usage -----------------------------------------------------------
 
 @login_required
@@ -309,7 +354,7 @@ def my_cto(request):
     return render(request, "cto/my_cto.html", {
         "balance": compute_available_cto_balance(employee),
         "applications": employee.cto_usage_applications.all(),
-        "claims": employee.cto_claims.all(),
+        "claims": employee.cto_claims.filter(is_opening=False),
         "credit_lines": CTOClaimLine.objects.filter(claim__employee=employee, state=CTOClaimLine.CREDITED),
         "claimable_ot_lines": claimable_ot_lines(employee),
         "today": timezone.localdate(),
@@ -381,6 +426,7 @@ def cto_queue(request):
         "my_filed_ot": OvertimeRequest.objects.filter(filed_by=employee) if employee else [],
         "can_file_ot": bool(filing_capacities(employee)),
         "can_file_exception": employee is not None and employee.is_hr_administrator(),
+        "can_enter_opening": can_enter_opening(employee),
     })
 
 

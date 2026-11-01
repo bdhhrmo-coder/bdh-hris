@@ -25,6 +25,15 @@ from leave.models import LeaveApplicationAction
 from official_requests.models import OfficialRequestAction
 
 
+# Readable labels for action codes that aren't self-explanatory.
+ACTION_LABELS = {
+    "opening_line_added": "Opening CTO line added",
+    "opening_line_voided": "Opening CTO line voided",
+    "correct_day_type": "Day type corrected",
+    "skip": "Step skipped",
+}
+
+
 def _employees_for_object(obj):
     """Best-effort list of Employee objects a transaction record concerns."""
     if obj is None:
@@ -68,7 +77,7 @@ def _rows_from_request_actions(qs, module_label, request_field):
             {
                 "timestamp": row.acted_at,
                 "module": module_label,
-                "action": row.action,
+                "action": ACTION_LABELS.get(row.action, row.action),
                 "detail": f"{request_obj} — {row.notes}" if row.notes else str(request_obj),
                 "actor": row.acted_by,
                 "employee_ids": {e.pk for e in employees},

@@ -203,6 +203,14 @@ Stage 2 ships.**
 | Nightly separation lapse | Daily, **00:45** | For employees whose last day of service has passed: lapses their remaining CTO credit and any CTO claims still in the approval chain. |
 | Carry-over reminders | Daily, **07:00** | Does nothing except on the reminder dates in settings (default Dec 1, Dec 10, Dec 16). Sends Supervisors/Unit Heads and HR the list of employees with at-risk credit, and the COH the reasons still waiting on a decision. |
 
+**Do not rename the Nursing Service Section.** The OT and CTO claim
+routes find Nursing staff (Unit Head, then Chief Nurse) by the section's
+exact name, set in `NURSING_SECTION_NAME` in `bdh_hris/settings.py`. If
+the section is renamed in admin without changing that setting, Supervisor
+OT filing and CTO claim submission stop with an error until an HR
+Administrator puts the name back (or IT updates the setting and restarts
+the service).
+
 The old whole-balance year-end job (`forfeit_expired_cto`) was **removed**
 on 2026-11-01. If an earlier install scheduled it, delete that task:
 `schtasks /delete /tn "<its name>" /f`.

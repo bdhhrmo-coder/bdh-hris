@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
+from datetime import date
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -83,6 +84,10 @@ CTO_USAGE_CUTOFF_MONTH_DAY = (12, 15)  # CTO usage dates cannot extend past this
 # OT/CTO routing (cto/routing.py): employees of this section route through
 # Unit Head -> Chief Nurse. Must match orgstructure.Section.name.
 NURSING_SECTION_NAME = "Nursing Service Section"
+# CTO opening balances (cto/opening.py, CLAUDE.md §7.1 Option A): last day
+# opening lines can be entered or voided. Its year is the only year a date
+# earned may fall in.
+CTO_OPENING_BALANCE_DATE = date(2026, 11, 30)
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
