@@ -57,7 +57,7 @@ def request_queue(request):
 @login_required
 def request_action(request, pk):
     """Single POST endpoint for every routing step, generalized across all
-    four request types via routing.next_status() rather than a hand-written
+    three request types via routing.next_status() rather than a hand-written
     branch tree per type (see routing.py)."""
     acting_employee = get_acting_employee(request.user)
     official_request = get_object_or_404(OfficialRequest, pk=pk)

@@ -8,7 +8,7 @@ class OfficialRequestForm(forms.ModelForm):
         model = OfficialRequest
         fields = [
             "request_type", "start_date", "end_date", "time_from", "time_to",
-            "destination", "purpose", "hours_requested", "is_restday_or_holiday",
+            "destination", "purpose",
         ]
         widgets = {
             "start_date": forms.DateInput(attrs={"type": "date"}),
@@ -21,8 +21,6 @@ class OfficialRequestForm(forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
         request_type = cleaned.get("request_type")
-        if request_type == OfficialRequest.OT_RESTDAY_HOLIDAY and not cleaned.get("hours_requested"):
-            self.add_error("hours_requested", "Required for Authorized OT/restday/holiday work.")
         if request_type == OfficialRequest.TRAVEL and not cleaned.get("destination"):
             self.add_error("destination", "Required for a Travel request.")
         start = cleaned.get("start_date")

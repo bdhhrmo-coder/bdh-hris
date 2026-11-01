@@ -1,8 +1,8 @@
 """
-Generic routing-step engine for OfficialRequest, since three of the four
-request types share the identical chain and the other two each skip
-exactly one step (see models.py's module docstring for the §6.2 chains).
-Rather than hand-writing four near-identical branch trees (the pattern
+Generic routing-step engine for OfficialRequest: Official Business has
+the full chain and the other two types each skip exactly one step (see
+models.py's module docstring for the §6.2 chains).
+Rather than hand-writing near-identical branch trees (the pattern
 used in leave/cto/exchange/attendance for their single fixed chain), this
 computes the ordered step list per request_type from ROUTING_CONFIG, so
 adding or re-shaping a request type later is a one-line config change,
@@ -15,7 +15,6 @@ ROUTING_CONFIG = {
     OR.OFFICIAL_BUSINESS: dict(skip_supervisor=False, skip_hr=False),
     OR.OFFICIAL_TIME: dict(skip_supervisor=True, skip_hr=False),
     OR.TRAVEL: dict(skip_supervisor=False, skip_hr=True),
-    OR.OT_RESTDAY_HOLIDAY: dict(skip_supervisor=False, skip_hr=False),
 }
 
 # Which role acts to reach a given status, and the action-name posted for it.

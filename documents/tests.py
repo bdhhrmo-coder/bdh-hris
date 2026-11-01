@@ -8,7 +8,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from accounts.models import RoleAssignment
-from cto.models import CTOCreditEntry, CTOMultiplierRate
+from cto.models import CTOClaim
 from employees.models import Employee
 from leave.models import LeaveApplication, LeaveType
 
@@ -33,15 +33,9 @@ def make_employee(username, employee_id, role=None):
     return employee
 
 
-def make_credit_entry(employee, actor_user, duty_type=CTOCreditEntry.DUTY_REGULAR):
-    rate, _ = CTOMultiplierRate.objects.get_or_create(
-        effective_date=date(2025, 12, 16), defaults=dict(weekday_multiplier="1.00", restday_holiday_multiplier="1.50"),
-    )
-    return CTOCreditEntry.objects.create(
-        employee=employee, work_date=date(2026, 3, 1), duty_type=duty_type, hours_worked="8.00",
-        shift_hours_used=8, multiplier_applied="1.00", credited_hours="8.00", credited_days="1.00",
-        recorded_by=actor_user,
-    )
+def make_credit_entry(employee, actor_user, duty_type=CTOClaim.DUTY_REGULAR):
+    """A draft CTO claim — the record CTO documents attach to."""
+    return CTOClaim.objects.create(employee=employee, duty_type=duty_type, filed_by=actor_user)
 
 
 @override_settings(MEDIA_ROOT="/tmp/bdh_hris_test_media")
@@ -92,14 +86,14 @@ class RequirementStatusTests(TestCase):
         self.employee = make_employee("docreq1", "EMP-DOCREQ1")
 
     def test_regular_duty_requires_three_documents(self):
-        entry = make_credit_entry(self.employee, self.hr_user, duty_type=CTOCreditEntry.DUTY_REGULAR)
+        entry = make_credit_entry(self.employee, self.hr_user, duty_type=CTOClaim.DUTY_REGULAR)
         status = requirement_status_for(entry)
         labels = {row["label"] for row in status}
         self.assertEqual(labels, {"Allowed to Work form", "DTR/logbook copy", "OT Accomplishment Report"})
         self.assertTrue(all(not row["satisfied"] for row in status))
 
     def test_medical_transport_requires_trip_ticket_and_alternative(self):
-        entry = make_credit_entry(self.employee, self.hr_user, duty_type=CTOCreditEntry.DUTY_MEDICAL_TRANSPORT)
+        entry = make_credit_entry(self.employee, self.hr_user, duty_type=CTOClaim.DUTY_MEDICAL_TRANSPORT)
         status = requirement_status_for(entry)
         labels = {row["label"] for row in status}
         self.assertIn("Trip Ticket (with employee's name on it)", labels)
@@ -107,7 +101,7 @@ class RequirementStatusTests(TestCase):
         self.assertEqual(len(status), 2)  # trip ticket + one collapsed alternative-group row
 
     def test_uploading_one_alternative_satisfies_the_group(self):
-        entry = make_credit_entry(self.employee, self.hr_user, duty_type=CTOCreditEntry.DUTY_MEDICAL_TRANSPORT)
+        entry = make_credit_entry(self.employee, self.hr_user, duty_type=CTOClaim.DUTY_MEDICAL_TRANSPORT)
         content_type = ContentType.objects.get_for_model(entry)
         cert_requirement = DocumentRequirement.objects.get(
             content_type=content_type, sub_type_value="MEDICAL_TRANSPORT", label="Logbook copy",

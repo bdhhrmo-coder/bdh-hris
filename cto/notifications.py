@@ -1,6 +1,5 @@
-"""Mirrors leave/notifications.py's shape — see that module's docstring
-for the CLAUDE.md §11/§2 in-app-only-for-now rationale. CTO usage has no
-data-entry-only shortcut (unlike leave), so there's one chain, not two."""
+"""CTO usage application notifications (in-app). OT request and CTO claim
+notifications are sent by cto/routing.py and cto/claims.py."""
 
 from accounts.models import RoleAssignment
 from leave.permissions import employees_with_role, hr_employees, supervisors_of
@@ -51,14 +50,3 @@ def notify_status_change(application):
             f"Your CTO usage application was {application.get_status_display().lower()}.",
             _MINE_URL,
         )
-
-
-def notify_credit_entry(entry):
-    """Sent when a CTO claim is submitted and credited (cto.claims.
-    credit_claim) — there's no routing chain to notify along, just the
-    one employee who just got credited."""
-    notify(
-        entry.employee,
-        f"You were credited {entry.credited_days} CTO day(s) for {entry.get_duty_type_display()} on {entry.work_date}.",
-        _MINE_URL,
-    )

@@ -157,22 +157,17 @@ class ExchangeNotificationIntegrationTests(TestCase):
 
 
 class CTONotificationIntegrationTests(TestCase):
-    def test_credited_claim_notifies_employee(self):
-        from unittest.mock import patch
+    def test_approved_claim_notifies_employee_with_credit(self):
+        from cto.claims import credit_lines
+        from cto.tests import Org, approve_all, approved_ot, filed_claim
 
-        from cto.tests import _FakeDate, make_approved_ot, make_draft_claim, upload_all_required
-
-        hr = make_employee("ctonotif_hr", "EMP-CN-1", role=RoleAssignment.HR_PROCESSOR)
-        employee = make_employee("ctonotif_emp", "EMP-CN-2")
-        ot = make_approved_ot(employee, date(2026, 3, 5), date(2026, 3, 5), "8")
-        entry = make_draft_claim(ot, date(2026, 3, 5), "8", hr.user)
-        upload_all_required(entry, hr.user)
-        client = Client()
-        client.login(username="ctonotif_hr", password="testpass123")
-        with patch("cto.views.date", _FakeDate):
-            client.post(reverse("cto:claim_submit", args=[entry.pk]))
-        self.assertTrue(Notification.objects.filter(recipient=employee, message__icontains="credited").exists())
-        self.assertFalse(Notification.objects.filter(recipient=hr).exists())
+        org = Org()
+        employee = org.lab_staff
+        ot = approved_ot(org, employee, date(2026, 3, 5), today=date(2026, 3, 1))
+        claim = filed_claim(org, employee, [(ot, "8", None, None)], date(2026, 3, 6))
+        Notification.objects.all().delete()
+        approve_all(claim, on_approved=credit_lines)
+        self.assertTrue(Notification.objects.filter(recipient=employee, message__icontains="CTO day").exists())
 
 
 class OfficialRequestNotificationIntegrationTests(TestCase):

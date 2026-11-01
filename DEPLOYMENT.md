@@ -179,6 +179,41 @@ old backups automatically. Someone on HR/IT should periodically clear out
 backups that are no longer needed; how often and how far back to keep is
 an operational decision for the hospital, not something to automate away.
 
+## 8a. Scheduled CTO jobs and the time zone
+
+**Time zone.** All CTO deadlines (Nov 30 filing, Dec 15 use, Dec 16
+carry-over reasons, the 1st-of-month effective dates) roll over at
+**midnight Manila time**. The app sets `TIME_ZONE = "Asia/Manila"` with
+`USE_TZ = True`, and the CTO code reads "today" with
+`django.utils.timezone.localdate()`, so the date follows Manila time even
+if the server clock is set to another zone. Still, set the Windows Server
+time zone to **(UTC+08:00) Kuala Lumpur, Singapore** (Manila) so Task
+Scheduler times below mean Manila time. Some older modules (leave,
+exchange) still use the server's own date, which is one more reason to
+keep the server on Manila time.
+
+**Jobs.** Register each with `schtasks` like the backup in §8, running
+`.venv\Scripts\python manage.py <command>` from `C:\BDH-HRIS`. **Stage 2
+adds these commands. None exist yet, so do not schedule anything until
+Stage 2 ships.**
+
+| Job | When | What it does |
+|---|---|---|
+| Dec 17 CTO forfeiture | Once a year, **Dec 17, 00:30** | Forfeits, credit line by credit line, CTO from work done on or before Nov 30 that is still unused and has no carry-over reason submitted. Lines with a submitted reason stay pending until the COH decides. Credits that carry over without a reason (work after Nov 30, or effective date after Dec 15) are left alone. |
+| Nightly separation lapse | Daily, **00:45** | For employees whose last day of service has passed: lapses their remaining CTO credit and any CTO claims still in the approval chain. |
+| Carry-over reminders | Daily, **07:00** | Does nothing except on the reminder dates in settings (default Dec 1, Dec 10, Dec 16). Sends Supervisors/Unit Heads and HR the list of employees with at-risk credit, and the COH the reasons still waiting on a decision. |
+
+The old whole-balance year-end job (`forfeit_expired_cto`) was **removed**
+on 2026-11-01. If an earlier install scheduled it, delete that task:
+`schtasks /delete /tn "<its name>" /f`.
+
+**Upgrading an existing install:** migration `cto 0005` drops the old CTO
+claim and ledger tables (`CTOCreditEntry`, `CTOCreditTransaction`) and
+creates the per-line credit tables. This was approved on the basis that
+no real CTO data exists yet. If real CTO data has been entered, **stop
+and take a backup first**, and talk to the project owner before running
+`migrate`.
+
 ## 9. Day-to-day operations
 
 **Checking if it's up:** `Get-Service BDH-HRIS`, or just browse to the

@@ -41,7 +41,7 @@ def actor_may_advance(acting_employee, official_request):
 
 
 def visible_requests_for(acting_employee):
-    """Requests this user may act on right now, across all four types."""
+    """Requests this user may act on right now, across all three types."""
     if acting_employee is None:
         return OfficialRequest.objects.none()
 

@@ -1,24 +1,14 @@
 """
-Official Business, Official Time, Travel, and Authorized OT/restday/holiday
-work requests — CLAUDE.md §6.2, Build Order Phase 8: "workflow routing
-only, no special business rules yet."
+Official Business, Official Time and Travel requests — CLAUDE.md §6.2,
+Build Order Phase 8: "workflow routing only, no special business rules yet."
 
-One model, one routing engine (routing.py), four request_type values —
-the same shape leave.LeaveType.requires_full_routing uses to split COSP
-Leave from everything else, generalized here since three of these four
-types share the identical Employee -> Supervisor -> HR -> AO -> COH chain
-and the other two each skip exactly one step (see routing.py's
-ROUTING_CONFIG):
-  - Official Business:        Employee -> Supervisor -> HR -> AO -> COH
-  - Official Time:            Employee -> HR -> AO -> COH        (no Supervisor step)
-  - Travel:                   Employee -> Supervisor -> AO -> COH (no HR step)
-  - Authorized OT/restday/holiday work: Employee -> Supervisor -> HR -> AO -> COH
+One model, one routing engine (routing.py), three request_type values:
+  - Official Business: Employee -> Supervisor -> HR -> AO -> COH
+  - Official Time:     Employee -> HR -> AO -> COH        (no Supervisor step)
+  - Travel:            Employee -> Supervisor -> AO -> COH (no HR step)
 
-Settled 2026-09-28 (CLAUDE.md §7): approving an OT_RESTDAY_HOLIDAY request
-does NOT create CTO credit. HR files a separate CTO claim per workday from
-the approved request (cto.CTOCreditEntry.ot_request links back here), and
-CTO is credited only when that claim is submitted with its required
-documents — see cto/claims.py. Nothing in this app touches CTO.
+Authorized OT/rest-day/holiday work moved to cto.OvertimeRequest on
+2026-11-01 (filed by Supervisor/HR/AO in batches — CLAUDE.md §7.1).
 """
 
 from django.conf import settings
@@ -30,12 +20,10 @@ class OfficialRequest(models.Model):
     OFFICIAL_BUSINESS = "OFFICIAL_BUSINESS"
     OFFICIAL_TIME = "OFFICIAL_TIME"
     TRAVEL = "TRAVEL"
-    OT_RESTDAY_HOLIDAY = "OT_RESTDAY_HOLIDAY"
     REQUEST_TYPE_CHOICES = [
         (OFFICIAL_BUSINESS, "Official Business"),
         (OFFICIAL_TIME, "Official Time"),
         (TRAVEL, "Travel"),
-        (OT_RESTDAY_HOLIDAY, "Authorized OT / rest day / holiday work"),
     ]
 
     SUBMITTED = "SUBMITTED"
@@ -65,18 +53,11 @@ class OfficialRequest(models.Model):
     start_date = models.DateField()
     end_date = models.DateField()
     time_from = models.TimeField(
-        null=True, blank=True, help_text="Mainly for Official Time / a partial-day OT claim."
+        null=True, blank=True, help_text="Mainly for Official Time."
     )
     time_to = models.TimeField(null=True, blank=True)
     destination = models.CharField(max_length=255, blank=True, help_text="Mainly for Travel.")
     purpose = models.TextField()
-    hours_requested = models.DecimalField(
-        max_digits=5, decimal_places=2, null=True, blank=True,
-        help_text="Hours worked — required for Authorized OT/restday/holiday work.",
-    )
-    is_restday_or_holiday = models.BooleanField(
-        default=False, help_text="OT/restday/holiday work only: whether this falls on a rest day or holiday."
-    )
 
     status = models.CharField(max_length=25, choices=STATUS_CHOICES, default=SUBMITTED)
     submitted_at = models.DateTimeField(auto_now_add=True)
@@ -91,8 +72,6 @@ class OfficialRequest(models.Model):
     def clean(self):
         if self.start_date and self.end_date and self.end_date < self.start_date:
             raise ValidationError("End date cannot be before the start date.")
-        if self.request_type == self.OT_RESTDAY_HOLIDAY and not self.hours_requested:
-            raise ValidationError({"hours_requested": "Required for Authorized OT/restday/holiday work."})
         if self.request_type == self.TRAVEL and not self.destination:
             raise ValidationError({"destination": "Required for a Travel request."})
 

@@ -40,7 +40,7 @@
     <td>{{ row.employee_display }}</td>
     <td>{{ row.action }}</td>
     <td>{{ row.detail }}</td>
-    <td>{{ row.actor }}</td>
+    <td>{{ row.actor|default:"System" }}</td>
   </tr>
   {% empty %}
   <tr><td colspan="6" class="empty-note">No records match this filter.</td></tr>

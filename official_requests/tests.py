@@ -24,7 +24,7 @@ def make_employee(username, employee_id, role=None):
 
 
 class RoutingStepsTests(TestCase):
-    """CLAUDE.md §6.2's four chains, generalized via ROUTING_CONFIG."""
+    """CLAUDE.md §6.2's three chains, generalized via ROUTING_CONFIG."""
 
     def test_official_business_full_chain(self):
         self.assertEqual(
@@ -45,11 +45,6 @@ class RoutingStepsTests(TestCase):
         self.assertIn(OfficialRequest.ENDORSED_BY_SUPERVISOR, steps)
         self.assertNotIn(OfficialRequest.PROCESSED_BY_HR, steps)
 
-    def test_ot_restday_holiday_full_chain(self):
-        self.assertEqual(
-            routing_steps(OfficialRequest.OT_RESTDAY_HOLIDAY), routing_steps(OfficialRequest.OFFICIAL_BUSINESS)
-        )
-
     def test_next_status_terminal_at_approved(self):
         self.assertIsNone(next_status(OfficialRequest.OFFICIAL_BUSINESS, OfficialRequest.APPROVED))
 
@@ -68,14 +63,6 @@ class RoutingStepsTests(TestCase):
 class ModelValidationTests(TestCase):
     def setUp(self):
         self.employee = make_employee("val1", "EMP-OFVAL1")
-
-    def test_ot_request_requires_hours(self):
-        req = OfficialRequest(
-            request_type=OfficialRequest.OT_RESTDAY_HOLIDAY, employee=self.employee,
-            start_date=date(2026, 6, 1), end_date=date(2026, 6, 1), purpose="Emergency duty coverage",
-        )
-        with self.assertRaises(Exception):
-            req.full_clean()
 
     def test_travel_requires_destination(self):
         req = OfficialRequest(

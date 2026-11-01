@@ -1,36 +1,49 @@
 from datetime import date
 from decimal import Decimal
-from io import StringIO
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
-from django.core.management import call_command
 from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import ValidationError
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from accounts.models import RoleAssignment
-from employees.models import Employee
-
 from documents.models import DocumentRequirement, UploadedDocument
-from official_requests.models import OfficialRequest
+from employees.models import Employee
+from notifications.models import Notification
+from orgstructure.models import Section, Unit
 
+from . import routing
 from .balances import (
     compute_available_cto_balance,
     compute_credit,
     cto_used_in_month,
     exceeds_monthly_cap,
-    filed_too_early,
-    filing_window_opens,
+    filing_deadline_for,
     forms_illegal_consecutive_run,
     violates_filing_deadline,
     violates_usage_cutoff,
 )
-from .claims import claim_submission_errors, claimable_ot_requests, credit_claim
-from .models import CTOCreditEntry, CTOCreditTransaction, CTOMultiplierRate, CTOUsageApplication
+from .claims import add_line, correct_day_type, credit_lines, submit_claim
+from .models import (
+    HOLIDAY,
+    REST_DAY,
+    WEEKDAY,
+    CTOClaim,
+    CTOClaimLine,
+    CTOMultiplierRate,
+    CTOUsageApplication,
+    OvertimeRequest,
+    RoutedRecord,
+)
+from .overtime import file_ot
 from .permissions import is_cto_eligible
 
+NURSING = "Nursing Service Section"
 
-def make_employee(username, employee_id, shift_hours=Employee.SHIFT_8_HOUR, role=None):
+
+def make_employee(username, employee_id, shift_hours=Employee.SHIFT_8_HOUR, role=None, section=None, unit=None):
     user = User.objects.create_user(username=username, password="testpass123")
     employee = Employee.objects.create(
         user=user,
@@ -43,20 +56,91 @@ def make_employee(username, employee_id, shift_hours=Employee.SHIFT_8_HOUR, role
     )
     if role:
         RoleAssignment.objects.create(employee=employee, role=role)
+    if section:
+        employee.sections.add(section)
+    if unit:
+        employee.units.add(unit)
     return employee
 
 
 def make_rate(effective_date=date(2025, 12, 16), weekday="1.00", restday="1.50"):
     # The 0002_seed_cto_multiplier_rate migration already seeds a real row
-    # at 2025-12-16, so tests that want full control over exactly which
-    # rates exist replace it via update_or_create rather than colliding
-    # with it on the unique effective_date constraint.
+    # at 2025-12-16; update_or_create avoids colliding with it.
     rate, _ = CTOMultiplierRate.objects.update_or_create(
         effective_date=effective_date,
         defaults=dict(weekday_multiplier=weekday, restday_holiday_multiplier=restday),
     )
-    rate.refresh_from_db()  # DecimalField values stay str in memory until reloaded
+    rate.refresh_from_db()
     return rate
+
+
+def on(day):
+    """Freeze 'today' for routing's approval date."""
+    return patch("django.utils.timezone.localdate", return_value=day)
+
+
+def ot_line(employee, work_date, hours="8", day_type=WEEKDAY):
+    return {"employee": employee, "work_date": work_date, "approved_hours": Decimal(hours), "day_type": day_type}
+
+
+def upload_all_required(claim, actor_user):
+    content_type = ContentType.objects.get_for_model(claim)
+    for req in DocumentRequirement.objects.filter(content_type=content_type, sub_type_value__in=["", claim.duty_type]):
+        UploadedDocument.objects.create(
+            content_type=content_type, object_id=claim.pk, requirement=req, file="secure_documents/x.pdf",
+            original_filename="x.pdf", file_size=1, file_type=UploadedDocument.PDF, uploaded_by=actor_user,
+        )
+
+
+def approve_all(record, on_approved=lambda r: None):
+    """Walk a pending record to the end, each step acted on by an eligible
+    approver."""
+    while record.status == RoutedRecord.PENDING:
+        actor = sorted(routing.step_actors(record, record.current_step), key=lambda e: e.pk)[0]
+        routing.approve_step(record, actor, actor.user, on_approved=on_approved)
+        record.refresh_from_db()
+
+
+class Org:
+    """A minimal hospital: one of each approving role, a supervisor of a
+    non-Nursing section, and Nursing with a Chief Nurse and an ER Unit Head."""
+
+    def __init__(self):
+        make_rate()
+        self.lab = Section.objects.get(name="Laboratory Section")
+        self.nursing = Section.objects.get(name=NURSING)
+        self.er = Unit.objects.get(section=self.nursing, name="ER")
+        self.hr = make_employee("hr", "E-HR", role=RoleAssignment.HR_PROCESSOR)
+        self.hr_admin = make_employee("hradmin", "E-HRA", role=RoleAssignment.HR_ADMINISTRATOR)
+        self.ao = make_employee("ao", "E-AO", role=RoleAssignment.ADMINISTRATIVE_OFFICER)
+        self.coh = make_employee("coh", "E-COH", role=RoleAssignment.CHIEF_OF_HOSPITAL)
+        self.lab_sup = make_employee("labsup", "E-LS", section=self.lab)
+        RoleAssignment.objects.create(employee=self.lab_sup, role=RoleAssignment.SUPERVISOR, section=self.lab)
+        self.lab_staff = make_employee("labstaff", "E-L1", section=self.lab)
+        self.lab_staff2 = make_employee("labstaff2", "E-L2", section=self.lab)
+        self.chief_nurse = make_employee("chiefnurse", "E-CN", section=self.nursing)
+        RoleAssignment.objects.create(employee=self.chief_nurse, role=RoleAssignment.SUPERVISOR, section=self.nursing)
+        self.er_head = make_employee("erhead", "E-ERH", section=self.nursing, unit=self.er)
+        RoleAssignment.objects.create(employee=self.er_head, role=RoleAssignment.SUPERVISOR, unit=self.er)
+        self.nurse = make_employee("nurse", "E-N1", section=self.nursing, unit=self.er)
+
+
+def approved_ot(org, employee, work_date, hours="8", day_type=WEEKDAY, today=None):
+    ot, _ = file_ot(org.hr, OvertimeRequest.CAPACITY_HR, "Coverage", "past", [ot_line(employee, work_date, hours, day_type)],
+                    org.hr.user, today or work_date)
+    approve_all(ot)
+    return ot.lines.get()
+
+
+def filed_claim(org, employee, lines, today, duty_type=CTOClaim.DUTY_REGULAR):
+    """lines: [(ot_line or None, hours, work_date, day_type)]. Submits it."""
+    claim = CTOClaim.objects.create(employee=employee, duty_type=duty_type, filed_by=employee.user)
+    for ot, hours, work_date, day_type in lines:
+        add_line(claim, Decimal(hours), today, ot_line=ot, work_date=work_date, day_type=day_type)
+    upload_all_required(claim, employee.user)
+    submit_claim(claim, employee.user, today)
+    claim.refresh_from_db()
+    return claim
 
 
 class MultiplierConversionTests(TestCase):
@@ -130,14 +214,10 @@ class ChiefOfHospitalExclusionTests(TestCase):
         self.assertFalse(is_cto_eligible(self.coh))
         self.assertTrue(is_cto_eligible(self.regular))
 
-    def test_credit_entry_clean_rejects_coh(self):
-        entry = CTOCreditEntry(
-            employee=self.coh, work_date=date(2026, 1, 5), hours_worked=Decimal("8"),
-            shift_hours_used=8, multiplier_applied=Decimal("1.00"),
-            credited_hours=Decimal("8.00"), credited_days=Decimal("1.00"), recorded_by=self.hr_user,
-        )
+    def test_claim_clean_rejects_coh(self):
+        claim = CTOClaim(employee=self.coh, filed_by=self.hr_user)
         with self.assertRaises(Exception):
-            entry.full_clean()
+            claim.full_clean()
 
     def test_usage_application_clean_rejects_coh(self):
         application = CTOUsageApplication(
@@ -228,183 +308,11 @@ class FilingDeadlineAndUsageCutoffTests(TestCase):
     def test_filing_after_deadline_is_blocked(self):
         self.assertTrue(violates_filing_deadline(date(2026, 6, 1), date(2026, 12, 1)))
 
-    def test_usage_ending_on_cutoff_is_allowed(self):
-        self.assertFalse(violates_usage_cutoff(date(2026, 12, 15)))
+    def test_november_work_deadline_is_same_year(self):
+        self.assertEqual(filing_deadline_for(date(2026, 11, 29)), date(2026, 11, 30))
 
-    def test_usage_ending_after_cutoff_is_blocked(self):
-        self.assertTrue(violates_usage_cutoff(date(2026, 12, 16)))
-
-
-class LedgerBalanceTests(TestCase):
-    def setUp(self):
-        self.employee = make_employee("ledger1", "EMP-LED1")
-        self.hr_user = User.objects.create_user(username="hr_ledger_cto", password="x")
-
-    def test_balance_reflects_earned_and_used(self):
-        CTOCreditTransaction.objects.create(
-            employee=self.employee, transaction_type=CTOCreditTransaction.EARNED,
-            days=Decimal("2.00"), transaction_date=date(2026, 1, 5), created_by=self.hr_user,
-        )
-        CTOCreditTransaction.objects.create(
-            employee=self.employee, transaction_type=CTOCreditTransaction.USED,
-            days=Decimal("-0.50"), transaction_date=date(2026, 1, 10), created_by=self.hr_user,
-        )
-        self.assertEqual(compute_available_cto_balance(self.employee, as_of_date=date(2026, 1, 31)), Decimal("1.50"))
-
-    def test_balance_as_of_date_ignores_later_transactions(self):
-        CTOCreditTransaction.objects.create(
-            employee=self.employee, transaction_type=CTOCreditTransaction.EARNED,
-            days=Decimal("2.00"), transaction_date=date(2026, 1, 5), created_by=self.hr_user,
-        )
-        CTOCreditTransaction.objects.create(
-            employee=self.employee, transaction_type=CTOCreditTransaction.EARNED,
-            days=Decimal("1.00"), transaction_date=date(2026, 3, 1), created_by=self.hr_user,
-        )
-        self.assertEqual(compute_available_cto_balance(self.employee, as_of_date=date(2026, 1, 31)), Decimal("2.00"))
-
-
-class ForfeitureCommandTests(TestCase):
-    def setUp(self):
-        self.employee = make_employee("forfeit1", "EMP-FOR1")
-        self.exempt_employee = make_employee("forfeit2", "EMP-FOR2")
-        self.coh = make_employee("forfeit_coh", "EMP-FORCOH", role=RoleAssignment.CHIEF_OF_HOSPITAL)
-        self.actor = User.objects.create_user(username="hr_forfeit", password="x")
-        for emp in (self.employee, self.exempt_employee):
-            CTOCreditTransaction.objects.create(
-                employee=emp, transaction_type=CTOCreditTransaction.EARNED,
-                days=Decimal("3.00"), transaction_date=date(2026, 2, 1), created_by=self.actor,
-            )
-
-    def test_forfeits_remaining_balance_at_year_end(self):
-        call_command("forfeit_expired_cto", "--year", "2026", "--actor-username", "hr_forfeit", stdout=StringIO())
-        self.assertEqual(
-            compute_available_cto_balance(self.employee, as_of_date=date(2026, 12, 31)), Decimal("0.00")
-        )
-
-    def test_exempted_employee_keeps_balance(self):
-        call_command(
-            "forfeit_expired_cto", "--year", "2026", "--actor-username", "hr_forfeit",
-            "--exempt", "EMP-FOR2", "--exempt-reason", "COH exception memo 2026-12-01", stdout=StringIO(),
-        )
-        self.assertEqual(
-            compute_available_cto_balance(self.exempt_employee, as_of_date=date(2026, 12, 31)), Decimal("3.00")
-        )
-        self.assertEqual(
-            compute_available_cto_balance(self.employee, as_of_date=date(2026, 12, 31)), Decimal("0.00")
-        )
-
-    def test_chief_of_hospital_is_skipped_entirely(self):
-        CTOCreditTransaction.objects.create(
-            employee=self.coh, transaction_type=CTOCreditTransaction.ADJUSTMENT,
-            days=Decimal("1.00"), transaction_date=date(2026, 2, 1), created_by=self.actor,
-        )
-        call_command("forfeit_expired_cto", "--year", "2026", "--actor-username", "hr_forfeit", stdout=StringIO())
-        self.assertEqual(compute_available_cto_balance(self.coh, as_of_date=date(2026, 12, 31)), Decimal("1.00"))
-
-    def test_dry_run_writes_nothing(self):
-        call_command(
-            "forfeit_expired_cto", "--year", "2026", "--actor-username", "hr_forfeit", "--dry-run", stdout=StringIO()
-        )
-        self.assertEqual(
-            compute_available_cto_balance(self.employee, as_of_date=date(2026, 12, 31)), Decimal("3.00")
-        )
-
-    def test_running_twice_is_idempotent(self):
-        call_command("forfeit_expired_cto", "--year", "2026", "--actor-username", "hr_forfeit", stdout=StringIO())
-        call_command("forfeit_expired_cto", "--year", "2026", "--actor-username", "hr_forfeit", stdout=StringIO())
-        self.assertEqual(
-            compute_available_cto_balance(self.employee, as_of_date=date(2026, 12, 31)), Decimal("0.00")
-        )
-
-
-class CTORoutingPermissionTests(TestCase):
-    """CTO usage routing reuses leave.permissions' role checks — CLAUDE.md
-    §6.2: Employee -> Supervisor -> HR -> AO -> COH."""
-
-    def setUp(self):
-        self.employee = make_employee("route1", "EMP-ROUTE1")
-        self.supervisor = make_employee("routesup1", "EMP-ROUTESUP1", role=RoleAssignment.SUPERVISOR)
-        self.hr = make_employee("routehr1", "EMP-ROUTEHR1", role=RoleAssignment.HR_PROCESSOR)
-        self.ao = make_employee("routeao1", "EMP-ROUTEAO1", role=RoleAssignment.ADMINISTRATIVE_OFFICER)
-        self.coh = make_employee("routecoh1", "EMP-ROUTECOH1", role=RoleAssignment.CHIEF_OF_HOSPITAL)
-        # Hospital-wide Supervisor assignment (no section/unit) makes
-        # is_supervisor_of() true for any target employee — see
-        # leave.permissions.is_supervisor_of.
-
-        self.application = CTOUsageApplication.objects.create(
-            employee=self.employee, start_date=date(2026, 5, 1), end_date=date(2026, 5, 1),
-            number_of_days=Decimal("1.00"), status=CTOUsageApplication.SUBMITTED,
-        )
-        self.client = Client()
-
-    def test_supervisor_can_endorse_submitted_application(self):
-        self.client.force_login(self.supervisor.user)
-        response = self.client.post(
-            reverse("cto:cto_action", args=[self.application.pk]), {"action": "endorse"}
-        )
-        self.application.refresh_from_db()
-        self.assertEqual(self.application.status, CTOUsageApplication.ENDORSED_BY_SUPERVISOR)
-
-    def test_hr_cannot_act_before_supervisor_endorsement(self):
-        self.client.force_login(self.hr.user)
-        response = self.client.post(
-            reverse("cto:cto_action", args=[self.application.pk]), {"action": "process"}
-        )
-        self.assertEqual(response.status_code, 403)
-
-    def test_full_chain_to_approval_creates_used_transaction(self):
-        CTOCreditTransaction.objects.create(
-            employee=self.employee, transaction_type=CTOCreditTransaction.EARNED,
-            days=Decimal("5.00"), transaction_date=date(2026, 1, 1),
-            created_by=User.objects.create_user(username="seed_hr_route", password="x"),
-        )
-        self.client.force_login(self.supervisor.user)
-        self.client.post(reverse("cto:cto_action", args=[self.application.pk]), {"action": "endorse"})
-        self.client.force_login(self.hr.user)
-        self.client.post(reverse("cto:cto_action", args=[self.application.pk]), {"action": "process"})
-        self.client.force_login(self.ao.user)
-        self.client.post(reverse("cto:cto_action", args=[self.application.pk]), {"action": "recommend"})
-        self.client.force_login(self.coh.user)
-        self.client.post(reverse("cto:cto_action", args=[self.application.pk]), {"action": "approve"})
-
-        self.application.refresh_from_db()
-        self.assertEqual(self.application.status, CTOUsageApplication.APPROVED)
-        self.assertEqual(compute_available_cto_balance(self.employee), Decimal("4.00"))
-
-    def test_approval_blocked_when_balance_insufficient(self):
-        self.client.force_login(self.supervisor.user)
-        self.client.post(reverse("cto:cto_action", args=[self.application.pk]), {"action": "endorse"})
-        self.client.force_login(self.hr.user)
-        self.client.post(reverse("cto:cto_action", args=[self.application.pk]), {"action": "process"})
-        self.client.force_login(self.ao.user)
-        self.client.post(reverse("cto:cto_action", args=[self.application.pk]), {"action": "recommend"})
-        self.client.force_login(self.coh.user)
-        self.client.post(reverse("cto:cto_action", args=[self.application.pk]), {"action": "approve"})
-
-        self.application.refresh_from_db()
-        self.assertEqual(self.application.status, CTOUsageApplication.RECOMMENDED_BY_AO)
-
-
-class FilingWindowTests(TestCase):
-    """Confirmed 2026-09-28: a claim is filed no earlier than the month
-    after the workday, and no later than that year's filing deadline; both
-    year-end dates come from settings, not code."""
-
-    def test_window_opens_on_first_of_next_month(self):
-        self.assertEqual(filing_window_opens(date(2026, 3, 15)), date(2026, 4, 1))
-        self.assertEqual(filing_window_opens(date(2026, 3, 31)), date(2026, 4, 1))
-
-    def test_december_work_rolls_into_january(self):
-        self.assertEqual(filing_window_opens(date(2026, 12, 5)), date(2027, 1, 1))
-
-    def test_same_month_filing_is_too_early(self):
-        self.assertTrue(filed_too_early(date(2026, 3, 5), date(2026, 3, 31)))
-        self.assertFalse(filed_too_early(date(2026, 3, 5), date(2026, 4, 1)))
-
-    def test_november_work_cannot_be_filed_in_time(self):
-        work = date(2026, 11, 10)
-        filed = filing_window_opens(work)
-        self.assertTrue(violates_filing_deadline(work, filed))
+    def test_december_work_deadline_is_next_year(self):
+        self.assertEqual(filing_deadline_for(date(2026, 12, 20)), date(2027, 11, 30))
 
     @override_settings(CTO_FILING_DEADLINE_MONTH_DAY=(10, 31))
     def test_filing_deadline_comes_from_settings(self):
@@ -414,189 +322,636 @@ class FilingWindowTests(TestCase):
     def test_usage_cutoff_comes_from_settings(self):
         self.assertTrue(violates_usage_cutoff(date(2026, 12, 11)))
 
+    def test_usage_ending_on_cutoff_is_allowed(self):
+        self.assertFalse(violates_usage_cutoff(date(2026, 12, 15)))
 
-def make_approved_ot(employee, start, end, hours, restday=False):
-    return OfficialRequest.objects.create(
-        request_type=OfficialRequest.OT_RESTDAY_HOLIDAY, employee=employee, start_date=start, end_date=end,
-        purpose="Test OT", hours_requested=Decimal(hours), is_restday_or_holiday=restday,
-        status=OfficialRequest.APPROVED,
-    )
+    def test_usage_ending_after_cutoff_is_blocked(self):
+        self.assertTrue(violates_usage_cutoff(date(2026, 12, 16)))
 
 
-def make_draft_claim(ot, work_date, hours, actor_user, restday=False):
-    return CTOCreditEntry.objects.create(
-        employee=ot.employee, ot_request=ot, work_date=work_date, hours_worked=Decimal(hours),
-        is_restday_or_holiday=restday, shift_hours_used=8, multiplier_applied="1.00",
-        credited_hours=Decimal(hours), credited_days="1.00", recorded_by=actor_user,
-    )
 
 
-def upload_all_required(entry, actor_user):
-    """Attach one active document per configured requirement (the §7 set
-    is seeded by documents/migrations/0002)."""
-    content_type = ContentType.objects.get_for_model(entry)
-    for req in DocumentRequirement.objects.filter(content_type=content_type, sub_type_value__in=["", entry.duty_type]):
-        UploadedDocument.objects.create(
-            content_type=content_type, object_id=entry.pk, requirement=req, file="secure_documents/x.pdf",
-            original_filename="x.pdf", file_size=1, file_type=UploadedDocument.PDF, uploaded_by=actor_user,
-        )
-
-
-class CTOClaimSubmissionTests(TestCase):
-    """Settled 2026-09-28: approved OT never credits CTO by itself; a claim
-    credits only on submission, once every §7 check passes."""
+class OTRoutingTests(TestCase):
+    """CLAUDE.md §7.1 OT routes, approver-is-subject rule, and the
+    never-skip-HR/AO/COH-when-unassigned rule."""
 
     def setUp(self):
-        make_rate(weekday="1.00", restday="1.50")
-        self.hr = make_employee("claim_hr", "EMP-CL-1", role=RoleAssignment.HR_PROCESSOR)
-        self.employee = make_employee("claim_emp", "EMP-CL-2")
-        self.ot = make_approved_ot(self.employee, date(2026, 3, 6), date(2026, 3, 7), "16")
-        self.ok_day = date(2026, 4, 10)
+        self.org = Org()
+
+    def test_supervisor_filed_batch_goes_hr_ao_coh(self):
+        ot, _ = file_ot(self.org.lab_sup, "SUPERVISOR", "x", "", [ot_line(self.org.lab_staff, date(2026, 11, 5))],
+                        self.org.lab_sup.user, date(2026, 11, 1))
+        self.assertEqual(ot.route_steps(), ["HR", "AO", "COH"])
+
+    def test_nursing_unit_head_batch_goes_through_chief_nurse(self):
+        ot, _ = file_ot(self.org.er_head, "SUPERVISOR", "x", "", [ot_line(self.org.nurse, date(2026, 11, 5))],
+                        self.org.er_head.user, date(2026, 11, 1))
+        self.assertEqual(ot.route_steps(), ["CHIEF_NURSE", "HR", "AO", "COH"])
+        self.assertEqual(ot.current_step, "CHIEF_NURSE")
+        self.assertTrue(routing.can_act(self.org.chief_nurse, ot))
+
+    def test_hr_filed_batch_goes_ao_coh(self):
+        ot, _ = file_ot(self.org.hr, "HR", "x", "", [ot_line(self.org.lab_staff, date(2026, 11, 5))],
+                        self.org.hr.user, date(2026, 11, 1))
+        self.assertEqual(ot.route_steps(), ["AO", "COH"])
+
+    def test_ao_filed_batch_waits_for_coh(self):
+        ot, _ = file_ot(self.org.ao, "AO", "x", "", [ot_line(self.org.lab_staff, date(2026, 11, 5))],
+                        self.org.ao.user, date(2026, 11, 1))
+        self.assertEqual(ot.status, RoutedRecord.PENDING)
+        self.assertEqual(ot.current_step, "COH")
+        self.assertEqual(routing.step_actors(ot, "COH"), {self.org.coh})
+
+    def test_no_coh_assigned_leaves_batch_pending_and_tells_hr_admin(self):
+        RoleAssignment.objects.filter(role=RoleAssignment.CHIEF_OF_HOSPITAL).update(is_active=False)
+        ot, _ = file_ot(self.org.ao, "AO", "x", "", [ot_line(self.org.lab_staff, date(2026, 11, 5))],
+                        self.org.ao.user, date(2026, 11, 1))
+        self.assertEqual(ot.status, RoutedRecord.PENDING)
+        self.assertEqual(ot.current_step, "COH")
+        self.assertFalse(ot.actions.filter(action="skip").exists())
+        self.assertTrue(Notification.objects.filter(recipient=self.org.hr_admin, message__contains="nobody can act").exists())
+
+    def test_no_ao_assigned_waits_at_ao_not_skipped(self):
+        RoleAssignment.objects.filter(role=RoleAssignment.ADMINISTRATIVE_OFFICER).update(is_active=False)
+        ot, _ = file_ot(self.org.hr, "HR", "x", "", [ot_line(self.org.lab_staff, date(2026, 11, 5))],
+                        self.org.hr.user, date(2026, 11, 1))
+        self.assertEqual(ot.current_step, "AO")
+        self.assertEqual(ot.status, RoutedRecord.PENDING)
+
+    def test_approver_on_a_line_cannot_act_and_another_holder_takes_the_step(self):
+        hr2 = make_employee("hr2", "E-HR2", role=RoleAssignment.HR_PROCESSOR)
+        ot, _ = file_ot(self.org.lab_sup, "SUPERVISOR", "x", "",
+                        [ot_line(self.org.lab_staff, date(2026, 11, 5)), ot_line(self.org.hr, date(2026, 11, 5))],
+                        self.org.lab_sup.user, date(2026, 11, 1))
+        self.assertEqual(ot.current_step, "HR")
+        self.assertFalse(routing.can_act(self.org.hr, ot))
+        self.assertTrue(routing.can_act(hr2, ot))
+        with self.assertRaises(ValidationError):
+            routing.approve_step(ot, self.org.hr, self.org.hr.user)
+
+    def test_subject_conflict_skip_is_logged(self):
+        # The only AO is on the batch: the AO step is skipped and logged.
+        ot, _ = file_ot(self.org.hr, "HR", "x", "", [ot_line(self.org.ao, date(2026, 11, 5))],
+                        self.org.hr.user, date(2026, 11, 1))
+        self.assertEqual(ot.current_step, "COH")
+        skip = ot.actions.get(action="skip")
+        self.assertEqual(skip.step, "AO")
+        self.assertIn("every holder is on this record", skip.notes)
+
+    def test_batch_is_approved_as_a_whole(self):
+        ot, _ = file_ot(self.org.hr, "HR", "x", "",
+                        [ot_line(self.org.lab_staff, date(2026, 11, 5)), ot_line(self.org.lab_staff2, date(2026, 11, 5))],
+                        self.org.hr.user, date(2026, 11, 1))
+        approve_all(ot)
+        self.assertEqual(ot.status, RoutedRecord.APPROVED)
+        self.assertEqual(ot.actions.filter(action="approve").count(), 2)
+
+    def test_return_needs_a_remark_and_goes_back_to_filer(self):
+        ot, _ = file_ot(self.org.hr, "HR", "x", "", [ot_line(self.org.lab_staff, date(2026, 11, 5))],
+                        self.org.hr.user, date(2026, 11, 1))
+        with self.assertRaises(ValidationError):
+            routing.return_record(ot, self.org.ao, self.org.ao.user, "  ")
+        routing.return_record(ot, self.org.ao, self.org.ao.user, "Wrong date")
+        self.assertEqual(ot.status, RoutedRecord.RETURNED)
+        ot, _ = file_ot(self.org.hr, "HR", "x", "", [ot_line(self.org.lab_staff, date(2026, 11, 6))],
+                        self.org.hr.user, date(2026, 11, 1), ot=ot)
+        self.assertEqual(ot.current_step, "AO")  # chain restarts
+        self.assertTrue(ot.actions.filter(action="resubmit").exists())
+
+    def test_filer_cannot_add_themselves(self):
+        with self.assertRaises(ValidationError):
+            file_ot(self.org.lab_sup, "SUPERVISOR", "x", "", [ot_line(self.org.lab_sup, date(2026, 11, 5))],
+                    self.org.lab_sup.user, date(2026, 11, 1))
+
+    def test_coh_cannot_be_added(self):
+        with self.assertRaises(ValidationError):
+            file_ot(self.org.hr, "HR", "x", "", [ot_line(self.org.coh, date(2026, 11, 5))],
+                    self.org.hr.user, date(2026, 11, 1))
+
+    def test_employee_without_filing_role_cannot_file(self):
+        with self.assertRaises(ValidationError):
+            file_ot(self.org.lab_staff, "SUPERVISOR", "x", "", [ot_line(self.org.lab_staff2, date(2026, 11, 5))],
+                    self.org.lab_staff.user, date(2026, 11, 1))
+
+    def test_past_dates_need_a_reason(self):
+        with self.assertRaises(ValidationError):
+            file_ot(self.org.hr, "HR", "x", "", [ot_line(self.org.lab_staff, date(2026, 10, 5))],
+                    self.org.hr.user, date(2026, 11, 1))
+        file_ot(self.org.hr, "HR", "x", "Emergency, filed late", [ot_line(self.org.lab_staff, date(2026, 10, 5))],
+                self.org.hr.user, date(2026, 11, 1))
+
+    def test_warns_when_line_employee_is_on_the_route(self):
+        _, warnings = file_ot(self.org.hr, "HR", "x", "", [ot_line(self.org.ao, date(2026, 11, 5))],
+                              self.org.hr.user, date(2026, 11, 1))
+        self.assertEqual(len(warnings), 1)
+
+    def test_employees_supervisor_gets_notice_when_added_by_someone_else(self):
+        file_ot(self.org.hr, "HR", "x", "", [ot_line(self.org.lab_staff, date(2026, 11, 5))],
+                self.org.hr.user, date(2026, 11, 1))
+        self.assertTrue(Notification.objects.filter(recipient=self.org.lab_sup, message__contains="added to an OT").exists())
+
+    def test_oic_counts_as_chief_nurse_and_unit_head(self):
+        oic = make_employee("oic", "E-OIC")
+        RoleAssignment.objects.create(employee=oic, role=RoleAssignment.SUPERVISOR, section=self.org.nursing,
+                                      is_oic=True, delegated_by=self.org.chief_nurse)
+        oic_unit = make_employee("oicunit", "E-OICU")
+        RoleAssignment.objects.create(employee=oic_unit, role=RoleAssignment.SUPERVISOR, unit=self.org.er,
+                                      is_oic=True, delegated_by=self.org.er_head)
+        self.assertIn(oic, routing.chief_nurses())
+        self.assertIn(oic_unit, routing.unit_heads_of(self.org.nurse))
+
+
+class OTBatchFormTests(TestCase):
+    """The OT form's 'Add row' button only raises TOTAL_FORMS; the server
+    must accept any number of rows."""
+
+    def setUp(self):
+        self.org = Org()
+        self.staff = [make_employee(f"bulk{i}", f"E-B{i}", section=self.org.lab) for i in range(12)]
+
+    def test_twelve_line_batch(self):
+        data = {"filed_as": "HR", "purpose": "Unit-wide coverage", "past_date_reason": "",
+                "lines-TOTAL_FORMS": "13", "lines-INITIAL_FORMS": "0",
+                "lines-MIN_NUM_FORMS": "1", "lines-MAX_NUM_FORMS": "200"}
+        for i, emp in enumerate(self.staff):
+            data.update({f"lines-{i}-employee": emp.pk, f"lines-{i}-work_date": "2099-01-05",
+                         f"lines-{i}-approved_hours": "4", f"lines-{i}-day_type": WEEKDAY})
+        client = Client()
+        client.force_login(self.org.hr.user)  # row 12 left blank on purpose
+        response = client.post(reverse("cto:ot_new"), data)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(OvertimeRequest.objects.get().lines.count(), 12)
+
+
+class ClaimRoutingTests(TestCase):
+    def setUp(self):
+        self.org = Org()
+
+    def _claim(self, employee):
+        ot = approved_ot(self.org, employee, date(2026, 10, 5), today=date(2026, 10, 1))
+        return filed_claim(self.org, employee, [(ot, "8", None, None)], date(2026, 10, 6))
+
+    def test_claim_route(self):
+        claim = self._claim(self.org.lab_staff)
+        self.assertEqual(claim.route_steps(), ["SUPERVISOR", "HR", "AO", "COH"])
+        self.assertTrue(routing.can_act(self.org.lab_sup, claim))
+
+    def test_nursing_claim_route_unit_head_then_chief_nurse(self):
+        claim = self._claim(self.org.nurse)
+        self.assertEqual(claim.route_steps(), ["SUPERVISOR", "CHIEF_NURSE", "HR", "AO", "COH"])
+        self.assertEqual(routing.step_actors(claim, "SUPERVISOR"), {self.org.er_head})
+        self.assertEqual(routing.step_actors(claim, "CHIEF_NURSE"), {self.org.chief_nurse})
+
+    def test_chief_nurse_own_claim_skips_the_chief_nurse_step(self):
+        claim = self._claim(self.org.chief_nurse)
+        # No Unit Head covers the Chief Nurse (no unit), so that step is skipped too.
+        self.assertEqual(claim.current_step, "HR")
+        self.assertEqual(set(claim.actions.filter(action="skip").values_list("step", flat=True)),
+                         {"SUPERVISOR", "CHIEF_NURSE"})
+
+    def test_ao_own_claim_skips_only_the_ao_step(self):
+        RoleAssignment.objects.create(employee=self.org.lab_sup, role=RoleAssignment.SUPERVISOR)  # covers anyone
+        claim = self._claim(self.org.ao)
+        approve_all(claim, on_approved=credit_lines)
+        self.assertEqual(claim.status, RoutedRecord.APPROVED)
+        self.assertEqual(list(claim.actions.filter(action="skip").values_list("step", flat=True)), ["AO"])
+        self.assertEqual(list(claim.actions.filter(action="approve").values_list("step", flat=True)),
+                         ["SUPERVISOR", "HR", "COH"])
+
+    def test_second_ao_takes_the_ao_step_on_ao_own_claim(self):
+        RoleAssignment.objects.create(employee=self.org.lab_sup, role=RoleAssignment.SUPERVISOR)
+        ao2 = make_employee("ao2", "E-AO2", role=RoleAssignment.ADMINISTRATIVE_OFFICER)
+        claim = self._claim(self.org.ao)
+        approve_all(claim, on_approved=credit_lines)
+        approvals = list(claim.actions.filter(action="approve").values_list("step", "acted_by"))
+        self.assertIn(("AO", ao2.user.pk), approvals)
+        self.assertFalse(claim.actions.filter(action="skip").exists())
+
+    def test_exception_claim_goes_ao_coh(self):
+        claim = CTOClaim.objects.create(employee=self.org.lab_staff, filed_by=self.org.hr_admin.user,
+                                        exception_reason="Certified emergency duty")
+        add_line(claim, Decimal("8"), date(2026, 10, 6), work_date=date(2026, 10, 5), day_type=WEEKDAY)
+        upload_all_required(claim, self.org.hr_admin.user)
+        submit_claim(claim, self.org.hr_admin.user, date(2026, 10, 6))
+        self.assertEqual(claim.route_steps(), ["AO", "COH"])
+
+    def test_return_without_remark_is_refused(self):
+        claim = self._claim(self.org.lab_staff)
+        with self.assertRaises(ValidationError):
+            routing.return_record(claim, self.org.lab_sup, self.org.lab_sup.user, "")
+
+
+class ClaimRuleTests(TestCase):
+    def setUp(self):
+        self.org = Org()
+        self.emp = self.org.lab_staff
 
     def test_approved_ot_alone_credits_nothing(self):
-        self.assertEqual(compute_available_cto_balance(self.employee), Decimal("0"))
-        self.assertFalse(CTOCreditEntry.objects.exists())
+        approved_ot(self.org, self.emp, date(2026, 10, 5), today=date(2026, 10, 1))
+        self.assertEqual(compute_available_cto_balance(self.emp, date(2026, 12, 1)), Decimal("0"))
 
-    def test_missing_documents_block_submission(self):
-        entry = make_draft_claim(self.ot, date(2026, 3, 6), "8", self.hr.user)
-        errors = credit_claim(entry, self.hr.user, self.ok_day)
-        self.assertTrue(any("Required documents" in e for e in errors))
-        self.assertEqual(compute_available_cto_balance(self.employee), Decimal("0"))
+    def test_actual_hours_above_approved_are_rejected(self):
+        ot = approved_ot(self.org, self.emp, date(2026, 10, 5), hours="4", today=date(2026, 10, 1))
+        claim = CTOClaim.objects.create(employee=self.emp, filed_by=self.emp.user)
+        with self.assertRaises(ValidationError):
+            add_line(claim, Decimal("5"), date(2026, 10, 6), ot_line=ot)
 
-    def test_same_month_submission_is_blocked(self):
-        entry = make_draft_claim(self.ot, date(2026, 3, 6), "8", self.hr.user)
-        upload_all_required(entry, self.hr.user)
-        errors = claim_submission_errors(entry, date(2026, 3, 31))
-        self.assertTrue(any("month after the workday" in e for e in errors))
+    def test_ot_line_cannot_be_on_two_live_claims(self):
+        ot = approved_ot(self.org, self.emp, date(2026, 10, 5), today=date(2026, 10, 1))
+        first = CTOClaim.objects.create(employee=self.emp, filed_by=self.emp.user)
+        add_line(first, Decimal("8"), date(2026, 10, 6), ot_line=ot)
+        second = CTOClaim.objects.create(employee=self.emp, filed_by=self.emp.user)
+        with self.assertRaises(ValidationError):
+            add_line(second, Decimal("8"), date(2026, 10, 6), ot_line=ot)
 
-    def test_submission_after_deadline_is_blocked(self):
-        entry = make_draft_claim(self.ot, date(2026, 3, 6), "8", self.hr.user)
-        upload_all_required(entry, self.hr.user)
-        errors = claim_submission_errors(entry, date(2026, 12, 1))
-        self.assertTrue(any("filing deadline" in e for e in errors))
+    def test_24_hour_cap_across_ot_and_medical_transport(self):
+        day = date(2026, 10, 5)
+        ot = approved_ot(self.org, self.emp, day, hours="16", today=date(2026, 10, 1))
+        filed_claim(self.org, self.emp, [(ot, "16", None, None)], date(2026, 10, 6))
+        mt = CTOClaim.objects.create(employee=self.emp, duty_type=CTOClaim.DUTY_MEDICAL_TRANSPORT, filed_by=self.emp.user)
+        add_line(mt, Decimal("8"), date(2026, 10, 6), work_date=day, day_type=WEEKDAY)  # 24 total: OK
+        mt2 = CTOClaim.objects.create(employee=self.emp, duty_type=CTOClaim.DUTY_MEDICAL_TRANSPORT, filed_by=self.emp.user)
+        with self.assertRaises(ValidationError):
+            add_line(mt2, Decimal("0.5"), date(2026, 10, 6), work_date=day, day_type=WEEKDAY)
 
-    def test_complete_claim_credits_with_configured_multiplier(self):
-        entry = make_draft_claim(self.ot, date(2026, 3, 7), "8", self.hr.user, restday=True)
-        upload_all_required(entry, self.hr.user)
-        self.assertEqual(credit_claim(entry, self.hr.user, self.ok_day), [])
-        entry.refresh_from_db()
-        self.assertEqual(entry.status, CTOCreditEntry.CREDITED)
-        self.assertEqual(entry.multiplier_applied, Decimal("1.50"))
-        self.assertEqual(entry.credited_days, Decimal("1.50"))  # 8h x 1.5 / 8h shift
-        self.assertEqual(entry.credited_by, self.hr.user)
-        ledger = CTOCreditTransaction.objects.get(credit_entry=entry)
-        self.assertEqual(ledger.days, Decimal("1.50"))
+    def test_line_past_its_deadline_cannot_be_added(self):
+        claim = CTOClaim.objects.create(employee=self.emp, duty_type=CTOClaim.DUTY_MEDICAL_TRANSPORT, filed_by=self.emp.user)
+        with self.assertRaises(ValidationError):
+            add_line(claim, Decimal("8"), date(2026, 12, 1), work_date=date(2026, 10, 5), day_type=WEEKDAY)
 
-    def test_multiplier_is_read_from_rate_table(self):
-        make_rate(weekday="1.25", restday="2.00")  # policy change, same effective date
-        entry = make_draft_claim(self.ot, date(2026, 3, 6), "8", self.hr.user)
-        upload_all_required(entry, self.hr.user)
-        credit_claim(entry, self.hr.user, self.ok_day)
-        entry.refresh_from_db()
-        self.assertEqual(entry.multiplier_applied, Decimal("1.25"))
+    def test_documents_are_required_to_submit(self):
+        ot = approved_ot(self.org, self.emp, date(2026, 10, 5), today=date(2026, 10, 1))
+        claim = CTOClaim.objects.create(employee=self.emp, filed_by=self.emp.user)
+        add_line(claim, Decimal("8"), date(2026, 10, 6), ot_line=ot)
+        with self.assertRaises(ValidationError):
+            submit_claim(claim, self.emp.user, date(2026, 10, 6))
 
-    def test_claim_cannot_be_credited_twice(self):
-        entry = make_draft_claim(self.ot, date(2026, 3, 6), "8", self.hr.user)
-        upload_all_required(entry, self.hr.user)
-        credit_claim(entry, self.hr.user, self.ok_day)
-        self.assertEqual(credit_claim(entry, self.hr.user, self.ok_day), ["This claim has already been credited."])
-        self.assertEqual(CTOCreditTransaction.objects.filter(credit_entry=entry).count(), 1)
+    def test_nov_29_ot_filed_nov_30_is_credited_dec_1_as_this_years_cto(self):
+        ot = approved_ot(self.org, self.emp, date(2026, 11, 29), today=date(2026, 11, 20))
+        claim = filed_claim(self.org, self.emp, [(ot, "8", None, None)], date(2026, 11, 30))
+        with on(date(2026, 11, 30)):
+            approve_all(claim, on_approved=credit_lines)
+        line = claim.lines.get()
+        self.assertEqual(line.effective_date, date(2026, 12, 1))
+        self.assertEqual(line.year_earned, 2026)
+        self.assertEqual(compute_available_cto_balance(self.emp, date(2026, 11, 30)), Decimal("0"))
+        self.assertEqual(compute_available_cto_balance(self.emp, date(2026, 12, 1)), Decimal("1.00"))
 
-    def test_hours_over_approved_total_are_blocked(self):
-        make_draft_claim(self.ot, date(2026, 3, 6), "10", self.hr.user)
-        entry = make_draft_claim(self.ot, date(2026, 3, 7), "8", self.hr.user)
-        upload_all_required(entry, self.hr.user)
-        errors = claim_submission_errors(entry, self.ok_day)
-        self.assertTrue(any("approved hours" in e for e in errors))
+    def test_december_ot_is_credited_jan_1_as_next_years_cto(self):
+        ot = approved_ot(self.org, self.emp, date(2026, 12, 3), today=date(2026, 12, 1))
+        claim = filed_claim(self.org, self.emp, [(ot, "8", None, None)], date(2026, 12, 4))
+        with on(date(2026, 12, 10)):
+            approve_all(claim, on_approved=credit_lines)
+        line = claim.lines.get()
+        self.assertEqual(line.effective_date, date(2027, 1, 1))
+        self.assertEqual(line.year_earned, 2027)
+        self.assertEqual(filing_deadline_for(line.work_date), date(2027, 11, 30))
 
-    def test_fully_claimed_ot_is_no_longer_listed(self):
-        self.assertIn(self.ot, claimable_ot_requests())
-        make_draft_claim(self.ot, date(2026, 3, 6), "8", self.hr.user)
-        make_draft_claim(self.ot, date(2026, 3, 7), "8", self.hr.user)
-        self.assertNotIn(self.ot, claimable_ot_requests())
+    def test_late_coh_approval_sets_effective_date_after_dec_15(self):
+        # Carry-over without a reason for such credits is Stage 2 (forfeiture job).
+        ot = approved_ot(self.org, self.emp, date(2026, 10, 5), today=date(2026, 10, 1))
+        claim = filed_claim(self.org, self.emp, [(ot, "8", None, None)], date(2026, 11, 28))
+        with on(date(2026, 12, 20)):
+            approve_all(claim, on_approved=credit_lines)
+        line = claim.lines.get()
+        self.assertEqual(line.effective_date, date(2026, 12, 20))
+        self.assertEqual(line.year_earned, 2026)
+
+    def test_returned_claim_keeps_its_first_filing_date(self):
+        ot = approved_ot(self.org, self.emp, date(2026, 10, 5), today=date(2026, 10, 1))
+        claim = filed_claim(self.org, self.emp, [(ot, "8", None, None)], date(2026, 11, 28))
+        routing.return_record(claim, self.org.lab_sup, self.org.lab_sup.user, "Attach a clearer DTR")
+        submit_claim(claim, self.emp.user, date(2026, 12, 3))  # after Nov 30
+        claim.refresh_from_db()
+        self.assertEqual(claim.first_filed_on, date(2026, 11, 28))
+        self.assertEqual(claim.status, RoutedRecord.PENDING)
+        self.assertEqual(claim.current_step, "SUPERVISOR")
+
+    def test_rest_day_credit_uses_rate_in_force_on_the_workday(self):
+        make_rate(effective_date=date(2026, 10, 10), weekday="1.00", restday="2.00")
+        ot = approved_ot(self.org, self.emp, date(2026, 10, 5), day_type=REST_DAY, today=date(2026, 10, 1))
+        claim = filed_claim(self.org, self.emp, [(ot, "8", None, None)], date(2026, 10, 20))
+        with on(date(2026, 10, 25)):
+            approve_all(claim, on_approved=credit_lines)
+        line = claim.lines.get()
+        self.assertEqual(line.multiplier_applied, Decimal("1.50"))
+        self.assertEqual(line.credited_days, Decimal("1.50"))
+
+    def test_day_type_correction_recalculates_and_leaves_ot_line_unchanged(self):
+        ot = approved_ot(self.org, self.emp, date(2026, 10, 5), today=date(2026, 10, 1))
+        claim = filed_claim(self.org, self.emp, [(ot, "8", None, None)], date(2026, 10, 6))
+        routing.approve_step(claim, self.org.lab_sup, self.org.lab_sup.user)
+        claim.refresh_from_db()
+        line = claim.lines.get()
+        with self.assertRaises(ValidationError):  # remark required
+            correct_day_type(line, HOLIDAY, "", self.org.hr, self.org.hr.user)
+        correct_day_type(line, HOLIDAY, "Oct 5 was a declared holiday", self.org.hr, self.org.hr.user)
+        line.refresh_from_db()
+        ot.refresh_from_db()
+        self.assertEqual(line.day_type, HOLIDAY)
+        self.assertEqual(line.credited_days, Decimal("1.50"))
+        self.assertEqual(ot.day_type, WEEKDAY)
+        self.assertTrue(claim.actions.filter(action="correct_day_type", notes__contains="declared holiday").exists())
+
+    def test_day_type_cannot_be_corrected_outside_hr_step(self):
+        ot = approved_ot(self.org, self.emp, date(2026, 10, 5), today=date(2026, 10, 1))
+        claim = filed_claim(self.org, self.emp, [(ot, "8", None, None)], date(2026, 10, 6))
+        with self.assertRaises(ValidationError):
+            correct_day_type(claim.lines.get(), HOLIDAY, "x", self.org.hr, self.org.hr.user)
+
+    def test_one_claim_with_several_lines(self):
+        ot1 = approved_ot(self.org, self.emp, date(2026, 10, 5), today=date(2026, 10, 1))
+        ot2 = approved_ot(self.org, self.emp, date(2026, 11, 5), today=date(2026, 11, 1))
+        claim = filed_claim(self.org, self.emp, [(ot1, "8", None, None), (ot2, "4", None, None)], date(2026, 11, 6))
+        with on(date(2026, 11, 10)):
+            approve_all(claim, on_approved=credit_lines)
+        self.assertEqual(sorted(claim.lines.values_list("effective_date", flat=True)),
+                         [date(2026, 11, 10), date(2026, 12, 1)])
 
 
-class _FakeDate(date):
-    fixed_today = date(2026, 4, 10)
+class UsageAllocationTests(TestCase):
+    """Per-line credit: oldest first, pending usage held aside, and use
+    dated on or before Dec 15 stays against that year's credit even if
+    approved later."""
 
-    @classmethod
-    def today(cls):
-        return cls.fixed_today
-
-
-class CTOClaimViewTests(TestCase):
     def setUp(self):
-        from unittest.mock import patch
+        self.org = Org()
+        self.emp = self.org.lab_staff
+        RoleAssignment.objects.create(employee=self.org.lab_sup, role=RoleAssignment.SUPERVISOR)
+        self.client = Client()
 
-        patcher = patch("cto.views.date", _FakeDate)
-        patcher.start()
-        self.addCleanup(patcher.stop)
-        make_rate()
-        self.hr = make_employee("claimv_hr", "EMP-CV-1", role=RoleAssignment.HR_PROCESSOR)
-        self.hr_admin = make_employee("claimv_hra", "EMP-CV-2", role=RoleAssignment.HR_ADMINISTRATOR)
-        self.employee = make_employee("claimv_emp", "EMP-CV-3")
-        self.ot = make_approved_ot(self.employee, date(2026, 3, 6), date(2026, 3, 7), "16")
-        self.client.force_login(self.hr.user)
+    def _credit(self, work_date, hours, approved_on):
+        ot = approved_ot(self.org, self.emp, work_date, hours=hours, today=work_date)
+        claim = filed_claim(self.org, self.emp, [(ot, hours, None, None)], work_date)
+        with on(approved_on):
+            approve_all(claim, on_approved=credit_lines)
+        return claim.lines.get()
 
-    def _file(self, work_date="2026-03-06", hours="8", restday=False):
-        return self.client.post(reverse("cto:claim_create", args=[self.ot.pk]), {
-            "work_date": work_date, "duty_type": CTOCreditEntry.DUTY_REGULAR, "hours_worked": hours,
-            "is_restday_or_holiday": restday, "notes": "",
-        })
+    def _apply(self, start, end, days, today):
+        self.client.force_login(self.emp.user)
+        with on(today):
+            return self.client.post(reverse("cto:cto_apply"), {
+                "start_date": start, "end_date": end, "number_of_days": days, "reason": "",
+            })
 
-    def test_filing_creates_linked_draft_without_credit(self):
-        self._file()
-        entry = CTOCreditEntry.objects.get()
-        self.assertEqual(entry.ot_request, self.ot)
-        self.assertEqual(entry.status, CTOCreditEntry.DRAFT)
-        self.assertFalse(CTOCreditTransaction.objects.exists())
+    def test_oldest_credit_is_used_first_and_pending_days_are_held(self):
+        old = self._credit(date(2026, 8, 3), "8", date(2026, 8, 10))   # effective Sep 1
+        new = self._credit(date(2026, 9, 7), "8", date(2026, 9, 10))   # effective Oct 1
+        self._apply("2026-11-10", "2026-11-11", "1.5", date(2026, 11, 2))
+        app = CTOUsageApplication.objects.get()
+        self.assertEqual(app.status, CTOUsageApplication.SUBMITTED)
+        self.assertEqual(old.allocations.get().days, Decimal("1.00"))
+        self.assertEqual(new.allocations.get().days, Decimal("0.50"))
+        self.assertEqual(compute_available_cto_balance(self.emp, date(2026, 11, 2)), Decimal("0.50"))
 
-    def test_work_date_outside_ot_is_rejected(self):
-        self._file(work_date="2026-03-08")
-        self.assertFalse(CTOCreditEntry.objects.exists())
+    def test_insufficient_balance_is_refused_at_filing(self):
+        self._credit(date(2026, 8, 3), "8", date(2026, 8, 10))
+        self._apply("2026-11-10", "2026-11-11", "2", date(2026, 11, 2))
+        self.assertFalse(CTOUsageApplication.objects.exists())
 
-    def test_one_claim_per_workday(self):
-        self._file(hours="4")
-        self._file(hours="4")
-        self.assertEqual(CTOCreditEntry.objects.count(), 1)
+    def test_returned_usage_releases_the_hold(self):
+        self._credit(date(2026, 8, 3), "8", date(2026, 8, 10))
+        self._apply("2026-11-10", "2026-11-10", "1", date(2026, 11, 2))
+        app = CTOUsageApplication.objects.get()
+        self.client.force_login(self.org.lab_sup.user)
+        self.client.post(reverse("cto:cto_action", args=[app.pk]), {"action": "return"})
+        self.assertEqual(compute_available_cto_balance(self.emp, date(2026, 11, 2)), Decimal("1.00"))
 
-    def test_hours_beyond_approved_total_rejected_at_filing(self):
-        self._file(work_date="2026-03-06", hours="10")
-        self._file(work_date="2026-03-07", hours="8")
-        self.assertEqual(CTOCreditEntry.objects.count(), 1)
+    def test_use_dated_by_dec_15_approved_later_counts_against_that_year(self):
+        line = self._credit(date(2026, 8, 3), "8", date(2026, 8, 10))
+        self._apply("2026-12-14", "2026-12-14", "1", date(2026, 12, 10))
+        app = CTOUsageApplication.objects.get()
+        for user, action in [(self.org.lab_sup, "endorse"), (self.org.hr, "process"),
+                             (self.org.ao, "recommend"), (self.org.coh, "approve")]:
+            self.client.force_login(user.user)
+            with on(date(2026, 12, 20)):
+                self.client.post(reverse("cto:cto_action", args=[app.pk]), {"action": action})
+        app.refresh_from_db()
+        self.assertEqual(app.status, CTOUsageApplication.APPROVED)
+        self.assertEqual(line.allocations.get().days, Decimal("1.00"))
+        self.assertEqual(line.year_earned, 2026)
 
-    def test_cannot_file_from_unapproved_ot(self):
-        self.ot.status = OfficialRequest.RECOMMENDED_BY_AO
-        self.ot.save()
-        self.assertEqual(self._file().status_code, 404)
+    def test_credit_not_yet_effective_cannot_be_used(self):
+        self._credit(date(2026, 11, 3), "8", date(2026, 11, 5))  # effective Dec 1
+        self._apply("2026-11-20", "2026-11-20", "1", date(2026, 11, 10))
+        self.assertFalse(CTOUsageApplication.objects.exists())
 
-    def test_employee_cannot_file_or_submit(self):
-        self.client.force_login(self.employee.user)
-        self.assertEqual(self._file().status_code, 403)
 
-    def test_submit_credits_only_with_documents(self):
-        self._file()
-        entry = CTOCreditEntry.objects.get()
-        self.client.post(reverse("cto:claim_submit", args=[entry.pk]))
-        self.assertEqual(compute_available_cto_balance(self.employee), Decimal("0"))
-        upload_all_required(entry, self.hr.user)
-        self.client.post(reverse("cto:claim_submit", args=[entry.pk]))
-        entry.refresh_from_db()
-        self.assertEqual(entry.status, CTOCreditEntry.CREDITED)
-        self.assertEqual(compute_available_cto_balance(self.employee), Decimal("1.00"))
+class PageSmokeTests(TestCase):
+    """Every new page renders for the people who use it."""
 
-    def test_exception_claim_is_hr_admin_only_and_needs_reason(self):
-        data = {
-            "employee": self.employee.pk, "work_date": "2026-03-10", "duty_type": CTOCreditEntry.DUTY_REGULAR,
-            "hours_worked": "8", "is_restday_or_holiday": False, "exception_reason": "", "notes": "",
-        }
-        self.assertEqual(self.client.post(reverse("cto:credit_entry_create"), data).status_code, 403)
-        self.client.force_login(self.hr_admin.user)
-        self.client.post(reverse("cto:credit_entry_create"), data)
-        self.assertFalse(CTOCreditEntry.objects.exists())
-        data["exception_reason"] = "Certified emergency duty"
-        self.client.post(reverse("cto:credit_entry_create"), data)
-        entry = CTOCreditEntry.objects.get()
-        self.assertIsNone(entry.ot_request)
-        self.assertEqual(entry.status, CTOCreditEntry.DRAFT)
-        self.assertFalse(CTOCreditTransaction.objects.exists())
+    def setUp(self):
+        self.org = Org()
+        emp = self.org.lab_staff
+        ot = approved_ot(self.org, emp, date(2026, 10, 5), today=date(2026, 10, 1))
+        self.ot = ot.request
+        self.claim = filed_claim(self.org, emp, [(ot, "8", None, None)], date(2026, 10, 6))
+        self.client = Client()
+
+    def _get(self, employee, name, *args):
+        self.client.force_login(employee.user)
+        response = self.client.get(reverse(name, args=args))
+        self.assertEqual(response.status_code, 200, name)
+        return response
+
+    def test_pages(self):
+        self._get(self.org.hr, "cto:ot_new")
+        self._get(self.org.hr, "cto:ot_detail", self.ot.pk)
+        self._get(self.org.lab_sup, "cto:cto_queue")
+        self._get(self.org.lab_sup, "cto:claim_detail", self.claim.pk)
+        self._get(self.org.lab_staff, "cto:my_cto")
+        self._get(self.org.lab_staff, "cto:claim_new")
+        self._get(self.org.lab_staff, "cto:cto_apply")
+        self._get(self.org.hr_admin, "cto:exception_claim_new")
+
+    def test_ot_form_has_add_row_template(self):
+        response = self._get(self.org.hr, "cto:ot_new")
+        self.assertContains(response, "__prefix__")
+        self.assertContains(response, 'name="lines-TOTAL_FORMS"')
+
+    def test_draft_claim_page_shows_add_line_form(self):
+        draft = CTOClaim.objects.create(employee=self.org.lab_staff2, filed_by=self.org.lab_staff2.user)
+        response = self._get(self.org.lab_staff2, "cto:claim_detail", draft.pk)
+        self.assertContains(response, "add_line")
+
+    def test_employee_cannot_open_ot_form(self):
+        self.client.force_login(self.org.lab_staff.user)
+        self.assertEqual(self.client.get(reverse("cto:ot_new")).status_code, 403)
+
+
+class HardeningTests(TestCase):
+    def setUp(self):
+        self.org = Org()
+        self.emp = self.org.lab_staff
+
+    # 1. same employee + date on another live OT request
+    def test_same_employee_and_date_blocked_on_second_pending_or_approved_request(self):
+        file_ot(self.org.hr, "HR", "x", "", [ot_line(self.emp, date(2026, 11, 5))], self.org.hr.user, date(2026, 11, 1))
+        with self.assertRaises(ValidationError):  # first is pending
+            file_ot(self.org.lab_sup, "SUPERVISOR", "x", "", [ot_line(self.emp, date(2026, 11, 5))],
+                    self.org.lab_sup.user, date(2026, 11, 1))
+        approve_all(OvertimeRequest.objects.get())
+        with self.assertRaises(ValidationError):  # first is approved
+            file_ot(self.org.lab_sup, "SUPERVISOR", "x", "", [ot_line(self.emp, date(2026, 11, 5))],
+                    self.org.lab_sup.user, date(2026, 11, 1))
+
+    def test_returned_request_does_not_block_and_its_own_lines_are_not_duplicates(self):
+        ot, _ = file_ot(self.org.hr, "HR", "x", "", [ot_line(self.emp, date(2026, 11, 5))], self.org.hr.user, date(2026, 11, 1))
+        routing.return_record(ot, self.org.ao, self.org.ao.user, "fix hours")
+        file_ot(self.org.hr, "HR", "x", "", [ot_line(self.emp, date(2026, 11, 5), "4")], self.org.hr.user,
+                date(2026, 11, 1), ot=ot)  # re-filing the same line on the same request is fine
+
+    # 2. HR Administrator cannot file an exception claim for themselves
+    def test_hr_admin_cannot_file_exception_claim_for_self(self):
+        from .claims import create_exception_claim
+
+        with self.assertRaises(ValidationError):
+            create_exception_claim(self.org.hr_admin, self.org.hr_admin, CTOClaim.DUTY_REGULAR, "x", self.org.hr_admin.user)
+        with self.assertRaises(ValidationError):  # HR Processor is not enough
+            create_exception_claim(self.org.hr, self.emp, CTOClaim.DUTY_REGULAR, "x", self.org.hr.user)
+        with self.assertRaises(ValidationError):  # reason required
+            create_exception_claim(self.org.hr_admin, self.emp, CTOClaim.DUTY_REGULAR, " ", self.org.hr_admin.user)
+        claim = create_exception_claim(self.org.hr_admin, self.emp, CTOClaim.DUTY_REGULAR, "Emergency", self.org.hr_admin.user)
+        self.assertTrue(claim.is_exception())
+
+    # 3. approval + crediting is all-or-nothing
+    def test_missing_rate_at_coh_approval_leaves_claim_pending_and_uncredited(self):
+        from .claims import approve_claim
+
+        ot = approved_ot(self.org, self.emp, date(2026, 10, 5), today=date(2026, 10, 1))
+        claim = filed_claim(self.org, self.emp, [(ot, "8", None, None)], date(2026, 10, 6))
+        for actor in (self.org.lab_sup, self.org.hr, self.org.ao):
+            approve_claim(claim, actor, actor.user)
+            claim.refresh_from_db()
+        self.assertEqual(claim.current_step, "COH")
+        CTOMultiplierRate.objects.all().delete()
+        with self.assertRaises(ValidationError):
+            approve_claim(claim, self.org.coh, self.org.coh.user)
+        claim.refresh_from_db()
+        self.assertEqual(claim.status, RoutedRecord.PENDING)
+        self.assertEqual(claim.current_step, "COH")
+        self.assertIsNone(claim.approved_on)
+        self.assertFalse(claim.actions.filter(step="COH").exists())
+        line = claim.lines.get()
+        self.assertEqual(line.state, CTOClaimLine.PENDING)
+        self.assertIsNone(line.effective_date)
+
+    # 5. NURSING_SECTION_NAME matches a real section
+    def test_nursing_section_setting_matches_a_section(self):
+        from django.conf import settings
+
+        self.assertTrue(Section.objects.filter(name=settings.NURSING_SECTION_NAME).exists())
+
+    # 7. no deletes from admin
+    def test_admin_cannot_delete_ot_requests_claims_or_lines(self):
+        from django.contrib import admin
+        from django.test import RequestFactory
+
+        request = RequestFactory().get("/")
+        request.user = User.objects.create_superuser("root", "r@x.test", "x")
+        for model in (OvertimeRequest, CTOClaim):
+            self.assertFalse(admin.site._registry[model].has_delete_permission(request))
+        for model_admin in (admin.site._registry[OvertimeRequest], admin.site._registry[CTOClaim]):
+            for inline in model_admin.get_inline_instances(request):
+                if inline.model in (CTOClaimLine,) or inline.model.__name__ == "OvertimeLine":
+                    self.assertFalse(inline.has_delete_permission(request))
+
+
+class PermissionViewTests(TestCase):
+    """6. Who can view and act on OT requests and claims."""
+
+    def setUp(self):
+        self.org = Org()
+        self.outsider = make_employee("outsider", "E-OUT")
+        self.ot, _ = file_ot(self.org.lab_sup, "SUPERVISOR", "x", "", [ot_line(self.org.lab_staff, date(2099, 1, 5))],
+                             self.org.lab_sup.user, date(2099, 1, 1))
+        self.client = Client()
+
+    def _as(self, employee):
+        self.client.force_login(employee.user)
+        return self.client
+
+    def test_who_can_view_an_ot_request(self):
+        url = reverse("cto:ot_detail", args=[self.ot.pk])
+        for allowed in (self.org.lab_sup, self.org.hr, self.org.ao, self.org.coh):
+            self.assertEqual(self._as(allowed).get(url).status_code, 200, allowed)
+        self.assertEqual(self._as(self.outsider).get(url).status_code, 403)
+
+    def test_only_the_current_step_can_approve_an_ot_request(self):
+        url = reverse("cto:ot_action", args=[self.ot.pk])
+        for wrong in (self.org.ao, self.org.coh, self.outsider, self.org.lab_sup, self.org.lab_staff):
+            self._as(wrong).post(url, {"action": "approve"})
+            self.ot.refresh_from_db()
+            self.assertEqual(self.ot.current_step, "HR", wrong)
+        self._as(self.org.hr).post(url, {"action": "approve"})
+        self.ot.refresh_from_db()
+        self.assertEqual(self.ot.current_step, "AO")
+
+    def test_only_the_filer_can_edit_a_returned_ot_request(self):
+        routing.return_record(self.ot, self.org.hr, self.org.hr.user, "wrong hours")
+        url = reverse("cto:ot_edit", args=[self.ot.pk])
+        self.assertEqual(self._as(self.org.hr).get(url).status_code, 403)
+        self.assertEqual(self._as(self.org.lab_staff).get(url).status_code, 403)
+        self.assertEqual(self._as(self.org.lab_sup).get(url).status_code, 200)
+
+    def test_pending_ot_request_cannot_be_edited(self):
+        self.assertEqual(self._as(self.org.lab_sup).get(reverse("cto:ot_edit", args=[self.ot.pk])).status_code, 404)
+
+    def test_who_can_view_and_act_on_a_claim(self):
+        ot = approved_ot(self.org, self.org.lab_staff, date(2026, 10, 5), today=date(2026, 10, 1))
+        claim = filed_claim(self.org, self.org.lab_staff, [(ot, "8", None, None)], date(2026, 10, 6))
+        view = reverse("cto:claim_detail", args=[claim.pk])
+        act = reverse("cto:claim_action", args=[claim.pk])
+        for allowed in (self.org.lab_staff, self.org.lab_sup, self.org.hr, self.org.ao, self.org.coh):
+            self.assertEqual(self._as(allowed).get(view).status_code, 200, allowed)
+        self.assertEqual(self._as(self.outsider).get(view).status_code, 403)
+        for wrong in (self.org.lab_staff, self.org.hr, self.outsider):
+            self._as(wrong).post(act, {"action": "approve"})
+            claim.refresh_from_db()
+            self.assertEqual(claim.current_step, "SUPERVISOR", wrong)
+        # The claimant cannot edit lines once submitted.
+        self.assertEqual(self._as(self.org.lab_staff).post(act, {"action": "add_line"}).status_code, 403)
+        self._as(self.org.lab_sup).post(act, {"action": "approve"})
+        claim.refresh_from_db()
+        self.assertEqual(claim.current_step, "HR")
+
+    def test_returned_claim_can_be_edited_only_by_the_claimant(self):
+        ot = approved_ot(self.org, self.org.lab_staff, date(2026, 10, 5), today=date(2026, 10, 1))
+        claim = filed_claim(self.org, self.org.lab_staff, [(ot, "8", None, None)], date(2026, 10, 6))
+        routing.return_record(claim, self.org.lab_sup, self.org.lab_sup.user, "clearer DTR")
+        act = reverse("cto:claim_action", args=[claim.pk])
+        line = claim.lines.get()
+        self.assertEqual(self._as(self.org.lab_sup).post(act, {"action": "remove_line", "line": line.pk}).status_code, 403)
+        self._as(self.org.lab_staff).post(act, {"action": "remove_line", "line": line.pk})
+        self.assertFalse(claim.lines.exists())
+
+
+class UsageLimitViewTests(TestCase):
+    """8. The 5-days-per-month and no-3-consecutive-days limits still apply
+    at filing, on top of the per-line balance."""
+
+    def setUp(self):
+        self.org = Org()
+        self.emp = self.org.lab_staff
+        for month in (6, 7, 8):  # plenty of credit
+            ot = approved_ot(self.org, self.emp, date(2026, month, 3), hours="24", today=date(2026, month, 3))
+            claim = filed_claim(self.org, self.emp, [(ot, "24", None, None)], date(2026, month, 3))
+            with on(date(2026, month, 10)):
+                approve_all(claim, on_approved=credit_lines)
+        self.client = Client()
+        self.client.force_login(self.emp.user)
+
+    def _apply(self, start, end, days):
+        with on(date(2026, 10, 1)):
+            self.client.post(reverse("cto:cto_apply"), {"start_date": start, "end_date": end, "number_of_days": days})
+
+    def test_more_than_5_days_in_a_month_is_refused(self):
+        self._apply("2026-10-05", "2026-10-06", "2")
+        self._apply("2026-10-12", "2026-10-13", "2")
+        self._apply("2026-10-19", "2026-10-20", "2")  # would be 6
+        self.assertEqual(CTOUsageApplication.objects.count(), 2)
+
+    def test_three_consecutive_days_are_refused(self):
+        self._apply("2026-10-05", "2026-10-06", "2")
+        self._apply("2026-10-07", "2026-10-07", "1")
+        self.assertEqual(CTOUsageApplication.objects.count(), 1)

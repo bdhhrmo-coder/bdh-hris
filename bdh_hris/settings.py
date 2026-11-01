@@ -80,6 +80,9 @@ RECORD_RETENTION_YEARS = int(os.environ.get("BDH_HRIS_RECORD_RETENTION_YEARS", "
 # separately, in the CTOMultiplierRate table.
 CTO_FILING_DEADLINE_MONTH_DAY = (11, 30)  # last day to file a CTO claim for that year's work
 CTO_USAGE_CUTOFF_MONTH_DAY = (12, 15)  # CTO usage dates cannot extend past this
+# OT/CTO routing (cto/routing.py): employees of this section route through
+# Unit Head -> Chief Nurse. Must match orgstructure.Section.name.
+NURSING_SECTION_NAME = "Nursing Service Section"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

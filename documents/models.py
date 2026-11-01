@@ -3,7 +3,7 @@ Document upload system — CLAUDE.md §10.
 
 One generic system, not a separate attachment table per app: a
 GenericForeignKey lets UploadedDocument attach to any transaction model
-(LeaveApplication, CTOUsageApplication, CTOCreditEntry, DutyExchangeRequest,
+(LeaveApplication, CTOUsageApplication, CTOClaim, DutyExchangeRequest,
 AttendanceCorrectionRequest, OfficialRequest) without touching those apps'
 own tables.
 
@@ -61,9 +61,9 @@ class DocumentRequirement(models.Model):
     CTO multipliers and biometric column mappings are.
 
     content_type identifies WHICH model this applies to (e.g.
-    cto.CTOCreditEntry). sub_type_value optionally narrows it to a
+    cto.CTOClaim). sub_type_value optionally narrows it to a
     specific value of that model's own "kind" field (e.g. duty_type for
-    CTOCreditEntry, leave_type.code for LeaveApplication, request_type for
+    CTOClaim, leave_type.code for LeaveApplication, request_type for
     OfficialRequest, correction_type for AttendanceCorrectionRequest) —
     see documents/requirements.py's SUBTYPE_EXTRACTORS for the mapping.
     Blank sub_type_value means "applies to every instance of this model."

@@ -1,46 +1,52 @@
 """
-CTO (Compensatory Time Off) models — CLAUDE.md §7. Flagged by CLAUDE.md as
-the highest compliance-risk module in the whole build; see cto/balances.py
-for the math this is built on top of, kept isolated and unit-tested the
-same way leave/balances.py is.
+CTO (Compensatory Time Off) models — CLAUDE.md §7 / §7.1 (rules decided
+2026-11-01, pending approved HR memo). Highest compliance-risk module; the
+date/credit math lives in cto/balances.py so it can be unit-tested alone.
 
-Two separate things happen here, on purpose:
-  - CREDITING (earning CTO from OT/restday/holiday work): a CTO claim
-    (CTOCreditEntry), filed by HR from an APPROVED "Authorized OT/restday/
-    holiday work" request (official_requests.OfficialRequest). Settled
-    2026-09-28 (see CLAUDE.md §7): approving OT never creates CTO credit
-    by itself. The OT approval and the claim are separate records; the
-    claim links back to the OT (ot_request) for the audit trail. A claim
-    starts as a DRAFT so its required documents can be attached, and only
-    credits the ledger when HR submits it and every §7 check passes (see
-    views.claim_submit). One claim per workday; the hours across all of
-    one OT's claims cannot exceed the OT's approved hours. An HR
-    Administrator may also file an exception claim with no OT request
-    (e.g. certified emergency or Medical Transport duty), with a required
-    reason — it goes through the same draft/documents/submit checks.
-  - SPENDING (using banked CTO as time off): full routing chain per
-    §6.2 — Employee -> Supervisor -> HR -> AO -> COH, same shape as COSP
-    Leave in the leave app (and deliberately reuses leave.permissions'
-    routing-role checks rather than re-implementing them).
+  - OvertimeRequest + OvertimeLine: authorized OT filed by a Supervisor
+    (Unit Head in Nursing), HR or the AO for one or more employees, one
+    line per employee per date. Approving OT never creates CTO credit.
+  - CTOClaim + CTOClaimLine: the employee's claim against approved OT
+    lines (or a Medical Transport / HR Admin exception claim). Credit,
+    effective date and year earned are tracked per line.
+  - CTOCreditAllocation: which credit line each CTO usage application
+    draws from (oldest effective date first), held from filing.
+  - CTOUsageApplication: spending CTO as time off (unchanged chain).
 
-Not applicable to the Chief of Hospital (§7): enforced structurally in
-forms/views, not just left as a convention.
+Routing for OT requests and claims is in cto/routing.py.
 """
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.urls import reverse
+
+WEEKDAY = "WEEKDAY"
+REST_DAY = "REST_DAY"
+HOLIDAY = "HOLIDAY"
+DAY_TYPE_CHOICES = [(WEEKDAY, "Weekday"), (REST_DAY, "Rest day"), (HOLIDAY, "Holiday")]
+
+# Routing step codes shared by OT requests and claims (cto/routing.py).
+STEP_SUPERVISOR = "SUPERVISOR"
+STEP_CHIEF_NURSE = "CHIEF_NURSE"
+STEP_HR = "HR"
+STEP_AO = "AO"
+STEP_COH = "COH"
+STEP_CHOICES = [
+    (STEP_SUPERVISOR, "Supervisor / Unit Head"),
+    (STEP_CHIEF_NURSE, "Chief Nurse"),
+    (STEP_HR, "HR"),
+    (STEP_AO, "Administrative Officer"),
+    (STEP_COH, "Chief of Hospital"),
+]
 
 
 class CTOMultiplierRate(models.Model):
     """
     OT-hours-to-CTO-hours multiplier, effective-dated so a future policy
-    change never rewrites how a past claim was computed. CLAUDE.md §7:
-    "Multipliers must be configurable, not hardcoded."
-
-    Seeded from BDH's approved Dec 16, 2025 HR Policy Revision Proposal
-    (the same one §7 cites): 1.0x weekday, 1.5x rest day/holiday, per
-    CSC-DBM Joint Circular No. 2, s.2004.
+    change never rewrites how a past claim was computed. The rate in force
+    on the WORKDAY applies (§7.1). Seeded 1.0x weekday / 1.5x rest day or
+    holiday per CSC-DBM Joint Circular No. 2, s.2004.
     """
 
     effective_date = models.DateField(unique=True)
@@ -59,158 +65,227 @@ class CTOMultiplierRate(models.Model):
         return cls.objects.filter(effective_date__lte=as_of_date).order_by("-effective_date").first()
 
 
-class CTOCreditEntry(models.Model):
-    """
-    A CTO claim: one workday of OT/rest-day/holiday work, converted to CTO
-    credit once submitted (see the module docstring). Normally linked to
-    an approved OT request; exception claims have no ot_request and must
-    give an exception_reason instead.
-
-    multiplier_applied/credited_hours/credited_days/shift_hours_used are
-    computed when the draft is saved (as a preview) and recomputed at
-    submission, which is the snapshot that is actually credited.
-
-    duty_type (added for Phase 9's document-requirements system, confirmed
-    2026-09-27): the standard §7 attachment set (Allowed to Work form,
-    DTR/logbook copy, OT Accomplishment Report) assumes regular OT/rest-
-    day/holiday duty. Medical Transport ("Decking" schedule) duty follows a
-    different, fully separate document set instead (Trip Ticket, plus
-    either a Certificate of Appearance or a logbook copy) — regardless of
-    which section the employee belongs to. See documents/requirements.py
-    for how the two sets are configured.
-    """
+class RoutedRecord(models.Model):
+    """Shared status/route fields for OvertimeRequest and CTOClaim. `route`
+    is the ordered step list snapshotted at submission (comma-separated
+    STEP_* codes); `current_step` is the step now waiting to act."""
 
     DRAFT = "DRAFT"
-    CREDITED = "CREDITED"
-    STATUS_CHOICES = [(DRAFT, "Draft — not yet credited"), (CREDITED, "Credited")]
+    PENDING = "PENDING"
+    RETURNED = "RETURNED"
+    APPROVED = "APPROVED"
+    CANCELLED = "CANCELLED"
+    STATUS_CHOICES = [
+        (DRAFT, "Draft"),
+        (PENDING, "Pending approval"),
+        (RETURNED, "Returned"),
+        (APPROVED, "Approved"),
+        (CANCELLED, "Cancelled"),
+    ]
+    EDITABLE_STATUSES = {DRAFT, RETURNED}
+
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=DRAFT)
+    route = models.CharField(max_length=100, blank=True)
+    current_step = models.CharField(max_length=15, choices=STEP_CHOICES, blank=True)
+    approved_on = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
+
+    def route_steps(self):
+        return [s for s in self.route.split(",") if s]
+
+
+class OvertimeRequest(RoutedRecord):
+    """A batch of authorized OT lines, approved or returned as a whole."""
+
+    CAPACITY_SUPERVISOR = "SUPERVISOR"
+    CAPACITY_HR = "HR"
+    CAPACITY_AO = "AO"
+    CAPACITY_CHOICES = [
+        (CAPACITY_SUPERVISOR, "Supervisor / Unit Head"),
+        (CAPACITY_HR, "HR"),
+        (CAPACITY_AO, "Administrative Officer"),
+    ]
+
+    filed_by = models.ForeignKey(
+        "employees.Employee", on_delete=models.PROTECT, related_name="overtime_requests_filed"
+    )
+    filed_as = models.CharField(max_length=15, choices=CAPACITY_CHOICES)
+    purpose = models.TextField()
+    past_date_reason = models.TextField(blank=True, help_text="Required when any line is dated before filing.")
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"OT request #{self.pk} filed by {self.filed_by}"
+
+    def get_absolute_url(self):
+        return reverse("cto:ot_detail", args=[self.pk])
+
+    def owner_employee(self):
+        return self.filed_by
+
+    def subject_employee_ids(self):
+        """People who may not act on this batch: everyone on a line, plus
+        the filer."""
+        return set(self.lines.values_list("employee_id", flat=True)) | {self.filed_by_id}
+
+
+class OvertimeLine(models.Model):
+    request = models.ForeignKey(OvertimeRequest, on_delete=models.CASCADE, related_name="lines")
+    employee = models.ForeignKey("employees.Employee", on_delete=models.PROTECT, related_name="overtime_lines")
+    work_date = models.DateField()
+    approved_hours = models.DecimalField(max_digits=5, decimal_places=2)
+    day_type = models.CharField(max_length=10, choices=DAY_TYPE_CHOICES)
+
+    class Meta:
+        ordering = ["work_date", "employee"]
+        constraints = [
+            models.UniqueConstraint(fields=["request", "employee", "work_date"], name="one_ot_line_per_employee_date"),
+        ]
+
+    def __str__(self):
+        return f"{self.employee} — {self.work_date} ({self.approved_hours}h {self.get_day_type_display()})"
+
+
+class OvertimeRequestAction(models.Model):
+    """Audit trail per OT request step (submit, approve, return, skip...)."""
+
+    request = models.ForeignKey(OvertimeRequest, on_delete=models.CASCADE, related_name="actions")
+    action = models.CharField(max_length=30)
+    step = models.CharField(max_length=15, blank=True)
+    notes = models.TextField(blank=True)
+    acted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    acted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["acted_at", "id"]
+
+    def __str__(self):
+        return f"{self.request} — {self.action} @ {self.acted_at:%Y-%m-%d %H:%M}"
+
+
+class CTOClaim(RoutedRecord):
+    """
+    An employee's CTO claim: one or more lines of their own, routed as one.
+    duty_type picks the document set (documents/requirements.py): REGULAR =
+    Allowed to Work form, DTR/logbook copy, OT Accomplishment Report;
+    MEDICAL_TRANSPORT = Trip Ticket plus Certificate of Appearance or
+    logbook. OT and Medical Transport lines never share a claim.
+    """
 
     DUTY_REGULAR = "REGULAR"
     DUTY_MEDICAL_TRANSPORT = "MEDICAL_TRANSPORT"
     DUTY_TYPE_CHOICES = [
-        (DUTY_REGULAR, "Regular OT/rest day/holiday duty"),
+        (DUTY_REGULAR, "OT / rest day / holiday work"),
         (DUTY_MEDICAL_TRANSPORT, "Medical Transport (Decking schedule)"),
     ]
 
-    employee = models.ForeignKey(
-        "employees.Employee", on_delete=models.CASCADE, related_name="cto_credit_entries"
-    )
-    ot_request = models.ForeignKey(
-        "official_requests.OfficialRequest",
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        related_name="cto_claims",
-        help_text="The approved OT/rest-day/holiday request this claim is filed from. "
-        "Blank only for an HR Administrator exception claim.",
-    )
-    exception_reason = models.TextField(
-        blank=True, help_text="Required when there is no OT request (exception claim)."
-    )
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=DRAFT)
-    work_date = models.DateField(help_text="The date the OT/rest-day/holiday work was performed.")
+    employee = models.ForeignKey("employees.Employee", on_delete=models.CASCADE, related_name="cto_claims")
     duty_type = models.CharField(max_length=20, choices=DUTY_TYPE_CHOICES, default=DUTY_REGULAR)
-    hours_worked = models.DecimalField(max_digits=5, decimal_places=2)
-    is_restday_or_holiday = models.BooleanField(
-        default=False, help_text="Determines which multiplier applies (weekday vs rest day/holiday)."
+    exception_reason = models.TextField(
+        blank=True, help_text="HR Administrator exception claim (no OT request): required reason."
     )
-    shift_hours_used = models.PositiveSmallIntegerField(
-        help_text="Snapshot of the employee's shift_hours at entry time, so a later shift-length "
-        "change never silently reinterprets this entry's day conversion."
+    filed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    first_filed_on = models.DateField(
+        null=True, blank=True,
+        help_text="Date of first submission. The Nov 30 filing deadline is judged on this date, "
+        "so a returned claim does not expire while being corrected.",
     )
-    multiplier_applied = models.DecimalField(
-        max_digits=4, decimal_places=2,
-        help_text="Snapshot of the multiplier in effect on work_date — never recomputed later.",
-    )
-    credited_hours = models.DecimalField(max_digits=6, decimal_places=2)
-    credited_days = models.DecimalField(max_digits=6, decimal_places=2)
-    notes = models.CharField(max_length=255, blank=True)
-    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
-    recorded_at = models.DateTimeField(auto_now_add=True)
-    credited_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
-    )
-    credited_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        ordering = ["-work_date"]
-        constraints = [
-            models.UniqueConstraint(fields=["ot_request", "work_date"], name="one_cto_claim_per_ot_workday"),
-        ]
+        ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.employee} worked {self.hours_worked}h on {self.work_date} -> {self.credited_days} CTO day(s)"
+        return f"CTO claim #{self.pk} — {self.employee}"
 
     def is_exception(self):
-        return self.ot_request_id is None
+        return bool(self.exception_reason.strip())
+
+    def uses_ot_lines(self):
+        return self.duty_type == self.DUTY_REGULAR and not self.is_exception()
+
+    def get_absolute_url(self):
+        return reverse("cto:claim_detail", args=[self.pk])
+
+    def owner_employee(self):
+        """Who fixes it when returned: the HR Administrator who filed an
+        exception claim, otherwise the employee."""
+        if self.is_exception():
+            return getattr(self.filed_by, "employee", None)
+        return self.employee
+
+    def subject_employee_ids(self):
+        return {self.employee_id}
 
     def clean(self):
         if self.employee_id and self.employee.has_role("CHIEF_OF_HOSPITAL"):
             raise ValidationError("CTO is not applicable to the Chief of Hospital (CLAUDE.md §7).")
-        if self.ot_request_id is None:
-            if not self.exception_reason.strip():
-                raise ValidationError({"exception_reason": "A reason is required for a claim with no OT request."})
-            return
-        ot = self.ot_request
-        if ot.request_type != ot.OT_RESTDAY_HOLIDAY or ot.status != ot.APPROVED:
-            raise ValidationError("A CTO claim can only be filed from an approved OT/rest-day/holiday request.")
-        if self.employee_id != ot.employee_id:
-            raise ValidationError("The claim must be for the same employee as the OT request.")
-        if self.work_date and not (ot.start_date <= self.work_date <= ot.end_date):
-            raise ValidationError(
-                {"work_date": f"The work date must fall within the OT request ({ot.start_date} to {ot.end_date})."}
-            )
 
 
-class CTOCreditTransaction(models.Model):
-    """
-    Append-only CTO balance ledger — same pattern as
-    leave.LeaveCreditTransaction, for the same reason: a running balance
-    field would be a black box, this is traceable.
-    """
+class CTOClaimLine(models.Model):
+    """One workday of a claim. credited_* is a preview until COH approval,
+    when it is recomputed and effective_date/year_earned are set."""
 
-    EARNED = "EARNED"
-    USED = "USED"
-    ADJUSTMENT = "ADJUSTMENT"
-    FORFEITED = "FORFEITED"
-    TRANSACTION_TYPE_CHOICES = [
-        (EARNED, "Earned/credited"),
-        (USED, "Used"),
-        (ADJUSTMENT, "Manual adjustment"),
-        (FORFEITED, "Forfeited"),
-    ]
+    PENDING = "PENDING"
+    CREDITED = "CREDITED"
+    STATE_CHOICES = [(PENDING, "Not yet credited"), (CREDITED, "Credited")]
 
-    employee = models.ForeignKey(
-        "employees.Employee", on_delete=models.CASCADE, related_name="cto_credit_transactions"
+    claim = models.ForeignKey(CTOClaim, on_delete=models.CASCADE, related_name="lines")
+    ot_line = models.ForeignKey(
+        OvertimeLine, on_delete=models.PROTECT, null=True, blank=True, related_name="claim_lines",
+        help_text="Blank for Medical Transport and exception lines.",
     )
-    transaction_type = models.CharField(max_length=15, choices=TRANSACTION_TYPE_CHOICES)
-    days = models.DecimalField(
-        max_digits=6, decimal_places=2, help_text="Positive for a credit, negative for a deduction."
-    )
-    transaction_date = models.DateField()
-    credit_entry = models.ForeignKey(
-        CTOCreditEntry, on_delete=models.SET_NULL, null=True, blank=True, related_name="ledger_entries"
-    )
-    usage_application = models.ForeignKey(
-        "CTOUsageApplication", on_delete=models.SET_NULL, null=True, blank=True, related_name="ledger_entries"
-    )
-    notes = models.CharField(max_length=255, blank=True)
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
-    created_at = models.DateTimeField(auto_now_add=True)
+    work_date = models.DateField()
+    hours_worked = models.DecimalField(max_digits=5, decimal_places=2)
+    day_type = models.CharField(max_length=10, choices=DAY_TYPE_CHOICES)
+    shift_hours_used = models.PositiveSmallIntegerField()
+    multiplier_applied = models.DecimalField(max_digits=4, decimal_places=2)
+    credited_hours = models.DecimalField(max_digits=6, decimal_places=2)
+    credited_days = models.DecimalField(max_digits=6, decimal_places=2)
+    state = models.CharField(max_length=10, choices=STATE_CHOICES, default=PENDING)
+    effective_date = models.DateField(null=True, blank=True)
+    year_earned = models.PositiveSmallIntegerField(null=True, blank=True)
 
     class Meta:
-        ordering = ["-transaction_date", "-id"]
+        ordering = ["work_date"]
 
     def __str__(self):
-        return f"{self.employee} — CTO {self.days:+} ({self.transaction_date})"
+        return f"{self.claim.employee} — {self.work_date}: {self.hours_worked}h -> {self.credited_days} day(s)"
+
+
+class CTOClaimAction(models.Model):
+    """Audit trail per claim step, including day-type corrections and
+    skipped steps."""
+
+    claim = models.ForeignKey(CTOClaim, on_delete=models.CASCADE, related_name="actions")
+    action = models.CharField(max_length=30)
+    step = models.CharField(max_length=15, blank=True)
+    notes = models.TextField(blank=True)
+    acted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    acted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["acted_at", "id"]
+
+    def __str__(self):
+        return f"{self.claim} — {self.action} @ {self.acted_at:%Y-%m-%d %H:%M}"
 
 
 class CTOUsageApplication(models.Model):
     """
-    An employee spending banked CTO credit as time off. Always full
-    routing (§6.2: "CTO Application (regular & COSP): Employee ->
-    Supervisor -> HR -> AO -> COH") — unlike leave.LeaveApplication,
-    there's no data-entry-only path here, so this ends at APPROVED rather
-    than ever reaching a RECORDED-only status.
+    An employee spending CTO credit as time off. Full routing (§6.2):
+    Employee -> Supervisor -> HR -> AO -> COH. Days are held against
+    specific credit lines (CTOCreditAllocation) from filing; the hold is
+    released if the application is returned, rejected or cancelled.
     """
 
     SUBMITTED = "SUBMITTED"
@@ -253,6 +328,19 @@ class CTOUsageApplication(models.Model):
     def clean(self):
         if self.employee_id and self.employee.has_role("CHIEF_OF_HOSPITAL"):
             raise ValidationError("CTO is not applicable to the Chief of Hospital (CLAUDE.md §7).")
+
+
+class CTOCreditAllocation(models.Model):
+    """Days of one usage application drawn from one credit line."""
+
+    line = models.ForeignKey(CTOClaimLine, on_delete=models.PROTECT, related_name="allocations")
+    usage_application = models.ForeignKey(
+        CTOUsageApplication, on_delete=models.CASCADE, related_name="allocations"
+    )
+    days = models.DecimalField(max_digits=6, decimal_places=2)
+
+    def __str__(self):
+        return f"{self.days} day(s) of {self.line} -> {self.usage_application}"
 
 
 class CTOUsageApplicationAction(models.Model):
