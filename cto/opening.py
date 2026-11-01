@@ -25,6 +25,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from accounts.models import RoleAssignment
+from employees.models import Employee
 from leave.permissions import employees_with_role
 
 from .models import WEEKDAY, CTOClaim, CTOClaimLine, RoutedRecord
@@ -101,8 +102,10 @@ def add_opening_line(actor, employee, days, date_earned, reason, user, today):
 
 @transaction.atomic
 def void_opening_line(actor, line, reason, user, today):
-    # Re-read and lock the row, so a usage application can't hold days
-    # against it between the check below and the void.
+    # Lock the employee row first — the same lock cto_apply takes before
+    # holding days — so a usage application can't hold days against this
+    # line between the check below and the void. Then re-read the line.
+    Employee.objects.select_for_update().get(pk=line.claim.employee_id)
     locked = CTOClaimLine.objects.select_for_update().select_related("claim__employee").get(pk=line.pk)
     _check(actor, locked.claim.employee, today, reason)
     if not locked.claim.is_opening or locked.state != CTOClaimLine.CREDITED:
