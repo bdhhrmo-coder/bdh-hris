@@ -1116,3 +1116,81 @@ class NursingSectionSettingTests(TestCase):
             file_ot(self.org.er_head, "SUPERVISOR", "x", "", [ot_line(self.org.nurse, date(2099, 1, 5))],
                     self.org.er_head.user, date(2099, 1, 1))
         self.assertFalse(OvertimeRequest.objects.exists())
+
+
+class ExceptionClaimDeadlineTests(TestCase):
+    """Decided 2026-11-01 (Q4): exception claims skip the filing deadline;
+    other claims don't."""
+
+    def setUp(self):
+        self.org = Org()
+
+    def test_exception_claim_accepts_old_work(self):
+        from .claims import create_exception_claim
+
+        make_rate(effective_date=date(2025, 1, 1))
+        claim = create_exception_claim(self.org.hr_admin, self.org.lab_staff, CTOClaim.DUTY_REGULAR,
+                                       "2025 paper CTO card, memo 12", self.org.hr_admin.user)
+        add_line(claim, Decimal("8"), date(2026, 12, 2), work_date=date(2025, 3, 10), day_type=WEEKDAY)
+        upload_all_required(claim, self.org.hr_admin.user)
+        submit_claim(claim, self.org.hr_admin.user, date(2026, 12, 2))
+        claim.refresh_from_db()
+        self.assertEqual(claim.status, RoutedRecord.PENDING)
+
+    def test_ordinary_medical_transport_claim_still_enforces_the_deadline(self):
+        claim = CTOClaim.objects.create(employee=self.org.lab_staff, duty_type=CTOClaim.DUTY_MEDICAL_TRANSPORT,
+                                        filed_by=self.org.lab_staff.user)
+        with self.assertRaises(ValidationError):
+            add_line(claim, Decimal("8"), date(2026, 12, 2), work_date=date(2026, 3, 10), day_type=WEEKDAY)
+
+
+class FreshDatabaseSeedTests(TestCase):
+    """A fresh database (migrations only) has what CTO needs on day one."""
+
+    def test_multiplier_rate_seeded(self):
+        rate = CTOMultiplierRate.active_as_of(date(2026, 11, 1))
+        self.assertEqual((rate.weekday_multiplier, rate.restday_holiday_multiplier), (Decimal("1.00"), Decimal("1.50")))
+
+    def test_claim_document_requirements_seeded(self):
+        ct = ContentType.objects.get_for_model(CTOClaim)
+        regular = set(DocumentRequirement.objects.filter(content_type=ct, sub_type_value="REGULAR")
+                      .values_list("label", flat=True))
+        self.assertEqual(regular, {"Allowed to Work form", "DTR/logbook copy", "OT Accomplishment Report"})
+        mt = DocumentRequirement.objects.filter(content_type=ct, sub_type_value="MEDICAL_TRANSPORT")
+        self.assertEqual(mt.count(), 3)
+        self.assertEqual(mt.filter(alternative_group="cert_or_logbook").count(), 2)
+
+
+class DryRunChecklistTests(TestCase):
+    """Behaviour the dry-run checklist asks testers to confirm."""
+
+    def setUp(self):
+        self.org = Org()
+        self.emp = self.org.lab_staff
+
+    def test_claim_for_a_future_workday_is_refused(self):
+        ot = approved_ot(self.org, self.emp, date(2026, 11, 6), today=date(2026, 11, 3))
+        claim = CTOClaim.objects.create(employee=self.emp, filed_by=self.emp.user)
+        with self.assertRaises(ValidationError):
+            add_line(claim, Decimal("8"), date(2026, 11, 3), ot_line=ot)
+        add_line(claim, Decimal("8"), date(2026, 11, 6), ot_line=ot)  # fine once the day arrives
+
+    def test_same_day_claim_is_credited_from_the_first_of_next_month(self):
+        ot = approved_ot(self.org, self.emp, date(2026, 11, 3), today=date(2026, 11, 3))
+        claim = filed_claim(self.org, self.emp, [(ot, "8", None, None)], date(2026, 11, 3))
+        with on(date(2026, 11, 3)):
+            approve_all(claim, on_approved=credit_lines)
+        self.assertEqual(claim.lines.get().effective_date, date(2026, 12, 1))
+        self.assertEqual(compute_available_cto_balance(self.emp, date(2026, 11, 30)), Decimal("0"))
+
+    def test_usage_ending_after_dec_15_is_refused(self):
+        from .opening import add_opening_line
+
+        add_opening_line(self.org.hr_admin, self.emp, Decimal("3"), date(2026, 6, 1), "card", self.org.hr_admin.user,
+                         date(2026, 11, 10))
+        client = Client()
+        client.force_login(self.emp.user)
+        with on(date(2026, 12, 1)):
+            client.post(reverse("cto:cto_apply"), {"start_date": "2026-12-16", "end_date": "2026-12-16",
+                                                   "number_of_days": "1"})
+        self.assertFalse(CTOUsageApplication.objects.exists())

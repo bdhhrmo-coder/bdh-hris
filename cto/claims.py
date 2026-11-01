@@ -8,7 +8,7 @@ Checks when a line is added (judged on today):
   - OT line: from an approved OT request, the claimant's own, not already
     on another live claim; actual hours <= approved hours
   - the workday is not in the future
-  - the line is not past its filing deadline
+  - the line is not past its filing deadline (exception claims skip this)
   - no more than 24 hours per employee per date across all live claims
   - a multiplier rate exists for the workday
 Checks at submission: every mandatory document is uploaded, the claim has
@@ -95,7 +95,9 @@ def add_line(claim, hours_worked, today, ot_line=None, work_date=None, day_type=
     if work_date > today:
         raise ValidationError("A claim can only be filed after the workday.")
 
-    if violates_filing_deadline(work_date, today):
+    # Exception claims skip the filing deadline (decided 2026-11-01): the HR
+    # Administrator's typed reason is the justification.
+    if not claim.is_exception() and violates_filing_deadline(work_date, today):
         raise ValidationError(
             f"The filing deadline for work on {work_date} was {filing_deadline_for(work_date):%B %d, %Y}."
         )
@@ -118,7 +120,8 @@ def submission_errors(claim, today):
     if not lines:
         errors.append("Add at least one line.")
     filed_on = claim.first_filed_on or today
-    for line in lines:
+    deadline_lines = [] if claim.is_exception() else lines  # exception claims skip the deadline
+    for line in deadline_lines:
         if violates_filing_deadline(line.work_date, filed_on):
             errors.append(
                 f"Work on {line.work_date}: filing deadline was {filing_deadline_for(line.work_date):%B %d, %Y}."

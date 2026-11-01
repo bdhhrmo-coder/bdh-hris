@@ -71,6 +71,20 @@ one that isn't clear; ask the project owner.
 
 ## 4. Initialize the database and static files
 
+**First load `.env` into this PowerShell window.** `manage.py` does not
+read `.env` by itself (only the service gets it, through NSSM). Without
+this, `migrate` quietly works on a local `db.sqlite3` instead of
+PostgreSQL. Do this in every new window before any `manage.py` command
+(§4, §8a, §9):
+
+```powershell
+Get-Content .env | Where-Object { $_ -match '^\s*[^#\s][^=]*=' } | ForEach-Object {
+    $k, $v = $_ -split '=', 2; Set-Item "env:$($k.Trim())" $v.Trim() }
+.venv\Scripts\python manage.py shell -c "from django.db import connection as c; print(c.vendor, c.settings_dict['NAME'])"
+```
+
+The last line must print `postgresql` and your database name.
+
 ```powershell
 .venv\Scripts\python manage.py migrate
 .venv\Scripts\python manage.py collectstatic --noinput
