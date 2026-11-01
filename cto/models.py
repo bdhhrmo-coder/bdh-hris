@@ -75,12 +75,14 @@ class RoutedRecord(models.Model):
     RETURNED = "RETURNED"
     APPROVED = "APPROVED"
     CANCELLED = "CANCELLED"
+    LAPSED = "LAPSED"
     STATUS_CHOICES = [
         (DRAFT, "Draft"),
         (PENDING, "Pending approval"),
         (RETURNED, "Returned"),
         (APPROVED, "Approved"),
         (CANCELLED, "Cancelled"),
+        (LAPSED, "Lapsed at separation"),
     ]
     EDITABLE_STATUSES = {DRAFT, RETURNED}
 
@@ -248,7 +250,17 @@ class CTOClaimLine(models.Model):
     PENDING = "PENDING"
     CREDITED = "CREDITED"
     VOIDED = "VOIDED"
-    STATE_CHOICES = [(PENDING, "Not yet credited"), (CREDITED, "Credited"), (VOIDED, "Voided")]
+    CARRY_PENDING = "CARRY_PENDING"
+    FORFEITED = "FORFEITED"
+    LAPSED = "LAPSED"
+    STATE_CHOICES = [
+        (PENDING, "Not yet credited"),
+        (CREDITED, "Credited"),
+        (VOIDED, "Voided"),
+        (CARRY_PENDING, "Carry-over awaiting COH decision"),
+        (FORFEITED, "Forfeited"),
+        (LAPSED, "Lapsed at separation"),
+    ]
 
     claim = models.ForeignKey(CTOClaim, on_delete=models.CASCADE, related_name="lines")
     ot_line = models.ForeignKey(
@@ -262,16 +274,60 @@ class CTOClaimLine(models.Model):
     multiplier_applied = models.DecimalField(max_digits=4, decimal_places=2)
     credited_hours = models.DecimalField(max_digits=6, decimal_places=2)
     credited_days = models.DecimalField(max_digits=6, decimal_places=2)
-    state = models.CharField(max_length=10, choices=STATE_CHOICES, default=PENDING)
+    state = models.CharField(max_length=15, choices=STATE_CHOICES, default=PENDING)
     effective_date = models.DateField(null=True, blank=True)
     year_earned = models.PositiveSmallIntegerField(null=True, blank=True)
     reason = models.TextField(blank=True, help_text="Opening lines only: required reason / paper-record reference.")
+    use_deadline = models.DateField(
+        null=True, blank=True,
+        help_text="Last date this credit can be used on: Dec 15 of the year earned (Dec 15 of the next "
+        "year if it took effect after Dec 15). Moves forward one year each time it carries over.",
+    )
+    closed_days = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True,
+        help_text="Days forfeited or lapsed when the line was closed.",
+    )
+    closed_on = models.DateField(null=True, blank=True)
 
     class Meta:
         ordering = ["work_date"]
 
     def __str__(self):
         return f"{self.claim.employee} — {self.work_date}: {self.hours_worked}h -> {self.credited_days} day(s)"
+
+
+class CTOCarryOverReason(models.Model):
+    """
+    A written reason for carrying an employee's unused CTO past Dec 15 of
+    `year` (CLAUDE.md §7.1). One per employee per year, covering all their
+    at-risk credit; submitted by a Supervisor (Unit Head in Nursing) or the
+    fallback submitter by end of Dec 16; decided by the COH. A rejection is
+    final for that employee and year.
+    """
+
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    STATUS_CHOICES = [(PENDING, "Awaiting COH decision"), (APPROVED, "Approved"), (REJECTED, "Rejected")]
+
+    employee = models.ForeignKey("employees.Employee", on_delete=models.CASCADE, related_name="cto_carryover_reasons")
+    year = models.PositiveSmallIntegerField()
+    reason = models.TextField()
+    submitted_by = models.ForeignKey("employees.Employee", on_delete=models.PROTECT, related_name="+")
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=PENDING)
+    decided_by = models.ForeignKey(
+        "employees.Employee", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decision_note = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-year", "employee"]
+        constraints = [models.UniqueConstraint(fields=["employee", "year"], name="one_carryover_reason_per_year")]
+
+    def __str__(self):
+        return f"CTO carry-over reason {self.year} — {self.employee} ({self.get_status_display()})"
 
 
 class CTOClaimAction(models.Model):

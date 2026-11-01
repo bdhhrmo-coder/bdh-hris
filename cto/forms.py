@@ -64,6 +64,15 @@ class OpeningLineForm(forms.Form):
     reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}), help_text="Cite the paper record.")
 
 
+class SeparationForm(forms.Form):
+    employee = forms.ModelChoiceField(queryset=Employee.objects.filter(is_active=True))
+    separation_status = forms.ChoiceField(
+        choices=[("", "— none (clear) —")] + Employee.SEPARATION_STATUS_CHOICES, required=False
+    )
+    last_day_of_service = forms.DateField(widget=DATE, required=False)
+    reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}))
+
+
 class CTOUsageApplicationForm(forms.ModelForm):
     class Meta:
         model = CTOUsageApplication

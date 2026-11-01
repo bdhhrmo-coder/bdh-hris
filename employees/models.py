@@ -121,6 +121,21 @@ class Employee(models.Model):
         "suspension) — the System Administrator enters the actual separation date on record.",
     )
 
+    # CTO separation status (CLAUDE.md §7.1, decided 2026-11-01). Set by HR
+    # (Processor or Administrator) and audit-logged in EmployeeEditHistory.
+    # Separate from separation_date above, which is the System
+    # Administrator's record-retention anchor.
+    SEPARATION_NOT_RENEWING = "NOT_RENEWING"
+    SEPARATION_RESIGNED = "RESIGNED"
+    SEPARATION_RETIRED = "RETIRED"
+    SEPARATION_STATUS_CHOICES = [
+        (SEPARATION_NOT_RENEWING, "Not renewing (COSP)"),
+        (SEPARATION_RESIGNED, "Resigned"),
+        (SEPARATION_RETIRED, "Retired (Regular)"),
+    ]
+    separation_status = models.CharField(max_length=15, choices=SEPARATION_STATUS_CHOICES, blank=True)
+    last_day_of_service = models.DateField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

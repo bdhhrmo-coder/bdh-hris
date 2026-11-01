@@ -26,6 +26,7 @@ from documents.requirements import requirement_status_for
 from notifications.services import notify
 
 from . import routing
+from .carryover import initial_use_deadline
 from .balances import compute_credit, effective_date_for, filing_deadline_for, violates_filing_deadline
 from .models import WEEKDAY, CTOClaim, CTOClaimLine, CTOMultiplierRate, OvertimeLine, OvertimeRequest, RoutedRecord
 from .permissions import is_cto_eligible
@@ -140,6 +141,7 @@ def credit_lines(claim):
         _preview(line, claim.employee)
         line.effective_date = effective_date_for(line.work_date, claim.approved_on)
         line.year_earned = line.effective_date.year
+        line.use_deadline = initial_use_deadline(line.effective_date, line.year_earned)
         line.state = CTOClaimLine.CREDITED
         line.save()
     total = sum((line.credited_days for line in claim.lines.all()), Decimal("0"))

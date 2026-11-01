@@ -206,16 +206,21 @@ Scheduler times below mean Manila time. Some older modules (leave,
 exchange) still use the server's own date, which is one more reason to
 keep the server on Manila time.
 
-**Jobs.** Register each with `schtasks` like the backup in §8, running
-`.venv\Scripts\python manage.py <command>` from `C:\BDH-HRIS`. **Stage 2
-adds these commands. None exist yet, so do not schedule anything until
-Stage 2 ships.**
+**Jobs.** Each runs through `scripts\run_manage.bat`, which loads `.env`
+(Task Scheduler does not) and appends output to
+`logs\scheduled-jobs.log`. Register them once, from an elevated prompt:
 
-| Job | When | What it does |
-|---|---|---|
-| Dec 17 CTO forfeiture | Once a year, **Dec 17, 00:30** | Forfeits, credit line by credit line, CTO from work done on or before Nov 30 that is still unused and has no carry-over reason submitted. Lines with a submitted reason stay pending until the COH decides. Credits that carry over without a reason (work after Nov 30, or effective date after Dec 15) are left alone. |
-| Nightly separation lapse | Daily, **00:45** | For employees whose last day of service has passed: lapses their remaining CTO credit and any CTO claims still in the approval chain. |
-| Carry-over reminders | Daily, **07:00** | Does nothing except on the reminder dates in settings (default Dec 1, Dec 10, Dec 16). Sends Supervisors/Unit Heads and HR the list of employees with at-risk credit, and the COH the reasons still waiting on a decision. |
+```powershell
+schtasks /create /tn "BDH HRIS CTO year-end"          /tr "C:\BDH-HRIS\scripts\run_manage.bat cto_year_end"            /sc daily /st 00:30 /ru SYSTEM
+schtasks /create /tn "BDH HRIS CTO separation lapse"  /tr "C:\BDH-HRIS\scripts\run_manage.bat cto_separation_lapse"    /sc daily /st 00:45 /ru SYSTEM
+schtasks /create /tn "BDH HRIS CTO carry-over reminders" /tr "C:\BDH-HRIS\scripts\run_manage.bat cto_carryover_reminders" /sc daily /st 07:00 /ru SYSTEM
+```
+
+| Job | Command | When | What it does |
+|---|---|---|---|
+| CTO year-end | `cto_year_end` | **Daily, 00:30**; does nothing until Dec 17 each year | For credit whose Dec 15 use deadline has passed (and whose Dec 16 reason deadline has passed): carries it over if the COH approved a reason, holds it (not usable) while a reason waits on the COH, otherwise forfeits it and tells the employee. Also closes out credit whose deadline passed in an earlier year (e.g. a separating employee whose status was cleared after Dec 17). Skips separating employees. Running daily makes it self-heal if the server was off on Dec 17. |
+| Separation lapse | `cto_separation_lapse` | Daily, **00:45** | For employees whose last day of service has passed: lapses their remaining CTO credit and any CTO claim still in the approval chain. Safe to run again. |
+| Carry-over reminders | `cto_carryover_reminders` | Daily, **07:00** | Does nothing except on the dates in `CTO_CARRYOVER_REMINDER_DATES` (default Dec 1, Dec 10, Dec 16). On those days: Supervisors/Unit Heads (or fallback submitters) and HR get the list of employees with at-risk CTO and no reason; the COH gets the count of reasons waiting for a decision. |
 
 **Do not rename the Nursing Service Section.** The OT and CTO claim
 routes find Nursing staff (Unit Head, then Chief Nurse) by the section's

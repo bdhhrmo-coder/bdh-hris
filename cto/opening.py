@@ -28,6 +28,7 @@ from accounts.models import RoleAssignment
 from employees.models import Employee
 from leave.permissions import employees_with_role
 
+from .carryover import initial_use_deadline
 from .models import WEEKDAY, CTOClaim, CTOClaimLine, RoutedRecord
 from .permissions import is_cto_eligible
 
@@ -91,6 +92,7 @@ def add_opening_line(actor, employee, days, date_earned, reason, user, today):
         claim=record, work_date=date_earned, hours_worked=Decimal("0"), day_type=WEEKDAY,
         shift_hours_used=employee.shift_hours, multiplier_applied=Decimal("0"), credited_hours=Decimal("0"),
         credited_days=days, state=CTOClaimLine.CREDITED, effective_date=today, year_earned=date_earned.year,
+        use_deadline=initial_use_deadline(today, date_earned.year),
         reason=reason.strip(),
     )
     record.actions.create(

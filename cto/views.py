@@ -16,7 +16,6 @@ from .balances import (
     filing_deadline_for,
     forms_illegal_consecutive_run,
     plan_allocation,
-    violates_usage_cutoff,
 )
 from .claims import (
     add_line,
@@ -33,12 +32,14 @@ from .forms import (
     ExceptionClaimForm,
     ManualClaimLineForm,
     OpeningLineForm,
+    SeparationForm,
     OTClaimLineForm,
     OvertimeLineFormSet,
     OvertimeRequestForm,
 )
 from .models import (
     DAY_TYPE_CHOICES,
+    CTOCarryOverReason,
     CTOClaim,
     CTOClaimLine,
     CTOCreditAllocation,
@@ -50,6 +51,8 @@ from .models import (
 from .notifications import notify_status_change
 from .opening import add_opening_line, can_enter_opening, entry_is_open, opening_entry_actors, void_opening_line
 from .overtime import file_ot, filing_capacities
+from . import carryover
+from .separation import can_set_separation, is_separating, set_separation
 from .permissions import (
     get_acting_employee,
     is_administrative_officer,
@@ -346,6 +349,75 @@ def opening_balances(request):
     })
 
 
+# --- Year-end carry-over and separation (Stage 2) -------------------------
+
+@login_required
+def carry_over(request):
+    actor = _employee_or_403(request)
+    today = timezone.localdate()
+    year = today.year
+    is_coh = is_chief_of_hospital(actor)
+    if request.method == "POST":
+        try:
+            if request.POST.get("action") == "submit":
+                employee = get_object_or_404(Employee, pk=request.POST.get("employee"))
+                carryover.submit_reason(actor, employee, year, request.POST.get("reason", ""), today)
+                messages.success(request, f"Reason submitted for {employee}.")
+            elif request.POST.get("action") in ("approve", "reject"):
+                record = get_object_or_404(CTOCarryOverReason, pk=request.POST.get("reason_id"))
+                carryover.decide_reason(actor, record, request.POST["action"] == "approve",
+                                        request.POST.get("note", ""), today)
+                messages.success(request, "Decision recorded.")
+            else:
+                raise PermissionDenied("Unknown action.")
+        except ValidationError as exc:
+            _show_errors(request, exc)
+        return redirect("cto:carry_over")
+
+    reasons = {r.employee_id: r for r in CTOCarryOverReason.objects.filter(year=year).select_related("submitted_by")}
+    rows = []
+    for employee in carryover.at_risk_employees(year):
+        lines = carryover.at_risk_lines(employee, year)
+        rows.append({
+            "employee": employee,
+            "days": sum((l.remaining for l in lines), 0),
+            "reason": reasons.get(employee.pk),
+            "can_submit": actor in carryover.reason_submitters(employee) and employee.pk not in reasons,
+        })
+    sees_all = is_hr(actor) or is_administrative_officer(actor) or is_coh
+    if not sees_all:
+        rows = [r for r in rows if r["can_submit"] or (r["reason"] and r["reason"].submitted_by_id == actor.pk)]
+    return render(request, "cto/carry_over.html", {
+        "year": year,
+        "rows": rows,
+        "pending": CTOCarryOverReason.objects.filter(status=CTOCarryOverReason.PENDING).select_related(
+            "employee", "submitted_by") if is_coh else [],
+        "reason_deadline": carryover.reason_deadline(year),
+        "submission_open": today <= carryover.reason_deadline(year),
+    })
+
+
+@login_required
+def separation(request):
+    actor = _employee_or_403(request)
+    if not can_set_separation(actor):
+        raise PermissionDenied("Only HR can set a separation status.")
+    form = SeparationForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        try:
+            set_separation(actor, form.cleaned_data["employee"], form.cleaned_data["separation_status"],
+                           form.cleaned_data["last_day_of_service"], form.cleaned_data["reason"], request.user)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+        else:
+            messages.success(request, "Separation status saved.")
+            return redirect("cto:separation")
+    return render(request, "cto/separation.html", {
+        "form": form,
+        "separating": Employee.objects.exclude(separation_status="").order_by("last_day_of_service"),
+    })
+
+
 # --- CTO usage -----------------------------------------------------------
 
 @login_required
@@ -379,16 +451,19 @@ def cto_apply(request):
                 # Lock the employee row so two applications filed at once can't
                 # both pass the balance/cap checks and hold the same credit.
                 Employee.objects.select_for_update().get(pk=employee.pk)
+                employee.refresh_from_db()  # separation status as of now
+                separating = is_separating(employee)
                 plan = plan_allocation(employee, days, today, end)
-                if violates_usage_cutoff(end):
-                    cutoff = settings.CTO_USAGE_CUTOFF_MONTH_DAY
-                    form.add_error("end_date", f"CTO usage cannot extend past {cutoff[0]}/{cutoff[1]} of the year.")
-                elif exceeds_monthly_cap(employee, start, days):
+                if separating and end > employee.last_day_of_service:
+                    form.add_error("end_date", f"CTO can only be used up to your last day of service "
+                                               f"({employee.last_day_of_service:%B %d, %Y}).")
+                elif not separating and exceeds_monthly_cap(employee, start, days):
                     form.add_error(None, "This would exceed the 5-CTO-day-per-month usage cap.")
-                elif forms_illegal_consecutive_run(employee, start, end):
+                elif not separating and forms_illegal_consecutive_run(employee, start, end):
                     form.add_error(None, "CTO cannot be taken for 3 or more consecutive days.")
                 elif plan is None:
-                    form.add_error(None, "Insufficient CTO balance for these dates.")
+                    form.add_error(None, "Not enough CTO credit can be used on these dates. Credit counts from its "
+                                         "effective date and must be used by its use deadline (normally Dec 15).")
                 else:
                     application = form.save(commit=False)
                     application.employee = employee
@@ -427,6 +502,7 @@ def cto_queue(request):
         "can_file_ot": bool(filing_capacities(employee)),
         "can_file_exception": employee is not None and employee.is_hr_administrator(),
         "can_enter_opening": can_enter_opening(employee),
+        "can_set_separation": can_set_separation(employee),
     })
 
 

@@ -12,8 +12,11 @@ Rules: CLAUDE.md §7.1 (decided 2026-11-01, pending approved HR memo).
     balance counts only credit lines whose effective date has arrived.
   - Filing deadline for a line = Nov 30 (settings) of the year containing
     the 1st of the month after its workday.
-  - Use draws from the earliest effective date first. Days are held
-    against specific lines from filing (CTOCreditAllocation).
+  - Use draws from the soonest use deadline, then earliest effective date,
+    first. Days are held against specific lines from filing
+    (CTOCreditAllocation). A line can only be used on dates up to its
+    use_deadline (Dec 15 of the year earned, moved forward by carry-over —
+    see cto/carryover.py); separating employees are exempt.
   - The "max 5 days/month, no 3+ consecutive days" limits are USAGE caps,
     and "no 3+ consecutive" also looks at adjacent applications.
 """
@@ -81,19 +84,22 @@ def _remaining_days(line):
 
 
 def usable_lines(employee, as_of_date, usage_date=None):
-    """Credited lines of this employee whose effective date has arrived by
-    as_of_date, with days left, oldest effective date first. With
-    usage_date, only lines whose Dec 15 use deadline (of the year earned)
-    is on or after usage_date. Each line gets a .remaining attribute."""
+    """Credited lines of this employee with days left, soonest use deadline
+    first, then oldest effective date (so carried-over credit goes first).
+    Normally only lines whose effective date has arrived by as_of_date and,
+    with usage_date, whose use_deadline is on or after it. For a separating
+    employee both limits are waived (CLAUDE.md §7.1); the caller limits use
+    to the last day of service. Each line gets a .remaining attribute."""
     from .models import CTOClaimLine
+    from .separation import is_separating
 
-    lines = CTOClaimLine.objects.filter(
-        claim__employee=employee, state=CTOClaimLine.CREDITED, effective_date__lte=as_of_date,
-    ).order_by("effective_date", "id")
+    lines = CTOClaimLine.objects.filter(claim__employee=employee, state=CTOClaimLine.CREDITED)
+    if not is_separating(employee):
+        lines = lines.filter(effective_date__lte=as_of_date)
+        if usage_date is not None:
+            lines = lines.filter(use_deadline__gte=usage_date)
     result = []
-    for line in lines:
-        if usage_date is not None and usage_date > date(line.year_earned, *settings.CTO_USAGE_CUTOFF_MONTH_DAY):
-            continue
+    for line in lines.order_by("use_deadline", "effective_date", "id"):
         line.remaining = _remaining_days(line)
         if line.remaining > 0:
             result.append(line)
@@ -187,9 +193,3 @@ def forms_illegal_consecutive_run(employee, start_date, end_date, exclude_applic
         else:
             run = 1
     return False
-
-
-def violates_usage_cutoff(end_date):
-    """True if end_date falls after December 15 of its own year."""
-    cutoff = date(end_date.year, *settings.CTO_USAGE_CUTOFF_MONTH_DAY)
-    return end_date > cutoff

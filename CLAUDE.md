@@ -219,7 +219,7 @@ Decided by the project owner in a 2026-11-01 design session; these **replace** t
 - Reminders to Supervisors and HR (at-risk list) and to the COH (undecided reasons); dates in settings (default Dec 1, Dec 10, morning of Dec 16). The employee is notified of forfeiture, of a reason submitted for them, and of the COH decision.
 
 **Separating employees**
-- HR (Processor or Administrator) sets a separation status (COSP: not renewing / resigned; Regular: resigned / retired) and last day of service; audit-logged.
+- HR (Processor or Administrator) sets a separation status (COSP: not renewing / resigned; Regular: resigned / retired) and last day of service; audit-logged. Never for themselves (added 2026-11-01 after a security review: the status waives their own CTO limits) — another HR Processor or Administrator does it.
 - Waived: effective-date wait, Dec 15 use deadline, 5-day monthly limit, 3-consecutive-day limit. The Supervisor still approves CTO dates.
 - Their pending claims are flagged to approvers and HR. After the last day of service, remaining credit lapses (nightly job) and claims still in the chain lapse with no credit.
 - Clearing the status restores normal rules; CTO already used stays used.
@@ -232,10 +232,16 @@ Decided by the project owner in a 2026-11-01 design session; these **replace** t
 - `CTO_OPENING_BALANCE_DATE` (default Nov 30, 2026) only locks entry. Up to and including that date, a wrong line is voided with a typed reason and re-entered — nothing is edited in place. A line with CTO days already held or used against it can't be voided. After the lock, corrections go through an exception claim (AO, then COH).
 - Implementation: lines are `CTOClaimLine`s on the employee's single opening record (`CTOClaim.is_opening`, one per employee, never routed). See `cto/opening.py`.
 
+**How Stage 2 implements this (2026-11-01)**
+- Every credited line has a `use_deadline`: Dec 15 of its year earned, or Dec 15 of the next year if it took effect after Dec 15. CTO can only be used on dates up to a line's deadline (this replaced the blanket "no use after Dec 15" check). An approved carry-over moves it forward one year.
+- `cto_year_end` runs **daily** and does nothing new until Dec 17. It handles every credited line whose deadline and reason deadline (Dec 16) have passed: approved reason → carry over; pending → held, not usable; rejected or none → forfeited.
+- `cto_separation_lapse` runs nightly. `cto_carryover_reminders` runs daily and acts only on `CTO_CARRYOVER_REMINDER_DATES`. Logic is in `cto/carryover.py` and `cto/separation.py`.
+- Separation status and last day of service are `Employee.separation_status` / `last_day_of_service`. They are separate from `separation_date`, which is the System Administrator's record-retention date.
+
 **Open questions (not built — ask the project owner)**
 - **Reductions after the opening-balance lock:** an exception claim can only add credit. How BDH wants a wrong opening line reduced after `CTO_OPENING_BALANCE_DATE` is undecided (deferred 2026-11-01). Until then, only voiding before the lock reduces credit.
 
-**Configuration:** `CTO_FILING_DEADLINE_MONTH_DAY`, `CTO_USAGE_CUTOFF_MONTH_DAY`, `CTO_OPENING_BALANCE_DATE`, `NURSING_SECTION_NAME` and reminder dates in settings; multipliers in the `CTOMultiplierRate` table. If `NURSING_SECTION_NAME` matches no section, OT filing by a Supervisor and claim submission stop with an error asking an HR Administrator to fix it — the Nursing steps are never silently skipped.
+**Configuration:** `CTO_FILING_DEADLINE_MONTH_DAY`, `CTO_USAGE_CUTOFF_MONTH_DAY`, `CTO_CARRYOVER_REASON_DEADLINE_MONTH_DAY`, `CTO_CARRYOVER_REMINDER_DATES`, `CTO_OPENING_BALANCE_DATE`, `NURSING_SECTION_NAME` and reminder dates in settings; multipliers in the `CTOMultiplierRate` table. If `NURSING_SECTION_NAME` matches no section, OT filing by a Supervisor and claim submission stop with an error asking an HR Administrator to fix it — the Nursing steps are never silently skipped.
 
 ---
 

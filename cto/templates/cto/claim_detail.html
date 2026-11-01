@@ -7,7 +7,7 @@
 <div class="card">
   <table>
     <tr><th>Status</th><td>{{ claim.get_status_display }}{% if step_label %} — waiting for {{ step_label }}{% endif %}</td></tr>
-    <tr><th>Employee</th><td>{{ claim.employee.full_name }}</td></tr>
+    <tr><th>Employee</th><td>{{ claim.employee.full_name }}{% if claim.employee.separation_status %} <span class="badge badge-pending">Separating — {{ claim.employee.get_separation_status_display }}, last day {{ claim.employee.last_day_of_service }}. Unapproved claims lapse after that day.</span>{% endif %}</td></tr>
     <tr><th>Type</th><td>{{ claim.get_duty_type_display }}</td></tr>
     {% if claim.is_exception %}<tr><th>Exception reason</th><td>{{ claim.exception_reason }}</td></tr>{% endif %}
     {% if claim.first_filed_on %}<tr><th>First filed</th><td>{{ claim.first_filed_on }}</td></tr>{% endif %}

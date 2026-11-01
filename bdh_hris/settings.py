@@ -80,7 +80,10 @@ RECORD_RETENTION_YEARS = int(os.environ.get("BDH_HRIS_RECORD_RETENTION_YEARS", "
 # confirmed 2026-09-28). The OT-to-CTO multipliers are configured
 # separately, in the CTOMultiplierRate table.
 CTO_FILING_DEADLINE_MONTH_DAY = (11, 30)  # last day to file a CTO claim for that year's work
-CTO_USAGE_CUTOFF_MONTH_DAY = (12, 15)  # CTO usage dates cannot extend past this
+CTO_USAGE_CUTOFF_MONTH_DAY = (12, 15)  # each credit's use deadline: Dec 15 of its year (moves on carry-over)
+CTO_CARRYOVER_REASON_DEADLINE_MONTH_DAY = (12, 16)  # last day a carry-over reason can be submitted
+# Days the carry-over reminder job (cto_carryover_reminders) sends its lists.
+CTO_CARRYOVER_REMINDER_DATES = [(12, 1), (12, 10), (12, 16)]
 # OT/CTO routing (cto/routing.py): employees of this section route through
 # Unit Head -> Chief Nurse. Must match orgstructure.Section.name.
 NURSING_SECTION_NAME = "Nursing Service Section"

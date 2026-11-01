@@ -47,6 +47,8 @@ def line_errors(filer, lines, ot=None):
             errors.append("You cannot add yourself to your own OT request.")
         if employee.has_role(RoleAssignment.CHIEF_OF_HOSPITAL):
             errors.append(f"{employee}: the Chief of Hospital cannot be on an OT line (CTO not applicable).")
+        if employee.separation_status and employee.last_day_of_service and work_date > employee.last_day_of_service:
+            errors.append(f"{label}: after their last day of service ({employee.last_day_of_service}).")
         if (employee.pk, work_date) in seen:
             errors.append(f"{label} appears twice.")
         seen.add((employee.pk, work_date))

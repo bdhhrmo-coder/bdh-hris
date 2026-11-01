@@ -23,7 +23,6 @@ from .balances import (
     filing_deadline_for,
     forms_illegal_consecutive_run,
     violates_filing_deadline,
-    violates_usage_cutoff,
 )
 from .claims import add_line, correct_day_type, credit_lines, submit_claim
 from .models import (
@@ -317,16 +316,6 @@ class FilingDeadlineAndUsageCutoffTests(TestCase):
     @override_settings(CTO_FILING_DEADLINE_MONTH_DAY=(10, 31))
     def test_filing_deadline_comes_from_settings(self):
         self.assertTrue(violates_filing_deadline(date(2026, 6, 1), date(2026, 11, 1)))
-
-    @override_settings(CTO_USAGE_CUTOFF_MONTH_DAY=(12, 10))
-    def test_usage_cutoff_comes_from_settings(self):
-        self.assertTrue(violates_usage_cutoff(date(2026, 12, 11)))
-
-    def test_usage_ending_on_cutoff_is_allowed(self):
-        self.assertFalse(violates_usage_cutoff(date(2026, 12, 15)))
-
-    def test_usage_ending_after_cutoff_is_blocked(self):
-        self.assertTrue(violates_usage_cutoff(date(2026, 12, 16)))
 
 
 
@@ -1194,3 +1183,426 @@ class DryRunChecklistTests(TestCase):
             client.post(reverse("cto:cto_apply"), {"start_date": "2026-12-16", "end_date": "2026-12-16",
                                                    "number_of_days": "1"})
         self.assertFalse(CTOUsageApplication.objects.exists())
+
+
+# --- Stage 2: carry-over, year-end, reminders, separation -----------------
+
+def opening_credit(org, employee, days="2", earned=date(2026, 6, 1), entered=date(2026, 11, 10)):
+    from .opening import add_opening_line
+
+    actor = org.hr_admin if employee.pk != org.hr_admin.pk else org.ao
+    return add_opening_line(actor, employee, Decimal(days), earned, "paper card", actor.user, entered)
+
+
+def apply_cto(employee, start, end, days, today):
+    client = Client()
+    client.force_login(employee.user)
+    with on(today):
+        return client.post(reverse("cto:cto_apply"), {"start_date": start, "end_date": end, "number_of_days": days})
+
+
+class CarryOverReasonTests(TestCase):
+    def setUp(self):
+        from .carryover import reason_submitters, submit_reason
+
+        self.org = Org()
+        self.emp = self.org.lab_staff
+        self.line = opening_credit(self.org, self.emp)
+        self.submitters = reason_submitters
+        self.submit = submit_reason
+
+    def test_use_deadline_is_dec_15_of_year_earned(self):
+        self.assertEqual(self.line.use_deadline, date(2026, 12, 15))
+
+    def test_who_submits(self):
+        org = self.org
+        self.assertEqual(self.submitters(org.lab_staff), {org.lab_sup})
+        self.assertEqual(self.submitters(org.nurse), {org.er_head})            # Unit Head
+        self.assertEqual(self.submitters(org.er_head), {org.chief_nurse})      # no other Unit Head -> Chief Nurse
+        self.assertEqual(self.submitters(org.chief_nurse), {org.hr_admin})     # no one covers -> HR Administrator
+        self.assertEqual(self.submitters(org.hr_admin), {org.ao})              # HR Admin's own -> AO
+        self.assertEqual(self.submitters(org.ao), {org.hr_admin})              # AO's own -> HR Admin
+        for e in (org.lab_staff, org.nurse, org.er_head, org.chief_nurse, org.hr_admin, org.ao):
+            self.assertNotIn(e, self.submitters(e))
+
+    def test_submit_by_dec_16_only_and_once(self):
+        with self.assertRaises(ValidationError):  # not a submitter for this employee
+            self.submit(self.org.er_head, self.emp, 2026, "x", date(2026, 12, 5))
+        with self.assertRaises(ValidationError):  # too late
+            self.submit(self.org.lab_sup, self.emp, 2026, "x", date(2026, 12, 17))
+        with self.assertRaises(ValidationError):  # blank
+            self.submit(self.org.lab_sup, self.emp, 2026, " ", date(2026, 12, 5))
+        self.submit(self.org.lab_sup, self.emp, 2026, "Short-staffed in December", date(2026, 12, 16))
+        with self.assertRaises(ValidationError):  # one per employee per year
+            self.submit(self.org.lab_sup, self.emp, 2026, "again", date(2026, 12, 16))
+
+    def test_submitting_notifies_employee_and_coh(self):
+        self.submit(self.org.lab_sup, self.emp, 2026, "Short-staffed", date(2026, 12, 5))
+        self.assertTrue(Notification.objects.filter(recipient=self.emp, message__contains="carry").exists())
+        self.assertTrue(Notification.objects.filter(recipient=self.org.coh, message__contains="awaits your decision").exists())
+
+    def test_only_coh_decides(self):
+        from .carryover import decide_reason
+
+        record = self.submit(self.org.lab_sup, self.emp, 2026, "x", date(2026, 12, 5))
+        with self.assertRaises(ValidationError):
+            decide_reason(self.org.ao, record, True, "", date(2026, 12, 6))
+
+
+class YearEndTests(TestCase):
+    def setUp(self):
+        self.org = Org()
+        self.emp = self.org.lab_staff
+
+    def _year_end(self, today=date(2026, 12, 17)):
+        from .carryover import run_year_end
+
+        return run_year_end(today)
+
+    def _reason(self, today=date(2026, 12, 10)):
+        from .carryover import submit_reason
+
+        return submit_reason(self.org.lab_sup, self.emp, 2026, "Short-staffed", today)
+
+    def _decide(self, record, approve, today):
+        from .carryover import decide_reason
+
+        return decide_reason(self.org.coh, record, approve, "", today)
+
+    def test_does_nothing_before_dec_17(self):
+        line = opening_credit(self.org, self.emp)
+        self.assertEqual(self._year_end(date(2026, 12, 16)), {"carried": 0, "pending": 0, "forfeited": 0})
+        line.refresh_from_db()
+        self.assertEqual(line.state, CTOClaimLine.CREDITED)
+
+    def test_missed_dec_17_self_heals_on_a_later_day(self):
+        line = opening_credit(self.org, self.emp)
+        self._year_end(date(2027, 1, 5))
+        line.refresh_from_db()
+        self.assertEqual(line.state, CTOClaimLine.FORFEITED)
+
+    def test_stale_credit_after_separation_cleared_is_closed_out(self):
+        from .separation import set_separation
+
+        line = opening_credit(self.org, self.emp)
+        set_separation(self.org.hr, self.emp, Employee.SEPARATION_RESIGNED, date(2027, 3, 1), "memo", self.org.hr.user)
+        self._year_end()  # skipped while separating
+        line.refresh_from_db()
+        self.assertEqual(line.state, CTOClaimLine.CREDITED)
+        set_separation(self.org.hr, self.emp, "", None, "withdrew resignation", self.org.hr.user)
+        self.emp.refresh_from_db()
+        self._year_end(date(2027, 2, 1))  # 2026 deadline long past, no reason
+        line.refresh_from_db()
+        self.assertEqual(line.state, CTOClaimLine.FORFEITED)
+
+    def test_no_reason_by_dec_16_is_forfeited_on_dec_17_and_employee_told(self):
+        line = opening_credit(self.org, self.emp, days="2")
+        apply_cto(self.emp, "2026-12-01", "2026-12-01", "0.5", date(2026, 11, 20))  # 0.5 held
+        self.assertEqual(self._year_end()["forfeited"], 1)
+        line.refresh_from_db()
+        self.assertEqual(line.state, CTOClaimLine.FORFEITED)
+        self.assertEqual(line.closed_days, Decimal("1.50"))
+        self.assertTrue(Notification.objects.filter(recipient=self.emp, message__contains="forfeited").exists())
+        self.assertEqual(self._year_end()["forfeited"], 0)  # idempotent
+
+    def test_fully_used_credit_is_untouched(self):
+        line = opening_credit(self.org, self.emp, days="1")
+        apply_cto(self.emp, "2026-12-01", "2026-12-01", "1", date(2026, 11, 20))
+        self._year_end()
+        line.refresh_from_db()
+        self.assertEqual(line.state, CTOClaimLine.CREDITED)
+
+    def test_use_dated_by_dec_15_approved_after_counts_and_is_not_forfeited(self):
+        line = opening_credit(self.org, self.emp, days="1")
+        apply_cto(self.emp, "2026-12-14", "2026-12-14", "1", date(2026, 12, 10))
+        self._year_end()  # application still pending: its hold protects the day
+        line.refresh_from_db()
+        self.assertEqual(line.state, CTOClaimLine.CREDITED)
+
+    def test_pending_reason_holds_credit_until_coh_decides(self):
+        line = opening_credit(self.org, self.emp)
+        record = self._reason()
+        self.assertEqual(self._year_end()["pending"], 1)
+        line.refresh_from_db()
+        self.assertEqual(line.state, CTOClaimLine.CARRY_PENDING)
+        self.assertEqual(compute_available_cto_balance(self.emp, date(2026, 12, 18)), Decimal("0"))  # not usable
+        self._decide(record, True, date(2026, 12, 20))
+        line.refresh_from_db()
+        self.assertEqual((line.state, line.use_deadline), (CTOClaimLine.CREDITED, date(2027, 12, 15)))
+
+    def test_coh_rejection_after_dec_15_forfeits_at_once(self):
+        line = opening_credit(self.org, self.emp)
+        record = self._reason()
+        self._year_end()
+        self._decide(record, False, date(2026, 12, 20))
+        line.refresh_from_db()
+        self.assertEqual(line.state, CTOClaimLine.FORFEITED)
+        self.assertTrue(Notification.objects.filter(recipient=self.emp, message__contains="rejected").exists())
+        self.assertTrue(Notification.objects.filter(recipient=self.org.lab_sup, message__contains="rejected").exists())
+
+    def test_early_rejection_leaves_credit_usable_until_dec_15_then_forfeited(self):
+        from .carryover import submit_reason
+
+        line = opening_credit(self.org, self.emp)
+        record = self._reason(date(2026, 12, 5))
+        self._decide(record, False, date(2026, 12, 8))
+        line.refresh_from_db()
+        self.assertEqual(line.state, CTOClaimLine.CREDITED)
+        apply_cto(self.emp, "2026-12-14", "2026-12-14", "1", date(2026, 12, 9))
+        self.assertEqual(CTOUsageApplication.objects.count(), 1)
+        with self.assertRaises(ValidationError):  # rejection is final
+            submit_reason(self.org.lab_sup, self.emp, 2026, "please", date(2026, 12, 10))
+        self._year_end()
+        line.refresh_from_db()
+        self.assertEqual((line.state, line.closed_days), (CTOClaimLine.FORFEITED, Decimal("1.00")))
+
+    def test_approved_reason_carries_and_needs_a_new_reason_next_year(self):
+        from .carryover import run_year_end, submit_reason
+
+        line = opening_credit(self.org, self.emp)
+        self._decide(self._reason(), True, date(2026, 12, 12))
+        self.assertEqual(self._year_end()["carried"], 1)
+        line.refresh_from_db()
+        self.assertEqual(line.use_deadline, date(2027, 12, 15))
+        apply_cto(self.emp, "2027-01-11", "2027-01-11", "1", date(2027, 1, 4))  # usable next year
+        self.assertEqual(CTOUsageApplication.objects.count(), 1)
+        counts = run_year_end(date(2027, 12, 17))  # no 2027 reason
+        line.refresh_from_db()
+        self.assertEqual((counts["forfeited"], line.state), (1, CTOClaimLine.FORFEITED))
+
+    def test_credit_effective_after_dec_15_carries_over_without_a_reason(self):
+        ot = approved_ot(self.org, self.emp, date(2026, 10, 5), today=date(2026, 10, 1))
+        claim = filed_claim(self.org, self.emp, [(ot, "8", None, None)], date(2026, 11, 28))
+        with on(date(2026, 12, 20)):
+            approve_all(claim, on_approved=credit_lines)
+        line = claim.lines.get()
+        self.assertEqual(line.use_deadline, date(2027, 12, 15))
+        self._year_end(date(2026, 12, 21))
+        line.refresh_from_db()
+        self.assertEqual(line.state, CTOClaimLine.CREDITED)
+        apply_cto(self.emp, "2026-12-28", "2026-12-28", "1", date(2026, 12, 21))  # usable after Dec 15
+        self.assertEqual(CTOUsageApplication.objects.count(), 1)
+
+    def test_december_work_is_not_at_risk_this_year(self):
+        ot = approved_ot(self.org, self.emp, date(2026, 12, 2), today=date(2026, 12, 1))
+        claim = filed_claim(self.org, self.emp, [(ot, "8", None, None)], date(2026, 12, 3))
+        with on(date(2026, 12, 10)):
+            approve_all(claim, on_approved=credit_lines)
+        self._year_end()
+        line = claim.lines.get()
+        self.assertEqual((line.state, line.use_deadline), (CTOClaimLine.CREDITED, date(2027, 12, 15)))
+
+
+class ReminderTests(TestCase):
+    def setUp(self):
+        from .carryover import send_reminders
+
+        self.org = Org()
+        opening_credit(self.org, self.org.lab_staff)
+        opening_credit(self.org, self.org.nurse)
+        self.send = send_reminders
+
+    def test_only_on_configured_dates(self):
+        self.assertIsNone(self.send(date(2026, 12, 2)))
+        with override_settings(CTO_CARRYOVER_REMINDER_DATES=[(12, 2)]):
+            self.assertIsNotNone(self.send(date(2026, 12, 2)))
+
+    def test_recipients(self):
+        from .carryover import submit_reason
+
+        submit_reason(self.org.er_head, self.org.nurse, 2026, "x", date(2026, 12, 1))
+        Notification.objects.all().delete()
+        summary = self.send(date(2026, 12, 10))
+        self.assertEqual(summary["at_risk_without_reason"], 1)  # nurse already has a reason
+        self.assertTrue(Notification.objects.filter(recipient=self.org.lab_sup, message__contains=self.org.lab_staff.full_name).exists())
+        self.assertFalse(Notification.objects.filter(recipient=self.org.er_head).exists())
+        self.assertTrue(Notification.objects.filter(recipient=self.org.hr, message__contains="at-risk").exists())
+        self.assertTrue(Notification.objects.filter(recipient=self.org.coh, message__contains="1 reason").exists())
+
+    def test_command_runs(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        with on(date(2026, 12, 3)):
+            call_command("cto_carryover_reminders", stdout=out)
+        self.assertIn("Not a reminder date", out.getvalue())
+
+
+class SeparationTests(TestCase):
+    def setUp(self):
+        self.org = Org()
+        self.cosp = self.org.lab_staff
+        self.cosp.employment_status = Employee.EMPLOYMENT_STATUS_COSP
+        self.cosp.save()
+
+    def _set(self, status, last_day, actor=None, employee=None):
+        from .separation import set_separation
+
+        actor = actor or self.org.hr
+        return set_separation(actor, employee or self.cosp, status, last_day, "Memo 45", actor.user)
+
+    def test_hr_only_valid_combinations_and_audit_logged(self):
+        with self.assertRaises(ValidationError):
+            self._set(Employee.SEPARATION_NOT_RENEWING, date(2027, 1, 15), actor=self.org.lab_sup)
+        with self.assertRaises(ValidationError):  # COSP cannot "retire"
+            self._set(Employee.SEPARATION_RETIRED, date(2027, 1, 15))
+        with self.assertRaises(ValidationError):  # last day required
+            self._set(Employee.SEPARATION_NOT_RENEWING, None)
+        self._set(Employee.SEPARATION_NOT_RENEWING, date(2027, 1, 15))
+        history = set(self.cosp.edit_history.values_list("field_name", flat=True))
+        self.assertEqual(history, {"separation_status", "last_day_of_service"})
+        with self.assertRaises(ValidationError):  # Regular cannot be "not renewing"
+            self._set(Employee.SEPARATION_NOT_RENEWING, date(2027, 1, 15), employee=self.org.lab_staff2)
+
+    def test_hr_cannot_set_own_separation_status(self):
+        with self.assertRaises(ValidationError):
+            self._set(Employee.SEPARATION_RESIGNED, date(2027, 1, 15), actor=self.org.hr, employee=self.org.hr)
+        self._set(Employee.SEPARATION_RESIGNED, date(2027, 1, 15), actor=self.org.hr_admin, employee=self.org.hr)
+
+    def test_cosp_uses_credit_past_dec_15_without_limits_then_it_lapses(self):
+        from .carryover import run_year_end
+        from .separation import run_separation_lapse
+
+        line = opening_credit(self.org, self.cosp, days="8")
+        ot = approved_ot(self.org, self.cosp, date(2026, 11, 20), today=date(2026, 11, 20))
+        claim = filed_claim(self.org, self.cosp, [(ot, "8", None, None)], date(2026, 11, 20))
+        with on(date(2026, 11, 25)):
+            approve_all(claim, on_approved=credit_lines)  # effective Dec 1
+        self._set(Employee.SEPARATION_NOT_RENEWING, date(2026, 12, 31))
+        # Effective-date wait waived: Dec 1 credit usable on Nov 26.
+        self.assertEqual(compute_available_cto_balance(self.cosp, date(2026, 11, 26)), Decimal("9.00"))
+        # Past Dec 15, 3 consecutive days, more than 5 in the month: all allowed.
+        apply_cto(self.cosp, "2026-12-21", "2026-12-23", "3", date(2026, 12, 1))
+        apply_cto(self.cosp, "2026-12-28", "2026-12-30", "3", date(2026, 12, 1))
+        self.assertEqual(CTOUsageApplication.objects.count(), 2)
+        apply_cto(self.cosp, "2027-01-04", "2027-01-04", "1", date(2026, 12, 1))  # after last day
+        self.assertEqual(CTOUsageApplication.objects.count(), 2)
+        run_year_end(date(2026, 12, 17))  # deadline waived: nothing forfeited
+        line.refresh_from_db()
+        self.assertEqual(line.state, CTOClaimLine.CREDITED)
+        self.assertEqual(run_separation_lapse(date(2026, 12, 31)), (0, 0))  # last day itself: not yet
+        lines, _ = run_separation_lapse(date(2027, 1, 1))
+        self.assertGreaterEqual(lines, 1)
+        self.assertEqual(compute_available_cto_balance(self.cosp, date(2027, 1, 1)), Decimal("0"))
+        self.assertTrue(Notification.objects.filter(recipient=self.cosp, message__contains="lapsed").exists())
+
+    def test_pending_claim_lapses_after_last_day(self):
+        from .separation import run_separation_lapse
+
+        ot = approved_ot(self.org, self.cosp, date(2026, 10, 5), today=date(2026, 10, 1))
+        claim = filed_claim(self.org, self.cosp, [(ot, "8", None, None)], date(2026, 10, 6))
+        self._set(Employee.SEPARATION_RESIGNED, date(2026, 10, 31))
+        run_separation_lapse(date(2026, 11, 1))
+        claim.refresh_from_db()
+        self.assertEqual(claim.status, RoutedRecord.LAPSED)
+        self.assertTrue(claim.actions.filter(action="lapse").exists())
+
+    def test_ot_line_after_last_day_is_blocked(self):
+        self._set(Employee.SEPARATION_RESIGNED, date(2026, 11, 15))
+        with self.assertRaises(ValidationError):
+            file_ot(self.org.hr, "HR", "x", "", [ot_line(self.cosp, date(2026, 11, 16))], self.org.hr.user,
+                    date(2026, 11, 1))
+
+    def test_clearing_restores_normal_rules(self):
+        ot = approved_ot(self.org, self.cosp, date(2026, 11, 20), today=date(2026, 11, 20))
+        claim = filed_claim(self.org, self.cosp, [(ot, "8", None, None)], date(2026, 11, 20))
+        with on(date(2026, 11, 25)):
+            approve_all(claim, on_approved=credit_lines)
+        self._set(Employee.SEPARATION_NOT_RENEWING, date(2026, 12, 31))
+        self.assertEqual(compute_available_cto_balance(self.cosp, date(2026, 11, 26)), Decimal("1.00"))
+        self._set("", None)
+        self.cosp.refresh_from_db()
+        self.assertEqual(compute_available_cto_balance(self.cosp, date(2026, 11, 26)), Decimal("0"))  # waits for Dec 1
+        apply_cto(self.cosp, "2026-12-21", "2026-12-21", "1", date(2026, 12, 1))  # Dec 15 deadline back
+        self.assertFalse(CTOUsageApplication.objects.exists())
+
+    def test_separating_employees_claims_are_flagged_in_queue(self):
+        ot = approved_ot(self.org, self.cosp, date(2026, 10, 5), today=date(2026, 10, 1))
+        filed_claim(self.org, self.cosp, [(ot, "8", None, None)], date(2026, 10, 6))
+        self._set(Employee.SEPARATION_NOT_RENEWING, date(2026, 12, 31))
+        client = Client()
+        client.force_login(self.org.lab_sup.user)
+        self.assertContains(client.get(reverse("cto:cto_queue")), "Separating")
+
+
+class Stage2PageTests(TestCase):
+    def setUp(self):
+        self.org = Org()
+        opening_credit(self.org, self.org.lab_staff)
+        self.client = Client()
+
+    def test_carry_over_page_submit_and_decide(self):
+        self.client.force_login(self.org.lab_sup.user)
+        with on(date(2026, 12, 5)):
+            self.assertContains(self.client.get(reverse("cto:carry_over")), self.org.lab_staff.full_name)
+            self.client.post(reverse("cto:carry_over"), {"action": "submit", "employee": self.org.lab_staff.pk,
+                                                         "reason": "Short-staffed"})
+        from .models import CTOCarryOverReason
+
+        record = CTOCarryOverReason.objects.get()
+        self.client.force_login(self.org.coh.user)
+        with on(date(2026, 12, 6)):
+            self.assertContains(self.client.get(reverse("cto:carry_over")), "awaiting your decision")
+            self.client.post(reverse("cto:carry_over"), {"action": "approve", "reason_id": record.pk})
+        record.refresh_from_db()
+        self.assertEqual(record.status, CTOCarryOverReason.APPROVED)
+
+    def test_employee_sees_no_one_elses_rows(self):
+        self.client.force_login(self.org.lab_staff2.user)
+        with on(date(2026, 12, 5)):
+            self.assertNotContains(self.client.get(reverse("cto:carry_over")), self.org.lab_staff.full_name)
+
+    def test_separation_page_hr_only(self):
+        self.client.force_login(self.org.hr.user)
+        self.assertEqual(self.client.get(reverse("cto:separation")).status_code, 200)
+        self.client.force_login(self.org.lab_sup.user)
+        self.assertEqual(self.client.get(reverse("cto:separation")).status_code, 403)
+
+    def test_commands(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        with on(date(2026, 12, 17)):
+            call_command("cto_year_end", stdout=out)
+            call_command("cto_separation_lapse", stdout=out)
+        self.assertIn("1 forfeited", out.getvalue())
+
+
+class UseDeadlineBackfillTests(TestCase):
+    def setUp(self):
+        self.org = Org()
+
+    def test_backfill_fills_missing_deadlines(self):
+        from .carryover import fill_missing_use_deadlines
+
+        normal = opening_credit(self.org, self.org.lab_staff)
+        ot = approved_ot(self.org, self.org.lab_staff2, date(2026, 10, 5), today=date(2026, 10, 1))
+        claim = filed_claim(self.org, self.org.lab_staff2, [(ot, "8", None, None)], date(2026, 11, 28))
+        with on(date(2026, 12, 20)):
+            approve_all(claim, on_approved=credit_lines)
+        late = claim.lines.get()
+        CTOClaimLine.objects.update(use_deadline=None)  # as on a dry-run-1 database
+        self.assertEqual(fill_missing_use_deadlines(CTOClaimLine), 2)
+        normal.refresh_from_db()
+        late.refresh_from_db()
+        self.assertEqual(normal.use_deadline, date(2026, 12, 15))
+        self.assertEqual(late.use_deadline, date(2027, 12, 15))  # took effect after Dec 15
+        self.assertEqual(fill_missing_use_deadlines(CTOClaimLine), 0)
+
+    def test_no_credited_line_is_left_without_a_use_deadline(self):
+        from .opening import void_opening_line
+
+        opening_credit(self.org, self.org.lab_staff)
+        void_opening_line(self.org.hr_admin, opening_credit(self.org, self.org.lab_staff, days="1"), "dup",
+                          self.org.hr_admin.user, date(2026, 11, 10))
+        for emp, work in ((self.org.lab_staff2, date(2026, 10, 5)), (self.org.nurse, date(2026, 12, 2))):
+            ot = approved_ot(self.org, emp, work, today=work)
+            claim = filed_claim(self.org, emp, [(ot, "8", None, None)], work)
+            with on(date(2026, 12, 20)):
+                approve_all(claim, on_approved=credit_lines)
+        self.assertTrue(CTOClaimLine.objects.filter(state=CTOClaimLine.CREDITED).exists())
+        self.assertFalse(CTOClaimLine.objects.filter(state=CTOClaimLine.CREDITED, use_deadline__isnull=True).exists())
