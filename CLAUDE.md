@@ -154,12 +154,12 @@ Implemented as a **custom `Role` model tied to Employee** (not Django's built-in
 | **Official Business** | Employee → Supervisor → HR → AO → COH |
 | **Official Time** | Employee → HR → AO → COH (no Supervisor step) |
 | **Travel** | Employee → Supervisor → AO → COH (no HR step) |
-| **Authorized OT/restday/holiday work** (pending approved HR memo — see §7.1) | Filed by Supervisor/HR/AO, not the employee. Supervisor-filed: HR → AO → COH (Nursing: Unit Head → Chief Nurse → HR → AO → COH). HR-filed: AO → COH. AO-filed: COH |
+| **Authorized OT/restday/holiday work** (pending approved HR memo — see §7.1) | Filed by Supervisor/HR/AO as a group request, not the employee. Supervisor-filed: HR → AO → COH. Unit Head-filed (section head above): section head (Chief Nurse) → HR → AO → COH. HR-filed: AO → COH. AO-filed: COH |
 
 **Attendance Correction, multiple dates (settled 2026-10-07):** one request holds 1–10 dates, each with its own times and reason. All dates in one formal request must belong to the same validator (ICTU-type and HR-type reasons are filed separately). Approvers act on the whole request only (validate/approve, return, reject); **a return needs a remark**. The filer edits and resubmits the same request, which **starts again from the first step**; the return history is kept and printed on F10.
 
 **Group (batch) filing — Travel, Official Business, OT / rest-day / holiday work (settled 2026-10-07):**
-- Who files: **Supervisor** (own sections/units incl. OIC; all types), **HR Processor** (any employee; **Travel and Official Business only**), **HR Administrator** (any employee; all types). The filer cannot include themselves.
+- Who files: **Supervisor** (own sections/units incl. OIC for Travel/OB; anyone for OT), **HR Processor** (any employee; all types — OT added 2026-11-02, D5), **HR Administrator** (any employee; all types), **AO** (any employee; OT only, D5). The filer cannot include themselves or the COH. OT details: §7.1.
 - One batch; each employee-date is its own OfficialRequest line. Whole-batch approve/return (remark required); filer edits and resubmits, starting the route again.
 - Routes (filer's step counts as done): OT/rest/holiday by Supervisor → HR → AO → COH; by HR Admin → AO → COH. Travel by Supervisor or HR → AO → COH. **Official Business by Supervisor → HR → AO → COH; by HR → Supervisor → AO → COH** (the Supervisor still endorses).
 - The filer can never act on their own batch at a later step, even with other roles or OIC. Approved OT creates no CTO (§7.1 unchanged). A regular employee filing their own request keeps the normal route.
@@ -206,31 +206,36 @@ Applies to both regular and COSP employees. Based on BDH's approved (Dec 16, 202
 - **Monthly cap:** max 5 CTO days/month, no 3+ consecutive days — except for separating employees (§7.1), who are exempt from both limits
 - **Filing, forfeiture and deadlines:** see §7.1, which replaces the earlier rules here. CTO filing deadline is Nov 30; CTO usage dates cannot extend past Dec 15 (except via §7.1 carry-over and separation rules).
 
-### 7.1 OT and CTO claim rules — PENDING APPROVED HR MEMO (decided 2026-11-01)
+### 7.1 OT and CTO claim rules — PENDING APPROVED HR MEMO (decided 2026-11-01, ported onto main 2026-11-02)
 
-Decided by the project owner in a 2026-11-01 design session; these **replace** the 2026-09-28 decisions (HR-filed claims, 1st-of-next-month filing window, COH exception for Nov/Dec work). They are pending an approved HR memo. Do not re-ask or change them without explicit confirmation.
+Decided by the project owner in a 2026-11-01 design session; these **replace** the 2026-09-28 decisions (HR-filed claims, 1st-of-next-month filing window, COH exception for Nov/Dec work). On 2026-11-02 the owner decided how they run on main (decisions D1-D7 and 8a-8i, marked below). They are pending an approved HR memo. Do not re-ask or change them without explicit confirmation.
 
 **General**
 - OT never becomes pay. Approved OT does not create CTO credit by itself. Unused CTO lapses and is never paid.
-- The COH can never be on an OT line (CTO not applicable).
+- CTO does not apply to the COH (Dec 16, 2025 policy). The COH is never on an OT group request. The COH files their **own** OT on the single-request form; HR records it ("Recorded (approved outside BDH)", like the COH's other requests); it never becomes a CTO claim or credit (D2, 8a; confirmed 2026-11-02). The COH has no CTO entry under My Requests.
 - Biometric attendance can inform HR review but never blocks an approval.
 
-**OT requests** (own model, not an `OfficialRequest` type)
-- Filed only by a Supervisor (Unit Head in Nursing), HR Processor, HR Administrator or AO — never by the employee. Past dates need a typed reason.
-- Batch: a header plus lines of one employee + one date each, with approved hours and day type (weekday / rest day / holiday) per line.
-- A filer may add anyone except the COH and themselves. Lines dated after an employee's last day of service are blocked. Each Supervisor/Unit Head covering the employee gets an in-app notice when the employee is put on someone else's OT line (information only).
-- If the filer adds someone who is on the batch's own approval route, warn and suggest a separate batch; do not block.
-- Routing: see §6.2. A batch is approved or returned as a whole. A return needs a typed remark, goes back to the filer, and the chain restarts.
-- Chief Nurse = the Supervisor whose role covers the whole Nursing Service Section; Unit Heads = Supervisors scoped to one Nursing unit. No new role.
+**OT requests** (main's group filing, `official_requests/batch.py`; the separate cto OT module was removed, D4)
+- An OT request is an `OfficialRequestBatch` of type OT / rest-day / holiday work; each employee-date is an `OfficialRequest` line. The day type comes from the batch's work kind, one per batch (8d). Older lines without a batch map the old flag: yes → rest day, no → weekday (8h).
+- Filed only by a Supervisor, HR Processor, HR Administrator or AO — never by the employee (D5). Employees have no OT choice on the single-request form (8a; the COH's own OT is the one exception, above).
+- Filing role, when someone holds several: AO, then HR Administrator, then HR Processor, then Supervisor — the first that may file the type (8b). The AO files OT only. A unit head with a section-level Supervisor above them files OT as "Unit Head" (D6).
+- A filer may add anyone except the COH and themselves. Past dates need a typed reason (`past_date_reason`). Lines dated after an employee's last day of service are blocked. Each Supervisor covering the employee gets an in-app notice, information only, when the employee is put on someone else's OT request (D5).
+- Duplicate guard: an employee-date already on a pending, returned or approved request can't be filed again (8e); the filer removes the line.
+- Routing (D6): Supervisor-filed HR → AO → COH; Unit Head-filed section head (Chief Nurse) → HR → AO → COH; HR-filed AO → COH; AO-filed COH. The batch is approved or returned as a whole. A return needs a typed remark, goes back to the filer, and the chain restarts.
+- **8i (2026-11-02):** when a Unit Head files an OT group request that includes the Chief Nurse, the Supervisor step goes to the AO (next level up; the Chief Nurse is on the request and never acts on it). If the AO is also on it, the COH takes the step (D1).
+- **Editing a returned group request (security rule, 2026-11-02):** only under the same filing role it was filed with (that role decides the route), and the employees allowed come from the roles held now. If the filer's roles have changed, they file a new group request.
+- The old "warn if the filer adds someone on the batch's own route" rule is dropped; the next-level-up rule below covers it.
 
-**Approver is the subject** (OT requests and CTO claims)
-- A person on the request/claim (even one line of a batch) cannot act on it. Another holder of the same role takes the step: Supervisor step → another Supervisor covering the employee's section/unit incl. OIC; Chief Nurse step → another Supervisor covering the whole Nursing Service Section; HR step → any HR Processor or HR Administrator; AO/COH → any other holder. If none exists, the step is skipped and the skip is audit-logged.
+**Who acts — next level up (D1; replaces "Approver is the subject")** (OT requests and CTO claims)
+- Same rules as every other request type (§6.2, `leave/permissions.py`): Supervisor step → the unit head (incl. an OIC), else the section-level Supervisor, else the AO, else the COH; the second Supervisor step (Chief Nurse) only where two-level endorsement applies (`needs_unit_step`); HR → any other HR Processor/Administrator; AO → the AO, or the COH when the AO is on the request; COH → never on their own.
+- Nobody on the request/claim (any line of a batch, the claimant, the filer of an exception claim) ever acts on it. Steps are **never skipped**: a step nobody can act on waits.
+- Chief Nurse = a Supervisor covering the whole section; unit heads = Supervisors scoped to a unit. Found by role scope, not by section name (8f: `NURSING_SECTION_NAME` removed). No new role.
 
 **CTO claims**
-- Filed by the employee any time after the workday. One claim may cover several of that employee's lines; it is approved or returned as a whole, but credit, effective date, filing deadline and year earned are tracked per line.
-- **OT claims:** lines come from any of the employee's approved OT lines; actual hours ≤ approved hours per line. Attachments: Allowed to Work form, DTR/logbook copy, OT Accomplishment Report.
+- Filed by the employee any time after the workday (My Requests → CTO → "+ New CTO claim"). One claim may cover several of that employee's lines; it is approved or returned as a whole, but credit, effective date, filing deadline and year earned are tracked per line. Document requirements attach to the claim (D7).
+- **OT claims:** lines come from the employee's **approved** one-day OT lines (D4; recorded lines never count, D2); actual hours ≤ approved hours per line. Attachments: Allowed to Work form, DTR/logbook copy, OT Accomplishment Report.
 - **Medical Transport claims:** no OT request; the employee enters date, hours and day type, and HR verifies. Attachments: Trip Ticket plus Certificate of Appearance or logbook copy. Always separate claims from OT claims; same routing as OT claims.
-- **Exception claims:** HR Administrator only (never for themselves), required reason, no OT request, routed AO → COH. They **skip the filing-deadline check** — the typed reason is the justification (decided 2026-11-01). The resulting credit still follows the carry-over rules by its work date. This is also the only way the COH can reinstate credit after a rejected carry-over reason.
+- **Exception claims:** HR Administrator (never for themselves); the AO only when no other HR Administrator exists (D3). Required reason, no OT request, routed AO → COH; the filer never acts on it. They **skip the filing-deadline check** — the typed reason is the justification (decided 2026-11-01). The resulting credit still follows the carry-over rules by its work date.
 - **24-hour cap:** no more than 24 hours per employee per date, counting OT and Medical Transport lines together.
 - **Filing deadline:** each line must be filed by Nov 30 of the year containing the 1st of the month after its workday (Nov work → Nov 30 same year; Dec work → Nov 30 next year). Judged on the claim's **first** filing date, so a returned claim does not expire while being corrected. A line already past its deadline cannot be added.
 - **Returns:** typed remark required; goes back to the employee; the chain restarts.
@@ -245,38 +250,42 @@ Decided by the project owner in a 2026-11-01 design session; these **replace** t
 - The CTO usage-application chain is unchanged.
 
 **Year-end carry-over**
-- Credit from **work done** on or before Nov 30 that is still unused after Dec 15 carries over only if a Supervisor/Unit Head covering the employee submits a written reason by end of Dec 16 and the COH approves. One reason per employee per year covers all their at-risk credits, goes straight to the COH, and may be submitted early. Pending credit cannot be used; COH rejection forfeits it at once.
+- Credit from **work done** on or before Nov 30 that is still unused after Dec 15 carries over only if the employee's next level up submits a written reason by end of Dec 16 and the COH approves. One reason per employee per year covers all their at-risk credits, goes straight to the COH, and may be submitted early. Pending credit cannot be used; COH rejection forfeits it at once.
 - Credit from work done after Nov 30, and any credit whose effective date is after Dec 15, carries over with no reason.
-- **Who submits the reason (decided 2026-11-01):** a Supervisor (Unit Head in Nursing) covering the employee. If none covers them: the Chief Nurse for Nursing staff; otherwise an HR Administrator. An HR Administrator's own credit is submitted by the AO; the AO's own credit by an HR Administrator. The submitter is never the employee, and the COH decides every reason.
+- **Who submits the reason (8g, 2026-11-02; replaces the 2026-11-01 rule):** the next level up (`endorsers_for`): the unit head, else the section-level Supervisor (Chief Nurse), else the AO — never the COH, who decides it. If nobody qualifies, an HR Administrator. An HR Administrator's own credit is submitted by the AO; the AO's own credit by an HR Administrator. The submitter is never the employee.
 - **Rejection:** final for that employee and year (no second reason). A rejection before Dec 15 leaves the credit usable until Dec 15; it is then forfeited on Dec 17. A rejection after Dec 15 forfeits the pending credit at once.
 - On Dec 17, credits with no reason submitted are forfeited. Credits with a reason stay pending until the COH decides.
 - A carried-over credit faces the next year's Dec 15 deadline and needs a new reason if still unused.
 - Reminders to Supervisors and HR (at-risk list) and to the COH (undecided reasons); dates in settings (default Dec 1, Dec 10, morning of Dec 16). The employee is notified of forfeiture, of a reason submitted for them, and of the COH decision.
 
 **Separating employees**
-- HR (Processor or Administrator) sets a separation status (COSP: not renewing / resigned; Regular: resigned / retired) and last day of service; audit-logged. Never for themselves (added 2026-11-01 after a security review: the status waives their own CTO limits) — another HR Processor or Administrator does it.
+- HR (Processor or Administrator) sets a separation status (COSP: not renewing / resigned; Regular: resigned / retired) and last day of service; audit-logged. Never for themselves (added 2026-11-01 after a security review: the status waives their own CTO limits) — another HR Processor or Administrator does it; the AO only when no other HR person exists (D3).
 - Waived: effective-date wait, Dec 15 use deadline, 5-day monthly limit, 3-consecutive-day limit. The Supervisor still approves CTO dates.
-- Their pending claims are flagged to approvers and HR. After the last day of service, remaining credit lapses (nightly job) and claims still in the chain lapse with no credit.
+- Their pending claims are flagged to approvers and HR. After the last day of service, remaining credit lapses (nightly job, archived employees included) and claims still in the chain lapse with no credit.
 - Clearing the status restores normal rules; CTO already used stays used.
 
 **Opening balances (Option A, decided 2026-11-01)**
-- Existing CTO credit is entered as **several opening lines per employee**, each with days, date earned and a required reason (may cite the paper record). Never collapsed into one balance at a cutoff.
+- Existing CTO credit is entered as **several opening lines per employee**, each with days, date earned and a required reason (may cite the paper record). Never collapsed into one balance at a cutoff. The Data Import has no CTO column (8c; an old template with a CTO value is refused).
 - Each line follows the normal rules by its own date earned: year earned = year of the date earned; credit earned on or before Nov 30 needs a carry-over reason if unused after Dec 15; credit earned after Nov 30 carries over without one. A line counts in the balance from the day it is entered.
 - Date earned must be in 2026 (the year of `CTO_OPENING_BALANCE_DATE`). Older credit is not entered here; it goes through an exception claim.
 - HR Administrator only, never for themselves. If no other HR Administrator exists, the AO enters them. No approval chain; every add and void is audit-logged.
 - `CTO_OPENING_BALANCE_DATE` (default Nov 30, 2026) only locks entry. Up to and including that date, a wrong line is voided with a typed reason and re-entered — nothing is edited in place. A line with CTO days already held or used against it can't be voided. After the lock, corrections go through an exception claim (AO, then COH).
 - Implementation: lines are `CTOClaimLine`s on the employee's single opening record (`CTOClaim.is_opening`, one per employee, never routed). See `cto/opening.py`.
 
+**Menu (2026-11-02):** Approvals → CTO Year-end Carry-over (every approval role). HR Administration → CTO Opening Balances and Exception CTO Claim (HR Administrators; the AO only while at most one other HR Administrator exists), CTO Separation Status (HR Processors/Administrators; the AO only while at most one other HR person exists). Pages keep their own checks.
+
 **How Stage 2 implements this (2026-11-01)**
 - Every credited line has a `use_deadline`: Dec 15 of its year earned, or Dec 15 of the next year if it took effect after Dec 15. CTO can only be used on dates up to a line's deadline (this replaced the blanket "no use after Dec 15" check). An approved carry-over moves it forward one year.
 - `cto_year_end` runs **daily** and does nothing new until Dec 17. It handles every credited line whose deadline and reason deadline (Dec 16) have passed: approved reason → carry over; pending → held, not usable; rejected or none → forfeited.
-- `cto_separation_lapse` runs nightly. `cto_carryover_reminders` runs daily and acts only on `CTO_CARRYOVER_REMINDER_DATES`. Logic is in `cto/carryover.py` and `cto/separation.py`.
+- `cto_separation_lapse` runs nightly. `cto_carryover_reminders` runs daily and acts only on `CTO_CARRYOVER_REMINDER_DATES`. Logic is in `cto/carryover.py` and `cto/separation.py`. Schedules: DEPLOYMENT.md §8a.
 - Separation status and last day of service are `Employee.separation_status` / `last_day_of_service`. They are separate from `separation_date`, which is the System Administrator's record-retention date.
+- Migration `cto 0006_ot_cto_claims` stops, changing nothing, if the old CTO ledger tables hold rows.
 
 **Open questions (not built — ask the project owner)**
+- **Exception claims after a rejected carry-over reason:** can an exception claim restore credit forfeited by a rejected carry-over reason? (Rejection is final; undecided.)
 - **Reductions after the opening-balance lock:** an exception claim can only add credit. How BDH wants a wrong opening line reduced after `CTO_OPENING_BALANCE_DATE` is undecided (deferred 2026-11-01). Until then, only voiding before the lock reduces credit.
 
-**Configuration:** `CTO_FILING_DEADLINE_MONTH_DAY`, `CTO_USAGE_CUTOFF_MONTH_DAY`, `CTO_CARRYOVER_REASON_DEADLINE_MONTH_DAY`, `CTO_CARRYOVER_REMINDER_DATES`, `CTO_OPENING_BALANCE_DATE`, `NURSING_SECTION_NAME` and reminder dates in settings; multipliers in the `CTOMultiplierRate` table. If `NURSING_SECTION_NAME` matches no section, OT filing by a Supervisor and claim submission stop with an error asking an HR Administrator to fix it — the Nursing steps are never silently skipped.
+**Configuration:** `CTO_FILING_DEADLINE_MONTH_DAY`, `CTO_USAGE_CUTOFF_MONTH_DAY`, `CTO_CARRYOVER_REASON_DEADLINE_MONTH_DAY`, `CTO_CARRYOVER_REMINDER_DATES`, `CTO_OPENING_BALANCE_DATE` and reminder dates in settings; multipliers in the `CTOMultiplierRate` table.
 
 ---
 
@@ -441,4 +450,4 @@ Do not attempt to build this in one pass. Suggested phase order:
 ### Running the tests
 - Command: `BDH_HRIS_DEBUG=1 venv/bin/python manage.py test`
 - `BDH_HRIS_DEBUG=1` is needed locally: with DEBUG off, settings switch to WhiteNoise's manifest storage, and without a `collectstatic` run about 20 page tests fail with "Missing staticfiles manifest entry".
-- **Known failures (4):** the CSC Form 6 and COSP leave-form print tests in `leave.tests` (`PrintCscForm6Tests`, `PrintCospLeaveFormTests`) need LibreOffice (`FileNotFoundError: 'libreoffice'`). They pass only on a machine with LibreOffice installed. Any other failure is a real one.
+- **Known failures (4):** the CSC Form 6 and COSP leave-form print tests in `leave.tests` (`PrintCscForm6Tests` x2, `PrintCospLeaveFormTests` x2) need LibreOffice. Without it they fail as `302 != 200` (on current main; older code showed `FileNotFoundError: 'libreoffice'`). They pass only on a machine with LibreOffice installed. Any other failure is a real one.
