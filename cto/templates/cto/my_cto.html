@@ -34,7 +34,7 @@
 <div class="card">
   <h2 class="mt-0">My CTO claims</h2>
   <p class="muted">File a claim against your approved OT lines (or for Medical Transport duty), upload the documents, and submit. CTO is credited only after the Chief of Hospital approves, and each line counts from its effective date.</p>
-  <p><a href="{% url 'cto:claim_new' %}" class="btn">+ New CTO claim</a>{% if claimable_ot_lines %} <span class="muted">{{ claimable_ot_lines|length }} approved OT line(s) not yet claimed.</span>{% endif %}</p>
+  {% if cto_eligible %}<p><a href="{% url 'cto:claim_new' %}" class="btn">+ New CTO claim</a>{% if claimable_ot_lines %} <span class="muted">{{ claimable_ot_lines|length }} approved OT line(s) not yet claimed.</span>{% endif %}</p>{% endif %}
   <table>
     <tr><th>#</th><th>Type</th><th>Status</th><th>First filed</th><th>Documents</th></tr>
     {% for c in claims %}

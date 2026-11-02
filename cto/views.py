@@ -343,6 +343,7 @@ def my_cto(request):
         "credit_lines": CTOClaimLine.objects.filter(claim__employee=employee, state=CTOClaimLine.CREDITED),
         "claimable_ot_lines": claimable_ot_lines(employee),
         "today": timezone.localdate(),
+        "cto_eligible": is_cto_eligible(employee),
     })
 
 
