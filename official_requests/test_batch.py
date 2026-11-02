@@ -1,6 +1,6 @@
 """Group (batch) filing - Batch 2, Item 7 (owner decisions 2026-10-07)."""
 
-from datetime import date, time
+from datetime import date, time, timedelta
 from decimal import Decimal
 
 from django.contrib.auth.models import User
@@ -33,6 +33,7 @@ def emp(username, section=None, *roles, **ra_extra):
 def post_data(kind, employees, lines, apply_same=True, purpose="Hospital outreach", destination="Brooke's Point",
               **extra):
     data = {"kind": kind, "purpose": purpose, "destination": destination,
+            "past_date_reason": "Filed after the duty",  # OT dates here are past (CLAUDE.md §7.1)
             "employees": [str(e.pk) for e in employees],
             "lines-TOTAL_FORMS": str(len(lines)), "lines-INITIAL_FORMS": "0",
             "lines-MIN_NUM_FORMS": "1", "lines-MAX_NUM_FORMS": "1000"}
@@ -106,11 +107,12 @@ class BatchTests(TestCase):
         self.file(oic, post_data("TRAVEL", [self.a], [{"date": "2026-10-20"}]))
         self.assertEqual(B.objects.get().filer_role, "SUPERVISOR")
 
-    def test_hr_processor_files_travel_and_ob_only(self):
+    def test_hr_processor_files_ot_travel_and_ob(self):
+        # D5 (2026-11-02): the HR Processor may now file OT as well (was Travel and OB only).
         self.file(self.proc, post_data("OT", [self.a], self.ot_lines()[:1]))
-        self.assertFalse(B.objects.exists())
-        self.file(self.proc, post_data("TRAVEL", [self.a, self.outsider], [{"date": "2026-10-20"}]))
         self.assertEqual(B.objects.get().filer_role, "HR_PROCESSOR")
+        self.file(self.proc, post_data("TRAVEL", [self.a, self.outsider], [{"date": "2026-10-20"}]))
+        self.assertEqual(B.objects.latest("pk").filer_role, "HR_PROCESSOR")
 
     def test_filer_cannot_include_themselves(self):
         r = self.file(self.sup, post_data("OT", [self.a, self.sup], self.ot_lines()[:1]))
@@ -176,6 +178,8 @@ class BatchTests(TestCase):
         self.run_route(self.proc, "TRAVEL", [self.a], ["recommend", "approve"], "2026-10-04")
         self.run_route(self.sup, "OFFICIAL_BUSINESS", [self.a], ["process", "recommend", "approve"], "2026-10-05")
         self.run_route(self.proc, "OFFICIAL_BUSINESS", [self.a, self.b], ["endorse", "recommend", "approve"], "2026-10-06")
+        self.run_route(self.proc, "OT", [self.a], ["recommend", "approve"], "2026-10-07")  # D5
+        self.run_route(self.ao, "HOLIDAY", [self.a], ["approve"], "2026-10-08")  # D6: AO-filed -> COH
 
     def test_ob_by_hr_needs_a_shared_supervisor(self):
         r = self.file(self.proc, post_data("OFFICIAL_BUSINESS", [self.a, self.outsider], [{"date": "2026-10-20"}]))
@@ -189,13 +193,15 @@ class BatchTests(TestCase):
         self.assertEqual(self.act(self.coh, batch, "approve").status_code, 403)
 
     def test_filer_cannot_act_on_own_batch_even_with_other_roles(self):
+        # 8b: the AO cannot file OB, so OB goes under the next role, HR Processor:
+        # route Supervisor -> AO -> COH, and the filer may act at neither step.
         boss = emp("boss", self.lab, "SUPERVISOR", "HR_PROCESSOR")
         RoleAssignment.objects.create(employee=boss, role="ADMINISTRATIVE_OFFICER")
-        self.file(boss, post_data("OT", [self.a], self.ot_lines()[:1]))  # HR Processor can't file OT -> as Supervisor
+        self.file(boss, post_data("OFFICIAL_BUSINESS", [self.a], [{"date": "2026-10-20"}]))
         batch = B.objects.get()
-        self.assertEqual(batch.filer_role, "SUPERVISOR")
-        self.assertEqual(self.act(boss, batch, "process").status_code, 403)
-        self.act(self.proc, batch, "process")
+        self.assertEqual(batch.filer_role, "HR_PROCESSOR")
+        self.assertEqual(self.act(boss, batch, "endorse").status_code, 403)
+        self.act(self.sup, batch, "endorse")
         batch.refresh_from_db()
         self.assertEqual(self.act(boss, batch, "recommend").status_code, 403)
         self.client.force_login(boss.user)
@@ -290,3 +296,188 @@ class BatchTests(TestCase):
         self.assertTrue(mine < link < approvals)
         self.client.force_login(self.a.user)  # plain employee: no link
         self.assertNotIn("File for a Group", self.client.get(reverse("official_requests:my_requests")).content.decode())
+
+
+class OtFilingTests(TestCase):
+    """OT on main's batch module, CLAUDE.md §7.1 (decisions D4-D6, 8a, 8b, 8e, 2026-11-02)."""
+
+    def setUp(self):
+        from orgstructure.models import Unit
+
+        self.lab = Section.objects.get(name="Laboratory Section")
+        self.pharm = Section.objects.get(name="Pharmacy Section")
+        self.nursing = Section.objects.get(name="Nursing Service Section")
+        self.er = Unit.objects.get(section=self.nursing, name="ER")
+        self.sup = emp("sup", self.lab, "SUPERVISOR")
+        self.a = emp("staffa", self.lab)
+        self.outsider = emp("outsider", self.pharm)
+        self.proc = emp("proc", None, "HR_PROCESSOR")
+        self.proc2 = emp("proc2", None, "HR_PROCESSOR")
+        self.hradmin = emp("hradmin", None, "HR_ADMINISTRATOR")
+        self.ao = emp("ao", None, "ADMINISTRATIVE_OFFICER")
+        self.coh = emp("coh", None, "CHIEF_OF_HOSPITAL")
+        self.chief_nurse = emp("chiefnurse", self.nursing, "SUPERVISOR")
+        self.er_head = emp("erhead", self.nursing)
+        self.er_head.units.add(self.er)
+        RoleAssignment.objects.create(employee=self.er_head, role="SUPERVISOR", unit=self.er)
+        self.nurse = emp("nurse", self.nursing)
+        self.nurse.units.add(self.er)
+
+    def file(self, who, data):
+        self.client.force_login(who.user)
+        return self.client.post(reverse("official_requests:batch_file"), data)
+
+    def act(self, who, batch, action, notes=""):
+        self.client.force_login(who.user)
+        return self.client.post(reverse("official_requests:batch_action", args=[batch.pk]),
+                                {"action": action, "notes": notes})
+
+    def ot(self, who, employees, day="2026-10-20", kind="OT", **extra):
+        return self.file(who, post_data(kind, employees, [{"date": day, "time_from": "17:00", "time_to": "20:00"}],
+                                        **extra))
+
+    def test_filer_role_priority_ao_hr_admin_hr_processor_supervisor(self):
+        # 8b: the highest role that allows the type.
+        everyone = emp("everyone", self.lab, "SUPERVISOR", "HR_PROCESSOR", "HR_ADMINISTRATOR",
+                       "ADMINISTRATIVE_OFFICER")
+        self.assertEqual(rules.filer_roles(everyone), ["AO", "HR_ADMINISTRATOR", "HR_PROCESSOR", "SUPERVISOR"])
+        self.assertEqual(rules.filing_role_for(everyone, "OT"), "AO")
+        self.assertEqual(rules.filing_role_for(everyone, "TRAVEL"), "HR_ADMINISTRATOR")  # AO files OT only
+        RoleAssignment.objects.filter(employee=everyone, role="HR_ADMINISTRATOR").delete()
+        self.assertEqual(rules.filing_role_for(everyone, "TRAVEL"), "HR_PROCESSOR")
+        RoleAssignment.objects.filter(employee=everyone, role="ADMINISTRATIVE_OFFICER").delete()
+        self.assertEqual(rules.filing_role_for(everyone, "OT"), "HR_PROCESSOR")
+        RoleAssignment.objects.filter(employee=everyone, role="HR_PROCESSOR").delete()
+        self.assertEqual(rules.filing_role_for(everyone, "OT"), "SUPERVISOR")
+
+    def test_ot_filers_hr_processor_ao_and_supervisor_for_any_employee(self):
+        # §7.1: a filer may add anyone except the COH and themselves; for Travel the Supervisor keeps own staff.
+        for who, day in ((self.proc, "2026-10-20"), (self.ao, "2026-10-21"), (self.sup, "2026-10-22")):
+            self.ot(who, [self.a, self.outsider], day)
+        self.assertEqual(list(B.objects.order_by("pk").values_list("filer_role", flat=True)),
+                         ["HR_PROCESSOR", "AO", "SUPERVISOR"])
+        self.assertTrue(all(b.active_lines().count() == 2 for b in B.objects.all()))
+        self.file(self.sup, post_data("TRAVEL", [self.outsider], [{"date": "2026-10-23"}]))
+        self.assertEqual(B.objects.count(), 3)
+
+    def test_employee_cannot_file_ot(self):
+        # D5: no group filing for a plain employee; 8a: no OT on the single form either...
+        self.client.force_login(self.a.user)
+        self.assertEqual(self.client.get(reverse("official_requests:batch_file")).status_code, 403)
+        self.client.post(reverse("official_requests:request_apply"), {
+            "request_type": R.OT_RESTDAY_HOLIDAY, "start_date": "2026-10-20", "end_date": "2026-10-20",
+            "purpose": "Coverage", "hours_requested": "3"})
+        self.assertFalse(R.objects.exists())
+        self.assertNotContains(self.client.get(reverse("official_requests:request_apply")), R.OT_RESTDAY_HOLIDAY)
+
+    def test_coh_files_own_ot_on_the_single_form_and_hr_records_it(self):
+        # ...except the COH's own OT, which HR records (approval is outside BDH).
+        self.client.force_login(self.coh.user)
+        self.client.post(reverse("official_requests:request_apply"), {
+            "request_type": R.OT_RESTDAY_HOLIDAY, "start_date": "2026-10-20", "end_date": "2026-10-20",
+            "purpose": "Coverage", "hours_requested": "3"})
+        self.assertTrue(R.objects.get(employee=self.coh).recorded_only)
+
+    def test_coh_cannot_be_added_to_an_ot_batch(self):
+        r = self.ot(self.hradmin, [self.a, self.coh])
+        self.assertContains(r, "Leave out the Chief of Hospital")
+        self.assertFalse(B.objects.exists())
+
+    def test_past_dated_ot_needs_a_typed_reason(self):
+        from django.utils import timezone
+
+        today = timezone.localdate()
+        past = (today - timedelta(days=1)).isoformat()
+        r = self.ot(self.sup, [self.a], past, past_date_reason="")  # override the helper's default
+        self.assertContains(r, "type why this is filed late")
+        self.assertFalse(B.objects.exists())
+        self.ot(self.sup, [self.a], today.isoformat(), past_date_reason="")  # today: no reason needed
+        self.assertEqual(B.objects.get().past_date_reason, "")
+        self.ot(self.sup, [self.a], past, past_date_reason="Emergency, filed next morning")
+        self.assertEqual(B.objects.latest("pk").past_date_reason, "Emergency, filed next morning")
+
+    def test_ot_after_last_day_of_service_is_blocked(self):
+        self.a.separation_status = Employee.SEPARATION_RESIGNED
+        self.a.last_day_of_service = date(2026, 10, 20)
+        self.a.save()
+        r = self.ot(self.hradmin, [self.a], "2026-10-21")
+        self.assertContains(r, "After the last day of service")
+        self.assertFalse(B.objects.exists())
+        self.ot(self.hradmin, [self.a], "2026-10-20")  # the last day itself is fine
+        self.assertTrue(B.objects.exists())
+
+    def test_ot_batch_with_twelve_employees_is_accepted(self):
+        people = [emp(f"crew{i}", self.lab) for i in range(12)]
+        self.ot(self.hradmin, people)
+        self.assertEqual(B.objects.get().active_lines().count(), 12)
+
+    def test_employees_supervisor_gets_info_notice_when_someone_else_files(self):
+        # D5: covering Supervisors are told, information only; the filer is not.
+        self.ot(self.hradmin, [self.a, self.nurse])
+        info = Notification.objects.filter(message__startswith="For your information")
+        self.assertEqual({n.recipient for n in info}, {self.sup, self.er_head, self.chief_nurse})
+        Notification.objects.all().delete()
+        self.ot(self.sup, [self.a], "2026-10-21")  # filed by the employee's own Supervisor
+        self.assertFalse(Notification.objects.filter(message__startswith="For your information").exists())
+
+    def test_unit_head_ot_goes_chief_nurse_hr_ao_coh(self):
+        # D6, with an OIC covering the Chief Nurse: the absent Chief Nurse is set aside.
+        oic = emp("oicnurse", self.nursing)
+        RoleAssignment.objects.create(employee=oic, role="SUPERVISOR", section=self.nursing, is_oic=True,
+                                      delegated_by=self.chief_nurse, start_date=date(2026, 1, 1),
+                                      end_date=date(2099, 12, 31))
+        self.ot(self.er_head, [self.nurse])
+        batch = B.objects.get()
+        self.assertEqual(batch.filer_role, "UNIT_HEAD")
+        self.assertEqual(self.act(self.chief_nurse, batch, "endorse").status_code, 403)
+        for who, code in ((oic, "endorse"), (self.proc, "process"), (self.ao, "recommend"), (self.coh, "approve")):
+            self.assertEqual(self.act(who, batch, code).status_code, 302, code)
+        batch.refresh_from_db()
+        self.assertEqual(batch.status, R.APPROVED)
+
+    def test_ot_batch_with_no_coh_waits(self):
+        RoleAssignment.objects.filter(role="CHIEF_OF_HOSPITAL").delete()
+        self.ot(self.hradmin, [self.a])
+        batch = B.objects.get()
+        self.act(self.ao, batch, "recommend")
+        batch.refresh_from_db()
+        self.assertEqual(batch.status, R.RECOMMENDED_BY_AO)  # never skipped: waits for a COH
+        self.assertEqual(rules.batches_awaiting(self.ao, self.ao.user), [])
+
+    def test_no_ao_or_ao_on_a_line_coh_takes_the_ao_step(self):
+        self.ot(self.hradmin, [self.a, self.ao])  # the AO is on a line
+        batch = B.objects.get()
+        self.assertEqual(self.act(self.ao, batch, "recommend").status_code, 403)
+        self.assertEqual(self.act(self.coh, batch, "recommend").status_code, 302)
+        RoleAssignment.objects.filter(role="ADMINISTRATIVE_OFFICER").delete()  # no AO at all
+        self.ot(self.hradmin, [self.a], "2026-10-21")
+        self.assertEqual(self.act(self.coh, B.objects.latest("pk"), "recommend").status_code, 302)
+
+    def test_person_on_a_line_never_acts_another_hr_does(self):
+        self.ot(self.sup, [self.a, self.proc])
+        batch = B.objects.get()
+        self.assertEqual(self.act(self.proc, batch, "process").status_code, 403)
+        self.assertEqual(self.act(self.proc2, batch, "process").status_code, 302)
+
+    def test_ot_duplicate_guard_blocks_pending_approved_and_returned(self):
+        # 8e: a returned batch still blocks the same employee-date in another batch.
+        self.ot(self.hradmin, [self.a], "2026-10-20")
+        pending = B.objects.get()
+        r = self.ot(self.proc, [self.a], "2026-10-20")
+        self.assertContains(r, "Already has a pending")
+        self.act(self.ao, pending, "return", notes="Fix the hours")
+        r = self.ot(self.proc, [self.a], "2026-10-20")
+        self.assertContains(r, "Already has a pending")  # returned still blocks
+        self.ot(self.hradmin, [self.a], "2026-10-21")
+        approved = B.objects.latest("pk")
+        self.act(self.ao, approved, "recommend")
+        self.act(self.coh, approved, "approve")
+        r = self.ot(self.proc, [self.a], "2026-10-21")
+        self.assertContains(r, "Already has a approved")
+        self.assertEqual(B.objects.count(), 2)
+        # the returned batch's own lines are no conflict when it is resubmitted
+        self.client.force_login(self.hradmin.user)
+        self.client.post(reverse("official_requests:batch_edit", args=[pending.pk]),
+                         post_data("OT", [self.a], [{"date": "2026-10-20", "time_from": "17:00", "time_to": "21:00"}]))
+        pending.refresh_from_db()
+        self.assertEqual(pending.status, R.SUBMITTED)

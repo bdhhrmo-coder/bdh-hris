@@ -99,6 +99,10 @@
         <textarea name="purpose" rows="2">{{ form.purpose.value|default:'' }}</textarea>
         {% for e in form.purpose.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
       </label>
+      <label class="span-all" x-show="workKind">Reason for filing late (required if any date is in the past)
+        <textarea name="past_date_reason" rows="2">{{ form.past_date_reason.value|default:'' }}</textarea>
+        {% for e in form.past_date_reason.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+      </label>
     </div>
   </div>
 

@@ -19,7 +19,7 @@ def request_apply(request):
         raise PermissionDenied("No employee record is linked to your account.")
 
     if request.method == "POST":
-        form = OfficialRequestForm(request.POST)
+        form = OfficialRequestForm(request.POST, acting_employee=acting_employee)
         if form.is_valid():
             official_request = form.save(commit=False)
             official_request.employee = acting_employee
@@ -38,7 +38,7 @@ def request_apply(request):
                 messages.success(request, f"{official_request.get_request_type_display()} request submitted.")
             return redirect("official_requests:my_requests")
     else:
-        form = OfficialRequestForm()
+        form = OfficialRequestForm(acting_employee=acting_employee)
 
     return render(request, "official_requests/request_apply.html", {"form": form})
 

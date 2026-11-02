@@ -3,16 +3,21 @@ Group (batch) filing of Travel, Official Business and Authorized OT /
 rest-day / holiday work - Batch 2, Item 7 (owner decisions 2026-10-07).
 
 WHO MAY FILE
-  Supervisor        - only employees they supervise (incl. as OIC); every type.
-  HR Processor      - any employee; Travel and Official Business ONLY.
+  Supervisor        - Travel / OB: only employees they supervise (incl. as OIC).
+                      OT: any employee (CLAUDE.md §7.1).
+  HR Processor      - any employee; every type (OT added by D5, 2026-11-02).
   HR Administrator  - any employee; every type.
-  Someone holding several of these roles files under the highest one that
-  allows the chosen type: HR Administrator, then HR Processor, then
-  Supervisor.
+  AO                - any employee; OT only (D5).
+  Never the COH or the filer themselves. Someone holding several of these
+  roles files under the highest one that allows the chosen type: AO, then
+  HR Administrator, then HR Processor, then Supervisor (8b, 2026-11-02).
+  A unit head with a section head above files OT as "Unit Head" (D6).
 
 ROUTE (the filer's own step counts as done; the whole batch moves together)
   OT / rest day / holiday   by Supervisor: HR -> AO -> COH
-                            by HR Admin:   AO -> COH
+                            by Unit Head:  section head -> HR -> AO -> COH (D6)
+                            by HR:         AO -> COH
+                            by AO:         COH (D6)
   Travel                    by Supervisor: AO -> COH
                             by HR:         AO -> COH
   Official Business         by Supervisor: HR -> AO -> COH
@@ -22,8 +27,11 @@ ROUTE (the filer's own step counts as done; the whole batch moves together)
   (single request form, routing.py) - nothing here changes that.
 
 The filer can never act on their own batch at a later step, whatever other
-roles (or OIC) they hold. Approving an OT batch creates NO CTO credit: HR
-still files each CTO claim from the approved line (CLAUDE.md §7.1).
+roles (or OIC) they hold. Approving an OT batch creates NO CTO credit: the
+employee files a CTO claim from the approved line (CLAUDE.md §7.1). OT lines
+dated in the past need a typed reason; none may fall after the employee's
+last day of service. Supervisors covering an employee put on someone else's
+OT batch get an information-only notice (D5).
 """
 
 from datetime import datetime, timedelta
@@ -37,6 +45,7 @@ from employees.models import Employee
 from exchange.models import DutyExchangeRequest
 from leave.models import LeaveApplication
 from leave.permissions import (
+    _supervisor_assignments,
     ao_step_actors,
     can_act_ao_step,
     can_act_coh_step,
@@ -45,6 +54,7 @@ from leave.permissions import (
     endorsers_for,
     second_endorsers_for,
     hr_step_actors,
+    supervisors_of,
 )
 from notifications.services import notify
 
@@ -65,22 +75,31 @@ KINDS = {
 WORK_KINDS = {"OT", "REST_DAY", "HOLIDAY"}
 
 KINDS_BY_ROLE = {
+    B.FILER_AO: set(WORK_KINDS),
     B.FILER_HR_ADMINISTRATOR: set(KINDS),
-    B.FILER_HR_PROCESSOR: {"TRAVEL", "OFFICIAL_BUSINESS"},
+    B.FILER_HR_PROCESSOR: set(KINDS),
     B.FILER_SUPERVISOR: set(KINDS),
 }
-ROLE_PRIORITY = [B.FILER_HR_ADMINISTRATOR, B.FILER_HR_PROCESSOR, B.FILER_SUPERVISOR]
+ROLE_PRIORITY = [B.FILER_AO, B.FILER_HR_ADMINISTRATOR, B.FILER_HR_PROCESSOR, B.FILER_SUPERVISOR]
 
 HR_ROLES = {B.FILER_HR_PROCESSOR, B.FILER_HR_ADMINISTRATOR}
+ANY_EMPLOYEE_ROLES = HR_ROLES | {B.FILER_AO}
 
 
 def _route_key(request_type, filer_role):
-    return request_type, ("HR" if filer_role in HR_ROLES else "SUPERVISOR")
+    if filer_role in HR_ROLES:
+        return request_type, "HR"
+    if filer_role in (B.FILER_AO, B.FILER_UNIT_HEAD):
+        return request_type, filer_role
+    return request_type, "SUPERVISOR"
 
 
 ROUTES = {
     (R.OT_RESTDAY_HOLIDAY, "SUPERVISOR"): [R.PROCESSED_BY_HR, R.RECOMMENDED_BY_AO, R.APPROVED],
     (R.OT_RESTDAY_HOLIDAY, "HR"): [R.RECOMMENDED_BY_AO, R.APPROVED],
+    (R.OT_RESTDAY_HOLIDAY, B.FILER_UNIT_HEAD): [R.ENDORSED_BY_SUPERVISOR, R.PROCESSED_BY_HR, R.RECOMMENDED_BY_AO,
+                                                R.APPROVED],
+    (R.OT_RESTDAY_HOLIDAY, B.FILER_AO): [R.APPROVED],
     (R.TRAVEL, "SUPERVISOR"): [R.RECOMMENDED_BY_AO, R.APPROVED],
     (R.TRAVEL, "HR"): [R.RECOMMENDED_BY_AO, R.APPROVED],
     (R.OFFICIAL_BUSINESS, "SUPERVISOR"): [R.PROCESSED_BY_HR, R.RECOMMENDED_BY_AO, R.APPROVED],
@@ -90,6 +109,8 @@ ROUTES = {
 SKIPPED = {
     (R.OT_RESTDAY_HOLIDAY, "SUPERVISOR"): "Supervisor endorsement",
     (R.OT_RESTDAY_HOLIDAY, "HR"): "Supervisor endorsement and HR processing",
+    (R.OT_RESTDAY_HOLIDAY, B.FILER_UNIT_HEAD): "Unit Head endorsement",
+    (R.OT_RESTDAY_HOLIDAY, B.FILER_AO): "Supervisor endorsement, HR processing and AO recommendation",
     (R.TRAVEL, "SUPERVISOR"): "Supervisor endorsement",
     (R.TRAVEL, "HR"): "Supervisor endorsement",
     (R.OFFICIAL_BUSINESS, "SUPERVISOR"): "Supervisor endorsement",
@@ -109,6 +130,7 @@ def filer_roles(acting_employee):
     if acting_employee is None:
         return []
     held = {
+        B.FILER_AO: acting_employee.has_role(RoleAssignment.ADMINISTRATIVE_OFFICER),
         B.FILER_HR_ADMINISTRATOR: acting_employee.has_role(RoleAssignment.HR_ADMINISTRATOR),
         B.FILER_HR_PROCESSOR: acting_employee.has_role(RoleAssignment.HR_PROCESSOR),
         B.FILER_SUPERVISOR: acting_employee.has_role(RoleAssignment.SUPERVISOR),
@@ -123,9 +145,18 @@ def allowed_kinds(acting_employee):
     return [k for k in KINDS if k in kinds]
 
 
+def is_unit_head_with_section_head(employee):
+    """A Supervisor scoped to units only, with a section-level Supervisor
+    above them (Nursing: a unit head under the Chief Nurse)."""
+    own = _supervisor_assignments(employee)
+    return bool(own) and all(ra.unit_id for ra in own) and bool(second_endorsers_for([employee]))
+
+
 def filing_role_for(acting_employee, kind):
     for role in filer_roles(acting_employee):
         if kind in KINDS_BY_ROLE[role]:
+            if role == B.FILER_SUPERVISOR and kind in WORK_KINDS and is_unit_head_with_section_head(acting_employee):
+                return B.FILER_UNIT_HEAD
             return role
     return None
 
@@ -147,9 +178,9 @@ def supervised_employees(acting_employee, viewing=False):
     return qs.filter(Q(sections__in=section_ids) | Q(units__in=unit_ids)).distinct()
 
 
-def employees_for(acting_employee, filer_role):
-    if filer_role in HR_ROLES:
-        return Employee.objects.filter(is_active=True)
+def employees_for(acting_employee, filer_role, kind):
+    if filer_role in ANY_EMPLOYEE_ROLES or (filer_role and kind in WORK_KINDS):
+        return Employee.objects.filter(is_active=True)  # OT: anyone (§7.1); the form leaves out the COH and self
     if filer_role == B.FILER_SUPERVISOR:
         return supervised_employees(acting_employee)
     return Employee.objects.none()
@@ -157,12 +188,10 @@ def employees_for(acting_employee, filer_role):
 
 def pickable_employees(acting_employee):
     """Everyone this person could include under any of their filing roles
-    (the form narrows it again once the type is chosen)."""
-    roles = filer_roles(acting_employee)
-    if any(r in HR_ROLES for r in roles):
+    (the form narrows it again once the type is chosen). Every filing role
+    may file OT for anyone, so that is all active employees."""
+    if filer_roles(acting_employee):
         return Employee.objects.filter(is_active=True)
-    if B.FILER_SUPERVISOR in roles:
-        return supervised_employees(acting_employee)
     return Employee.objects.none()
 
 
@@ -186,6 +215,12 @@ def common_supervisors(employees, exclude_employee=None):
         if not common:
             return []
     return list(Employee.objects.filter(pk__in=common or []))
+
+
+def unit_head_step_actors(batch):
+    """OT filed by a unit head: the section head above the filer (D6)."""
+    filer = getattr(batch.filed_by, "employee", None)
+    return second_endorsers_for([filer]) if filer is not None else []
 
 
 def batch_people(batch):
@@ -229,6 +264,8 @@ def may_act(acting_employee, user, batch):
     if acting_employee.pk in {p.pk for p in people}:
         return False  # never on a batch that includes them (owner decision 2026-10-26)
     if target == R.ENDORSED_BY_SUPERVISOR:
+        if batch.filer_role == B.FILER_UNIT_HEAD:
+            return acting_employee.pk in {s.pk for s in unit_head_step_actors(batch)}
         lines = list(batch.active_lines())
         return bool(lines) and acting_employee.pk in {
             s.pk for s in common_supervisors([line.employee for line in lines])}
@@ -345,10 +382,11 @@ def filing_note(batch, count):
 
 
 @transaction.atomic
-def create_batch(user, filer_role, kind, purpose, destination, entries):
+def create_batch(user, filer_role, kind, purpose, destination, entries, past_date_reason=""):
     _, request_type, work_kind = KINDS[kind]
     batch = B.objects.create(request_type=request_type, work_kind=work_kind, purpose=purpose,
                              destination=destination if request_type == R.TRAVEL else "",
+                             past_date_reason=past_date_reason if request_type == R.OT_RESTDAY_HOLIDAY else "",
                              filed_by=user, filer_role=filer_role)
     lines = [R.objects.create(batch=batch, **_line_values(batch, e)) for e in entries]
     _log(batch, "submit", user, filing_note(batch, len(lines)), lines)
@@ -357,12 +395,13 @@ def create_batch(user, filer_role, kind, purpose, destination, entries):
 
 
 @transaction.atomic
-def resubmit_batch(batch, user, purpose, destination, entries, note=""):
+def resubmit_batch(batch, user, purpose, destination, entries, note="", past_date_reason=""):
     """The filer's edit after a return: same batch, lines updated/added,
     removed lines cancelled (kept for the audit trail). Starts again from
     the first step of the route."""
     batch.purpose = purpose
     batch.destination = destination if batch.request_type == R.TRAVEL else ""
+    batch.past_date_reason = past_date_reason if batch.request_type == R.OT_RESTDAY_HOLIDAY else ""
     batch.status = R.SUBMITTED
     batch.save()
     existing = {(line.employee_id, line.start_date): line for line in batch.active_lines()}
@@ -414,7 +453,9 @@ def _url(batch):
 def _next_actors(batch):
     target = next_status(batch)
     involved = batch_people(batch)
-    if target == R.ENDORSED_BY_SUPERVISOR:
+    if target == R.ENDORSED_BY_SUPERVISOR and batch.filer_role == B.FILER_UNIT_HEAD:
+        people = unit_head_step_actors(batch)
+    elif target == R.ENDORSED_BY_SUPERVISOR:
         people = common_supervisors([line.employee for line in batch.active_lines()])
     elif target == R.PROCESSED_BY_HR:
         people = hr_step_actors(involved)
@@ -442,9 +483,22 @@ def notify_filed(batch, new_employee_ids=(), resubmitted=False):
     for emp in {line.employee for line in lines if line.employee_id in new_employee_ids}:
         mine = [line for line in lines if line.employee_id == emp.pk]
         notify(emp, f"{by} filed a {batch.type_label} request for you ({_dates_text(mine)}).", "/official-requests/mine/")
+    if batch.request_type == R.OT_RESTDAY_HOLIDAY:
+        _notify_covering_supervisors(batch, lines, new_employee_ids, by)
     verb = "resubmitted" if resubmitted else "filed"
     notify(_next_actors(batch), f"{by} {verb} a group {batch.type_label} request ({len(lines)} line(s)) "
                                 f"— awaiting your action.", _url(batch))
+
+
+def _notify_covering_supervisors(batch, lines, new_employee_ids, by):
+    """D5: each Supervisor covering an employee put on someone else's OT
+    batch is told, for information only (never the filer)."""
+    filer_pk = getattr(getattr(batch.filed_by, "employee", None), "pk", None)
+    for emp in {line.employee for line in lines if line.employee_id in new_employee_ids}:
+        mine = [line for line in lines if line.employee_id == emp.pk]
+        others = [s for s in supervisors_of(emp) if s.pk != filer_pk]
+        notify(others, f"For your information: {by} put {emp.full_name} on a {batch.type_label} request "
+                       f"({_dates_text(mine)}). No action needed from you.", _url(batch))
 
 
 def notify_step(batch, action, notes):

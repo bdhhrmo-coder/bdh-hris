@@ -21,6 +21,7 @@
 <div class="card">
   <p class="mt-0"><strong>Purpose:</strong> {{ batch.purpose|linebreaksbr }}</p>
   {% if batch.destination %}<p><strong>Destination:</strong> {{ batch.destination }}</p>{% endif %}
+  {% if batch.past_date_reason %}<p><strong>Reason for filing late:</strong> {{ batch.past_date_reason|linebreaksbr }}</p>{% endif %}
   <h2>Lines ({{ lines|length }})</h2>
   <div class="table-scroll">
   <table>
@@ -37,7 +38,7 @@
   </table>
   </div>
   {% if removed %}<p class="field-help">Removed by the filer after a return: {% for r in removed %}{{ r.employee.full_name }} ({{ r.start_date|date:"M d" }}){% if not forloop.last %}; {% endif %}{% endfor %}</p>{% endif %}
-  {% if batch.request_type == "OT_RESTDAY_HOLIDAY" %}<p class="field-help">Approval does not add CTO. HR files each CTO claim from the approved line, with the required documents.</p>{% endif %}
+  {% if batch.request_type == "OT_RESTDAY_HOLIDAY" %}<p class="field-help">Approval does not add CTO. The employee files a CTO claim from the approved line, with the required documents.</p>{% endif %}
 </div>
 
 {% if actions %}

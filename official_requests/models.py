@@ -162,12 +162,16 @@ class OfficialRequestBatch(models.Model):
     WORK_KIND_CHOICES = [(WORK_OT, "Authorized overtime"), (WORK_REST_DAY, "Rest-day work"), (WORK_HOLIDAY, "Holiday work")]
 
     FILER_SUPERVISOR = "SUPERVISOR"
+    FILER_UNIT_HEAD = "UNIT_HEAD"  # OT by a unit head with a section head above (D6, 2026-11-02)
     FILER_HR_PROCESSOR = "HR_PROCESSOR"
     FILER_HR_ADMINISTRATOR = "HR_ADMINISTRATOR"
+    FILER_AO = "AO"  # OT only (D5, 2026-11-02)
     FILER_ROLE_CHOICES = [
         (FILER_SUPERVISOR, "Supervisor"),
+        (FILER_UNIT_HEAD, "Unit Head"),
         (FILER_HR_PROCESSOR, "HR Processor"),
         (FILER_HR_ADMINISTRATOR, "HR Administrator"),
+        (FILER_AO, "Administrative Officer"),
     ]
 
     request_type = models.CharField(max_length=25, choices=OfficialRequest.REQUEST_TYPE_CHOICES)
@@ -175,6 +179,7 @@ class OfficialRequestBatch(models.Model):
                                  help_text="OT/rest-day/holiday batches only.")
     purpose = models.TextField(help_text="One shared purpose/reason for the whole batch.")
     destination = models.CharField(max_length=255, blank=True, help_text="Travel only.")
+    past_date_reason = models.TextField(blank=True, help_text="OT batches with a past date: why it is filed late.")
     filed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     filer_role = models.CharField(max_length=20, choices=FILER_ROLE_CHOICES,
                                   help_text="The role the batch was filed under; decides the route.")
