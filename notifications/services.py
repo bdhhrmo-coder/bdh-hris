@@ -32,7 +32,8 @@ def notify(employees, message, url=""):
         if employee is None or employee.pk in seen_ids:
             continue
         seen_ids.add(employee.pk)
-        to_create.append(Notification(recipient=employee, message=message, url=url))
+        # message is a 255-char column; long remarks would fail on PostgreSQL.
+        to_create.append(Notification(recipient=employee, message=message[:255], url=url))
 
     if to_create:
         Notification.objects.bulk_create(to_create)

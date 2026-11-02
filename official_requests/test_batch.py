@@ -8,7 +8,6 @@ from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import RoleAssignment
-from cto.models import CTOCreditEntry, CTOCreditTransaction
 from employees.models import Employee
 from leave.models import LeaveApplication, LeaveType
 from notifications.models import Notification

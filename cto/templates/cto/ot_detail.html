@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}OT request #{{ ot.pk }} — BDH HRIS{% endblock %}
+{% block content %}
+<h1>OT request #{{ ot.pk }}</h1>
+
+<div class="card">
+  <table>
+    <tr><th>Status</th><td>{{ ot.get_status_display }}{% if step_label %} — waiting for {{ step_label }}{% endif %}</td></tr>
+    <tr><th>Filed by</th><td>{{ ot.filed_by.full_name }} (as {{ ot.get_filed_as_display }})</td></tr>
+    <tr><th>Purpose</th><td>{{ ot.purpose }}</td></tr>
+    {% if ot.past_date_reason %}<tr><th>Reason for past dates</th><td>{{ ot.past_date_reason }}</td></tr>{% endif %}
+  </table>
+</div>
+
+<div class="card">
+  <table>
+    <tr><th>Employee</th><th>Date</th><th>Approved hours</th><th>Day type</th></tr>
+    {% for l in lines %}
+    <tr><td>{{ l.employee.full_name }}</td><td>{{ l.work_date }}</td><td>{{ l.approved_hours }}</td><td>{{ l.get_day_type_display }}</td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+{% if can_act %}
+<div class="card">
+  <form method="post" action="{% url 'cto:ot_action' ot.pk %}">
+    {% csrf_token %}
+    <p><label>Remark (required to return)<br><textarea name="notes" rows="2" cols="60"></textarea></label></p>
+    <button type="submit" name="action" value="approve">Approve the whole batch</button>
+    <button type="submit" name="action" value="return">Return the whole batch</button>
+  </form>
+</div>
+{% endif %}
+
+{% if is_filer and ot.status == "RETURNED" %}
+<div class="card">
+  <a href="{% url 'cto:ot_edit' ot.pk %}" class="btn">Edit and resubmit</a>
+  <form method="post" action="{% url 'cto:ot_action' ot.pk %}" style="display:inline;">
+    {% csrf_token %}<button type="submit" name="action" value="cancel">Cancel request</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2 class="mt-0">History</h2>
+  <table>
+    {% for a in ot.actions.all %}
+    <tr><td>{{ a.acted_at|date:"Y-m-d H:i" }}</td><td>{{ a.action }}</td><td>{{ a.step }}</td><td>{{ a.acted_by|default:"System" }}</td><td>{{ a.notes }}</td></tr>
+    {% endfor %}
+  </table>
+</div>
+<p><a href="{% url 'cto:cto_queue' %}">&larr; CTO and overtime queue</a></p>
+{% endblock %}

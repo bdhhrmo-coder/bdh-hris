@@ -33,20 +33,32 @@
 
 <div class="card">
   <h2 class="mt-0">My CTO claims</h2>
-  <p class="muted">HR files a claim for each workday of your approved OT. Upload your Allowed to Work form, DTR/logbook copy, and OT Accomplishment Report here (or, for Medical Transport, your Trip Ticket and Certificate of Appearance/logbook). CTO is credited only after HR submits the claim.</p>
+  <p class="muted">File a claim against your approved OT lines (or for Medical Transport duty), upload the documents, and submit. CTO is credited only after the Chief of Hospital approves, and each line counts from its effective date.</p>
+  <p><a href="{% url 'cto:claim_new' %}" class="btn">+ New CTO claim</a>{% if claimable_ot_lines %} <span class="muted">{{ claimable_ot_lines|length }} approved OT line(s) not yet claimed.</span>{% endif %}</p>
   <table>
-    <tr><th>Work date</th><th>Duty type</th><th>Hours</th><th>Credited days</th><th>Status</th><th>Documents</th></tr>
-    {% for e in credit_entries %}
+    <tr><th>#</th><th>Type</th><th>Status</th><th>First filed</th><th>Documents</th></tr>
+    {% for c in claims %}
     <tr>
-      <td>{{ e.work_date }}</td>
-      <td>{{ e.get_duty_type_display }}</td>
-      <td>{{ e.hours_worked }}</td>
-      <td>{% if e.status == "CREDITED" %}{{ e.credited_days }}{% else %}—{% endif %}</td>
-      <td><a href="{% url 'cto:claim_detail' e.pk %}">{{ e.get_status_display }}</a></td>
-      <td><a href="{% documents_url e %}">Documents</a></td>
+      <td><a href="{% url 'cto:claim_detail' c.pk %}">{{ c.pk }}</a></td>
+      <td>{{ c.get_duty_type_display }}</td>
+      <td>{% status_badge c.status c.get_status_display %}</td>
+      <td>{{ c.first_filed_on|default:"—" }}</td>
+      <td><a href="{% documents_url c %}">Documents</a></td>
     </tr>
     {% empty %}
-    <tr><td colspan="6" class="empty-note">No CTO claims yet.</td></tr>
+    <tr><td colspan="5" class="empty-note">No CTO claims yet.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h2 class="mt-0">My CTO credit</h2>
+  <table>
+    <tr><th>Workday</th><th>Credited days</th><th>Effective</th><th>Year earned</th></tr>
+    {% for l in credit_lines %}
+    <tr><td>{{ l.work_date }}</td><td>{{ l.credited_days }}</td><td>{{ l.effective_date }}{% if l.effective_date > today %} (not yet usable){% endif %}</td><td>{{ l.year_earned }}</td></tr>
+    {% empty %}
+    <tr><td colspan="4" class="empty-note">No credited CTO yet.</td></tr>
     {% endfor %}
   </table>
 </div>

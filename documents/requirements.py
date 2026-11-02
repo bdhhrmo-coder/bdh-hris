@@ -11,7 +11,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db.models import Q
 
 SUBTYPE_EXTRACTORS = {
-    "cto.ctocreditentry": lambda obj: obj.duty_type,
+    "cto.ctoclaim": lambda obj: obj.duty_type,
     "leave.leaveapplication": lambda obj: obj.leave_type.code,
     "official_requests.officialrequest": lambda obj: obj.request_type,
     "attendance.attendancecorrectionrequest": lambda obj: obj.correction_type,

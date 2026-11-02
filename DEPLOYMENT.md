@@ -251,6 +251,54 @@ old backups automatically. Someone on HR/IT should periodically clear out
 backups that are no longer needed; how often and how far back to keep is
 an operational decision for the hospital, not something to automate away.
 
+## 8a. Scheduled CTO jobs and the time zone
+
+**Time zone.** All CTO deadlines (Nov 30 filing, Dec 15 use, Dec 16
+carry-over reasons, the 1st-of-month effective dates) roll over at
+**midnight Manila time**. The app sets `TIME_ZONE = "Asia/Manila"` with
+`USE_TZ = True`, and the CTO code reads "today" with
+`django.utils.timezone.localdate()`, so the date follows Manila time even
+if the server clock is set to another zone. Still, set the Windows Server
+time zone to **(UTC+08:00) Kuala Lumpur, Singapore** (Manila) so Task
+Scheduler times below mean Manila time. Some older modules (leave,
+exchange) still use the server's own date, which is one more reason to
+keep the server on Manila time.
+
+**Jobs.** Each runs through `scripts\run_manage.bat`, which loads `.env`
+(Task Scheduler does not) and appends output to
+`logs\scheduled-jobs.log`. Register them once, from an elevated prompt:
+
+```powershell
+schtasks /create /tn "BDH HRIS CTO year-end"          /tr "C:\BDH-HRIS\scripts\run_manage.bat cto_year_end"            /sc daily /st 00:30 /ru SYSTEM
+schtasks /create /tn "BDH HRIS CTO separation lapse"  /tr "C:\BDH-HRIS\scripts\run_manage.bat cto_separation_lapse"    /sc daily /st 00:45 /ru SYSTEM
+schtasks /create /tn "BDH HRIS CTO carry-over reminders" /tr "C:\BDH-HRIS\scripts\run_manage.bat cto_carryover_reminders" /sc daily /st 07:00 /ru SYSTEM
+```
+
+| Job | Command | When | What it does |
+|---|---|---|---|
+| CTO year-end | `cto_year_end` | **Daily, 00:30**; does nothing until Dec 17 each year | For credit whose Dec 15 use deadline has passed (and whose Dec 16 reason deadline has passed): carries it over if the COH approved a reason, holds it (not usable) while a reason waits on the COH, otherwise forfeits it and tells the employee. Also closes out credit whose deadline passed in an earlier year (e.g. a separating employee whose status was cleared after Dec 17). Skips separating employees. Running daily makes it self-heal if the server was off on Dec 17. |
+| Separation lapse | `cto_separation_lapse` | Daily, **00:45** | For employees whose last day of service has passed: lapses their remaining CTO credit and any CTO claim still in the approval chain. Safe to run again. |
+| Carry-over reminders | `cto_carryover_reminders` | Daily, **07:00** | Does nothing except on the dates in `CTO_CARRYOVER_REMINDER_DATES` (default Dec 1, Dec 10, Dec 16). On those days: Supervisors/Unit Heads (or fallback submitters) and HR get the list of employees with at-risk CTO and no reason; the COH gets the count of reasons waiting for a decision. |
+
+**Do not rename the Nursing Service Section.** The OT and CTO claim
+routes find Nursing staff (Unit Head, then Chief Nurse) by the section's
+exact name, set in `NURSING_SECTION_NAME` in `bdh_hris/settings.py`. If
+the section is renamed in admin without changing that setting, Supervisor
+OT filing and CTO claim submission stop with an error until an HR
+Administrator puts the name back (or IT updates the setting and restarts
+the service).
+
+The old whole-balance year-end job (`forfeit_expired_cto`) was **removed**
+on 2026-11-01. If an earlier install scheduled it, delete that task:
+`schtasks /delete /tn "<its name>" /f`.
+
+**Upgrading an existing install:** migration `cto 0005` drops the old CTO
+claim and ledger tables (`CTOCreditEntry`, `CTOCreditTransaction`) and
+creates the per-line credit tables. This was approved on the basis that
+no real CTO data exists yet. If real CTO data has been entered, **stop
+and take a backup first**, and talk to the project owner before running
+`migrate`.
+
 ## 9. Day-to-day operations
 
 **Checking if it's up:** `Get-Service BDH-HRIS`, or just browse to the

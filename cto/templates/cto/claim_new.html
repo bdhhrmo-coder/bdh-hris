@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — BDH HRIS{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+<p class="muted">OT claims and Medical Transport claims are always separate. After creating the claim you add its lines, upload the documents, then submit.</p>
+<div class="card">
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Create draft claim</button>
+  </form>
+</div>
+{% endblock %}

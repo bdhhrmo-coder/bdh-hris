@@ -17,7 +17,7 @@ from django.utils.html import format_html
 register = template.Library()
 
 _APPROVED = {"APPROVED", "RECORDED"}
-_NOT_APPROVED = {"REJECTED", "RETURNED", "CANCELLED", "CONSENT_DECLINED", "FORFEITED", "DECLINED"}
+_NOT_APPROVED = {"REJECTED", "RETURNED", "CANCELLED", "CONSENT_DECLINED", "FORFEITED", "DECLINED", "LAPSED"}
 
 
 @register.simple_tag

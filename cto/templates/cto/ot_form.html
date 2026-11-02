@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{% if ot %}Edit returned OT request{% else %}File OT request{% endif %} — BDH HRIS{% endblock %}
+{% block content %}
+<h1>{% if ot %}Edit returned OT request #{{ ot.pk }}{% else %}File OT request{% endif %}</h1>
+<p class="muted">One line per employee per date. You cannot add yourself, and the Chief of Hospital cannot be added. Approving OT does not credit CTO — each employee files a CTO claim afterwards.</p>
+
+<form method="post">
+  {% csrf_token %}
+  <div class="card">{{ form.as_p }}</div>
+  <div class="card" x-data="{ count: {{ formset.total_form_count }} }">
+    {% with mf=formset.management_form %}
+    {# TOTAL_FORMS follows the rows on the page; the other management fields stay as Django renders them. #}
+    <input type="hidden" name="{{ mf.TOTAL_FORMS.html_name }}" :value="count" value="{{ formset.total_form_count }}">
+    {{ mf.INITIAL_FORMS }}{{ mf.MIN_NUM_FORMS }}{{ mf.MAX_NUM_FORMS }}
+    {% endwith %}
+    {% if formset.non_form_errors %}<ul class="errorlist">{% for e in formset.non_form_errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+    <table>
+      <thead><tr><th>Employee</th><th>Date</th><th>Approved hours</th><th>Day type</th></tr></thead>
+      <tbody x-ref="rows">
+      {% for f in formset %}
+      <tr>
+        <td>{{ f.employee }}{{ f.employee.errors }}</td>
+        <td>{{ f.work_date }}{{ f.work_date.errors }}</td>
+        <td>{{ f.approved_hours }}{{ f.approved_hours.errors }}</td>
+        <td>{{ f.day_type }}{{ f.day_type.errors }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <template x-ref="emptyRow">
+      <tr>
+        <td>{{ formset.empty_form.employee }}</td>
+        <td>{{ formset.empty_form.work_date }}</td>
+        <td>{{ formset.empty_form.approved_hours }}</td>
+        <td>{{ formset.empty_form.day_type }}</td>
+      </tr>
+    </template>
+    <p>
+      <button type="button"
+              @click="$refs.rows.insertAdjacentHTML('beforeend', $refs.emptyRow.innerHTML.replaceAll('__prefix__', count)); count++">
+        + Add row
+      </button>
+      <span class="muted">Blank rows are ignored.</span>
+    </p>
+  </div>
+  <button type="submit">Submit OT request</button>
+</form>
+{% endblock %}
