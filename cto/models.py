@@ -162,7 +162,11 @@ class CTOClaim(RoutedRecord):
         return self.employee
 
     def subject_employee_ids(self):
-        return {self.employee_id}
+        """People who never act on this claim: the claimant and, for an
+        exception claim, the person who filed it."""
+        ids = {self.employee_id}
+        filer = getattr(self.filed_by, "employee", None) if self.is_exception() else None
+        return ids | ({filer.pk} if filer else set())
 
     def clean(self):
         if self.employee_id and self.employee.has_role("CHIEF_OF_HOSPITAL"):

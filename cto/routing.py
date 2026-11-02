@@ -3,38 +3,40 @@ Routing for CTO claims (CLAUDE.md §6.2 / §7.1). OT requests are routed by
 main's official_requests module (owner decision D4, 2026-11-02).
 
 Routes (snapshotted on the record at submission as RoutedRecord.route):
-  Claim (OT / Medical Transport): Supervisor (Unit Head in Nursing) -> [Chief Nurse in Nursing] -> HR -> AO -> COH
-  Exception claim (HR Administrator): AO -> COH
+  Claim (OT / Medical Transport): Supervisor -> [Chief Nurse] -> HR -> AO -> COH
+  Exception claim: AO -> COH
 
-Approver is the subject: nobody on the record (the claimant) may act on it; another holder of the
-step's role takes it. When nobody can act on a step:
-  - Supervisor / Chief Nurse: the step is skipped (no holder, or every
-    holder is on the record — e.g. the Chief Nurse's own claim).
-  - HR / AO: skipped only if the role has holders and all of them are on
-    the record. With no holder at all, the record waits at that step and
-    the HR Administrators are told.
-  - COH: never skipped — nothing is approved without a COH action.
-Every skip is logged as a "skip" action (audit trail).
+Who acts at each step: main's next-level-up rules (owner decision D1,
+2026-11-02; leave/permissions.py, decisions 2026-10-26/27), the same as
+every other request type:
+  Supervisor   endorsers_for([employee]): the unit head (incl. an OIC), else
+               the section-level Supervisor, else the AO, else the COH.
+  Chief Nurse  second_endorsers_for([employee]); this step is on the route
+               only when needs_unit_step([employee]) (two-level endorsement).
+  HR           any HR Processor/Administrator not on the claim.
+  AO           the AO; the COH when the AO is on the claim.
+  COH          the COH, never on a claim they are on.
+Nobody on the claim (the claimant, and the filer of an exception claim)
+ever acts on it. There are no skips: a step with nobody who can act waits.
 
 submit/approve_step/return_record are atomic: if on_approved fails (e.g.
 claim crediting finds no multiplier rate), the whole step rolls back and
 the record stays pending at the step it was on.
-
-Chief Nurse = an active Supervisor assignment scoped to the Nursing
-Service Section with no unit; a Unit Head = an active Supervisor
-assignment scoped to a Nursing unit. OIC coverage is an is_oic=True
-Supervisor assignment, so it counts exactly as it does in supervisors_of.
 """
 
-from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from accounts.models import RoleAssignment
-from leave.permissions import employees_with_role, hr_employees, supervisors_of
+from leave.permissions import (
+    ao_step_actors,
+    coh_step_actors,
+    endorsers_for,
+    hr_step_actors,
+    needs_unit_step,
+    second_endorsers_for,
+)
 from notifications.services import notify
-from orgstructure.models import Section
 
 from .models import (
     STEP_AO,
@@ -52,81 +54,38 @@ STEP_LABELS = {
     STEP_AO: "Administrative Officer",
     STEP_COH: "Chief of Hospital",
 }
-SKIPPABLE_WHEN_EMPTY = {STEP_SUPERVISOR, STEP_CHIEF_NURSE}
-NEVER_SKIPPED = {STEP_COH}
-
-
-def _supervisor_assignments():
-    # Same filter as leave.permissions.employees_with_role: active
-    # SUPERVISOR assignments, OIC included.
-    return RoleAssignment.objects.filter(role=RoleAssignment.SUPERVISOR, is_active=True).select_related("employee")
-
-
-def is_nursing(employee):
-    name = settings.NURSING_SECTION_NAME
-    return employee.units.filter(section__name=name).exists() or employee.sections.filter(name=name).exists()
-
-
-def is_nursing_unit_head(employee):
-    return _supervisor_assignments().filter(
-        employee=employee, unit__section__name=settings.NURSING_SECTION_NAME
-    ).exists()
-
-
-def chief_nurses():
-    return {
-        ra.employee
-        for ra in _supervisor_assignments().filter(section__name=settings.NURSING_SECTION_NAME, unit__isnull=True)
-    }
-
-
-def unit_heads_of(employee):
-    unit_ids = list(employee.units.filter(section__name=settings.NURSING_SECTION_NAME).values_list("id", flat=True))
-    return {ra.employee for ra in _supervisor_assignments().filter(unit_id__in=unit_ids)}
-
-
-def require_nursing_section():
-    """Fail loudly if NURSING_SECTION_NAME matches no section: otherwise
-    every Nursing employee would silently lose the Unit Head / Chief Nurse
-    steps."""
-    if not Section.objects.filter(name=settings.NURSING_SECTION_NAME).exists():
-        raise ValidationError(
-            f'The Nursing section setting (NURSING_SECTION_NAME = "{settings.NURSING_SECTION_NAME}") matches no '
-            "section, so the Nursing route can't be worked out. Ask an HR Administrator to fix the section name "
-            "or the setting before submitting."
-        )
 
 
 def claim_route(claim):
     if claim.is_exception():
         return [STEP_AO, STEP_COH]
-    require_nursing_section()
     steps = [STEP_SUPERVISOR]
-    if is_nursing(claim.employee):
+    if needs_unit_step([claim.employee]):
         steps.append(STEP_CHIEF_NURSE)
     return steps + [STEP_HR, STEP_AO, STEP_COH]
 
 
-def _role_holders(record, step):
-    """Everyone holding the step's role for this record, before excluding
-    the people on the record."""
-    if step == STEP_SUPERVISOR:
-        employee = record.employee
-        return unit_heads_of(employee) if is_nursing(employee) else set(supervisors_of(employee))
-    if step == STEP_CHIEF_NURSE:
-        return chief_nurses()
-    if step == STEP_HR:
-        return set(hr_employees())
-    if step == STEP_AO:
-        return set(employees_with_role(RoleAssignment.ADMINISTRATIVE_OFFICER))
-    if step == STEP_COH:
-        return set(employees_with_role(RoleAssignment.CHIEF_OF_HOSPITAL))
-    return set()
+def _subjects(record):
+    """Everyone on the record: they never act on it."""
+    return list(type(record.employee).objects.filter(pk__in=record.subject_employee_ids()))
 
 
 def step_actors(record, step):
-    subjects = record.subject_employee_ids()
-    return {e for e in _role_holders(record, step) if e.pk not in subjects}
+    subjects = _subjects(record)
+    if step == STEP_SUPERVISOR:
+        people = endorsers_for([record.employee])
+    elif step == STEP_CHIEF_NURSE:
+        people = second_endorsers_for([record.employee])
+    elif step == STEP_HR:
+        people = hr_step_actors(subjects)
+    elif step == STEP_AO:
+        people = ao_step_actors(subjects)
+    elif step == STEP_COH:
+        people = coh_step_actors(subjects)
+    else:
+        people = []
+    excluded = {e.pk for e in subjects}
+    return {e for e in people if e.pk not in excluded}
 
 
 def can_act(employee, record):
@@ -144,28 +103,13 @@ def _log(record, action, step="", notes="", user=None):
 def _wait_at(record, step, actors):
     record.current_step = step
     record.save(update_fields=["current_step", "status", "route", "updated_at"])
-    url = record.get_absolute_url()
-    if actors:
-        notify(actors, f"{record} is waiting for your action ({STEP_LABELS[step]}).", url)
-    else:
-        notify(
-            employees_with_role(RoleAssignment.HR_ADMINISTRATOR),
-            f"{record} is waiting at the {STEP_LABELS[step]} step, but nobody can act on it. "
-            f"Assign a {STEP_LABELS[step]}.",
-            url,
-        )
+    notify(actors, f"{record} is waiting for your action ({STEP_LABELS[step]}).", record.get_absolute_url())
 
 
 def _advance(record, from_index, on_approved):
-    for step in record.route_steps()[from_index + 1:]:
-        holders = _role_holders(record, step)
-        actors = step_actors(record, step)
-        if actors:
-            return _wait_at(record, step, actors)
-        if step in NEVER_SKIPPED or (step not in SKIPPABLE_WHEN_EMPTY and not holders):
-            return _wait_at(record, step, actors)
-        reason = "every holder is on this record" if holders else "no holder is assigned"
-        _log(record, "skip", step, f"{STEP_LABELS[step]} step skipped: {reason}.")
+    steps = record.route_steps()[from_index + 1:]
+    if steps:
+        return _wait_at(record, steps[0], step_actors(record, steps[0]))
     record.status = RoutedRecord.APPROVED
     record.current_step = ""
     record.approved_on = timezone.localdate()

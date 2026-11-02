@@ -342,21 +342,52 @@ class ClaimRoutingTests(TestCase):
         self.assertEqual(routing.step_actors(claim, "SUPERVISOR"), {self.org.er_head})
         self.assertEqual(routing.step_actors(claim, "CHIEF_NURSE"), {self.org.chief_nurse})
 
-    def test_chief_nurse_own_claim_skips_the_chief_nurse_step(self):
+    def test_chief_nurse_own_claim_goes_to_the_ao_at_the_supervisor_step(self):
+        # D1 next level up: nobody above the section head at Supervisor level -> the AO. No skips.
         claim = self._claim(self.org.chief_nurse)
-        # No Unit Head covers the Chief Nurse (no unit), so that step is skipped too.
-        self.assertEqual(claim.current_step, "HR")
-        self.assertEqual(set(claim.actions.filter(action="skip").values_list("step", flat=True)),
-                         {"SUPERVISOR", "CHIEF_NURSE"})
+        self.assertEqual(claim.route_steps(), ["SUPERVISOR", "HR", "AO", "COH"])
+        self.assertEqual(routing.step_actors(claim, "SUPERVISOR"), {self.org.ao})
+        self.assertFalse(claim.actions.filter(action="skip").exists())
 
-    def test_ao_own_claim_skips_only_the_ao_step(self):
-        RoleAssignment.objects.create(employee=self.org.lab_sup, role=RoleAssignment.SUPERVISOR)  # covers anyone
+    def test_unit_head_own_claim_goes_to_the_chief_nurse(self):
+        claim = self._claim(self.org.er_head)
+        self.assertEqual(claim.route_steps(), ["SUPERVISOR", "HR", "AO", "COH"])  # no unit step for a head
+        self.assertEqual(routing.step_actors(claim, "SUPERVISOR"), {self.org.chief_nurse})
+
+    def test_ao_own_claim_coh_takes_the_supervisor_and_ao_steps(self):
+        # D1: the AO's own request goes to the COH at the Supervisor and AO steps.
         claim = self._claim(self.org.ao)
         approve_all(claim, on_approved=credit_lines)
         self.assertEqual(claim.status, RoutedRecord.APPROVED)
-        self.assertEqual(list(claim.actions.filter(action="skip").values_list("step", flat=True)), ["AO"])
-        self.assertEqual(list(claim.actions.filter(action="approve").values_list("step", flat=True)),
-                         ["SUPERVISOR", "HR", "COH"])
+        self.assertFalse(claim.actions.filter(action="skip").exists())
+        approvals = list(claim.actions.filter(action="approve").values_list("step", "acted_by"))
+        coh = self.org.coh.user.pk
+        self.assertEqual(approvals, [("SUPERVISOR", coh), ("HR", self.org.hr.user.pk), ("AO", coh), ("COH", coh)])
+
+    def test_absent_unit_head_is_covered_by_the_oic(self):
+        oic = make_employee("oicnurse", "E-OIC", section=self.org.nursing, unit=self.org.er)
+        RoleAssignment.objects.create(employee=oic, role=RoleAssignment.SUPERVISOR, unit=self.org.er, is_oic=True,
+                                      delegated_by=self.org.er_head, start_date=date(2026, 1, 1),
+                                      end_date=date(2099, 12, 31))
+        claim = self._claim(self.org.nurse)
+        self.assertEqual(routing.step_actors(claim, "SUPERVISOR"), {oic})  # the absent head is set aside, no skip
+        self.assertFalse(routing.can_act(self.org.er_head, claim))
+        self.assertFalse(claim.actions.filter(action="skip").exists())
+
+    def test_exception_claim_filer_never_acts_on_it(self):
+        # D3: with no other HR Administrator the AO files; the COH then takes the AO step.
+        from .claims import create_exception_claim
+
+        RoleAssignment.objects.filter(role=RoleAssignment.HR_ADMINISTRATOR).delete()
+        with self.assertRaises(ValidationError):  # HR Processor is not enough
+            create_exception_claim(self.org.hr, self.org.lab_staff, CTOClaim.DUTY_REGULAR, "x", self.org.hr.user)
+        claim = create_exception_claim(self.org.ao, self.org.lab_staff, CTOClaim.DUTY_REGULAR, "Certified",
+                                       self.org.ao.user)
+        add_line(claim, Decimal("8"), date(2026, 10, 6), work_date=date(2026, 10, 5), day_type=WEEKDAY)
+        upload_all_required(claim, self.org.ao.user)
+        submit_claim(claim, self.org.ao.user, date(2026, 10, 6))
+        self.assertEqual(routing.step_actors(claim, "AO"), {self.org.coh})
+        self.assertFalse(routing.can_act(self.org.ao, claim))
 
     def test_second_ao_takes_the_ao_step_on_ao_own_claim(self):
         RoleAssignment.objects.create(employee=self.org.lab_sup, role=RoleAssignment.SUPERVISOR)
@@ -682,12 +713,6 @@ class HardeningTests(TestCase):
         self.assertEqual(line.state, CTOClaimLine.PENDING)
         self.assertIsNone(line.effective_date)
 
-    # 5. NURSING_SECTION_NAME matches a real section
-    def test_nursing_section_setting_matches_a_section(self):
-        from django.conf import settings
-
-        self.assertTrue(Section.objects.filter(name=settings.NURSING_SECTION_NAME).exists())
-
     # 7. no deletes from admin
     def test_admin_cannot_delete_claims_or_lines(self):
         from django.contrib import admin
@@ -909,25 +934,6 @@ class OpeningBalanceTests(TestCase):
         self.assertEqual(client.get(reverse("cto:opening_balances")).status_code, 403)
 
 
-class NursingSectionSettingTests(TestCase):
-    def setUp(self):
-        self.org = Org()
-
-    @override_settings(NURSING_SECTION_NAME="Nursing Services (renamed)")
-    def test_claim_submission_fails_loudly_when_section_name_matches_nothing(self):
-        ot = approved_ot(self.org, self.org.nurse, date(2026, 10, 5), today=date(2026, 10, 1))
-        claim = CTOClaim.objects.create(employee=self.org.nurse, filed_by=self.org.nurse.user)
-        add_line(claim, Decimal("8"), date(2026, 10, 6), ot_line=ot)
-        upload_all_required(claim, self.org.nurse.user)
-        with self.assertRaises(ValidationError) as ctx:
-            submit_claim(claim, self.org.nurse.user, date(2026, 10, 6))
-        self.assertIn("HR Administrator", str(ctx.exception))
-        claim.refresh_from_db()
-        self.assertEqual(claim.status, RoutedRecord.DRAFT)
-        self.assertIsNone(claim.first_filed_on)
-
-
-
 class ExceptionClaimDeadlineTests(TestCase):
     """Decided 2026-11-01 (Q4): exception claims skip the filing deadline;
     other claims don't."""
@@ -1040,7 +1046,7 @@ class CarryOverReasonTests(TestCase):
         self.assertEqual(self.submitters(org.lab_staff), {org.lab_sup})
         self.assertEqual(self.submitters(org.nurse), {org.er_head})            # Unit Head
         self.assertEqual(self.submitters(org.er_head), {org.chief_nurse})      # no other Unit Head -> Chief Nurse
-        self.assertEqual(self.submitters(org.chief_nurse), {org.hr_admin})     # no one covers -> HR Administrator
+        self.assertEqual(self.submitters(org.chief_nurse), {org.ao})           # no one covers -> AO (8g)
         self.assertEqual(self.submitters(org.hr_admin), {org.ao})              # HR Admin's own -> AO
         self.assertEqual(self.submitters(org.ao), {org.hr_admin})              # AO's own -> HR Admin
         for e in (org.lab_staff, org.nurse, org.er_head, org.chief_nurse, org.hr_admin, org.ao):
@@ -1276,6 +1282,29 @@ class SeparationTests(TestCase):
         self.assertEqual(history, {"separation_status", "last_day_of_service"})
         with self.assertRaises(ValidationError):  # Regular cannot be "not renewing"
             self._set(Employee.SEPARATION_NOT_RENEWING, date(2027, 1, 15), employee=self.org.lab_staff2)
+
+    def test_ao_sets_separation_only_when_no_other_hr_exists(self):
+        # D3: never for yourself; the AO steps in only when no other HR person exists.
+        with self.assertRaises(ValidationError):
+            self._set(Employee.SEPARATION_RESIGNED, date(2027, 1, 15), actor=self.org.ao)
+        RoleAssignment.objects.filter(role__in=[RoleAssignment.HR_PROCESSOR, RoleAssignment.HR_ADMINISTRATOR],
+                                      employee=self.org.hr_admin).delete()
+        self._set(Employee.SEPARATION_RESIGNED, date(2027, 1, 15), actor=self.org.ao, employee=self.org.hr)
+
+    def test_archived_employee_credit_still_lapses(self):
+        # Main's archive (soft delete) sets is_active off; the nightly lapse must still find them.
+        from employees.archive import archive
+
+        from .separation import run_separation_lapse
+
+        line = opening_credit(self.org, self.cosp, days="3")
+        self._set(Employee.SEPARATION_NOT_RENEWING, date(2026, 11, 30))
+        archive(self.cosp, self.org.hr_admin.user, "Contract ended")
+        self.assertFalse(Employee.objects.get(pk=self.cosp.pk).is_active)
+        lines, _ = run_separation_lapse(date(2026, 12, 1))
+        line.refresh_from_db()
+        self.assertEqual((lines, line.state), (1, CTOClaimLine.LAPSED))
+        self.assertEqual(compute_available_cto_balance(self.cosp, date(2026, 12, 1)), Decimal("0"))
 
     def test_hr_cannot_set_own_separation_status(self):
         with self.assertRaises(ValidationError):

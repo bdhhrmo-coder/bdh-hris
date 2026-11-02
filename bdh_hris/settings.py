@@ -95,9 +95,6 @@ CTO_USAGE_CUTOFF_MONTH_DAY = (12, 15)  # each credit's use deadline: Dec 15 of i
 CTO_CARRYOVER_REASON_DEADLINE_MONTH_DAY = (12, 16)  # last day a carry-over reason can be submitted
 # Days the carry-over reminder job (cto_carryover_reminders) sends its lists.
 CTO_CARRYOVER_REMINDER_DATES = [(12, 1), (12, 10), (12, 16)]
-# OT/CTO routing (cto/routing.py): employees of this section route through
-# Unit Head -> Chief Nurse. Must match orgstructure.Section.name.
-NURSING_SECTION_NAME = "Nursing Service Section"
 # CTO opening balances (cto/opening.py, CLAUDE.md §7.1 Option A): last day
 # opening lines can be entered or voided. Its year is the only year a date
 # earned may fall in.

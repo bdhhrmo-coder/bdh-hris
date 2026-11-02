@@ -22,6 +22,7 @@ from .balances import (
 from .claims import (
     add_line,
     approve_claim,
+    can_file_exception,
     claimable_ot_lines,
     correct_day_type,
     create_exception_claim,
@@ -113,8 +114,8 @@ def claim_new(request):
 @login_required
 def exception_claim_new(request):
     employee = _employee_or_403(request)
-    if not employee.is_hr_administrator():
-        raise PermissionDenied("Only an HR Administrator may file an exception CTO claim.")
+    if not can_file_exception(employee):
+        raise PermissionDenied("Only an HR Administrator (or the AO) may file an exception CTO claim.")
     form = ExceptionClaimForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         try:
@@ -409,7 +410,7 @@ def cto_queue(request):
         # oldest first: first filed, first acted on (owner, 2026-10-06)
         "applications": visible_cto_applications_for(employee).select_related("employee").order_by("submitted_at", "pk"),
         "pending_claims": pending_claims,
-        "can_file_exception": employee is not None and employee.is_hr_administrator(),
+        "can_file_exception": can_file_exception(employee),
         "can_enter_opening": can_enter_opening(employee),
         "can_set_separation": can_set_separation(employee),
     })

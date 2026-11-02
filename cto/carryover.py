@@ -30,10 +30,9 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from accounts.models import RoleAssignment
-from leave.permissions import employees_with_role, supervisors_of
+from leave.permissions import employees_with_role, endorsers_for
 from notifications.services import notify
 
-from . import routing
 from .models import CTOCarryOverReason, CTOClaimLine
 from .separation import is_separating
 
@@ -95,11 +94,12 @@ def reason_submitters(employee):
         return others(employees_with_role(RoleAssignment.ADMINISTRATIVE_OFFICER))
     if employee.has_role(RoleAssignment.ADMINISTRATIVE_OFFICER):
         return others(employees_with_role(RoleAssignment.HR_ADMINISTRATOR))
-    nursing = routing.is_nursing(employee)
-    covering = others(routing.unit_heads_of(employee) if nursing else supervisors_of(employee))
-    if not covering and nursing:
-        covering = others(routing.chief_nurses())
-    if not covering:
+    # Next level up (owner decision 8g, 2026-11-02): the unit head, else the
+    # section-level Supervisor (Chief Nurse), else the AO. Never the COH,
+    # who decides the reason.
+    cohs = {e.pk for e in employees_with_role(RoleAssignment.CHIEF_OF_HOSPITAL)}
+    covering = {p for p in others(endorsers_for([employee])) if p.pk not in cohs}
+    if not covering:  # no AO either: an HR Administrator, as for the AO's own reason
         covering = others(employees_with_role(RoleAssignment.HR_ADMINISTRATOR))
     return covering
 

@@ -16,6 +16,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from accounts.models import RoleAssignment
+from leave.permissions import ao_step_actors, hr_step_actors
 from employees.models import Employee, EmployeeEditHistory
 
 ALLOWED = {
@@ -30,20 +31,28 @@ def is_separating(employee):
     return bool(employee.separation_status and employee.last_day_of_service)
 
 
+def separation_actors(employee):
+    """Who may set this employee's separation status: any other HR Processor
+    or Administrator; the AO when there is none (owner decision D3)."""
+    return set(hr_step_actors([employee])) or set(ao_step_actors([employee]))
+
+
 def can_set_separation(actor):
+    """True if actor could set someone's separation status (opens the page)."""
     return actor is not None and (
         actor.has_role(RoleAssignment.HR_PROCESSOR) or actor.has_role(RoleAssignment.HR_ADMINISTRATOR)
+        or actor.has_role(RoleAssignment.ADMINISTRATIVE_OFFICER)
     )
 
 
 @transaction.atomic
 def set_separation(actor, employee, status, last_day, reason, user):
     """status "" with last_day None clears it."""
-    if not can_set_separation(actor):
-        raise ValidationError("Only HR can set a separation status.")
     if actor.pk == employee.pk:
         # The status waives the actor's own CTO deadlines and limits.
         raise ValidationError("You cannot set your own separation status; another HR Processor or Administrator must.")
+    if actor not in separation_actors(employee):
+        raise ValidationError("Only HR can set a separation status (the AO only when no other HR staff exists).")
     if not reason.strip():
         raise ValidationError("A reason is required.")
     if status:

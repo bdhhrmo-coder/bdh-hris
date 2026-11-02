@@ -214,13 +214,29 @@ def correct_day_type(line, new_day_type, remark, employee, user):
     )
 
 
+def exception_claim_filers(employee):
+    """Who may file an exception claim for this employee: any other HR
+    Administrator; the AO when there is none (owner decision D3)."""
+    from accounts.models import RoleAssignment
+    from leave.permissions import employees_with_role
+
+    hr_admins = {e for e in employees_with_role(RoleAssignment.HR_ADMINISTRATOR) if e.pk != employee.pk}
+    return hr_admins or {e for e in employees_with_role(RoleAssignment.ADMINISTRATIVE_OFFICER) if e.pk != employee.pk}
+
+
+def can_file_exception(actor):
+    """Opens the exception-claim page: an HR Administrator, or the AO."""
+    return actor is not None and (actor.is_hr_administrator() or actor.has_role("ADMINISTRATIVE_OFFICER"))
+
+
 def create_exception_claim(hr_admin, employee, duty_type, reason, user):
-    """HR Administrator only, never for themselves; a reason is required.
-    Routed AO -> COH when submitted."""
-    if not hr_admin.is_hr_administrator():
-        raise ValidationError("Only an HR Administrator may file an exception CTO claim.")
+    """HR Administrator only, never for themselves (the AO when no other HR
+    Administrator exists, D3); a reason is required. Routed AO -> COH."""
     if employee.pk == hr_admin.pk:
         raise ValidationError("You cannot file an exception claim for yourself.")
+    if hr_admin not in exception_claim_filers(employee):
+        raise ValidationError("Only an HR Administrator may file an exception CTO claim "
+                              "(the AO only when no other HR Administrator exists).")
     if not is_cto_eligible(employee):
         raise ValidationError("CTO is not applicable to the Chief of Hospital.")
     if not reason.strip():

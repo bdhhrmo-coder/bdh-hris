@@ -280,14 +280,6 @@ schtasks /create /tn "BDH HRIS CTO carry-over reminders" /tr "C:\BDH-HRIS\script
 | Separation lapse | `cto_separation_lapse` | Daily, **00:45** | For employees whose last day of service has passed: lapses their remaining CTO credit and any CTO claim still in the approval chain. Safe to run again. |
 | Carry-over reminders | `cto_carryover_reminders` | Daily, **07:00** | Does nothing except on the dates in `CTO_CARRYOVER_REMINDER_DATES` (default Dec 1, Dec 10, Dec 16). On those days: Supervisors/Unit Heads (or fallback submitters) and HR get the list of employees with at-risk CTO and no reason; the COH gets the count of reasons waiting for a decision. |
 
-**Do not rename the Nursing Service Section.** The OT and CTO claim
-routes find Nursing staff (Unit Head, then Chief Nurse) by the section's
-exact name, set in `NURSING_SECTION_NAME` in `bdh_hris/settings.py`. If
-the section is renamed in admin without changing that setting, Supervisor
-OT filing and CTO claim submission stop with an error until an HR
-Administrator puts the name back (or IT updates the setting and restarts
-the service).
-
 The old whole-balance year-end job (`forfeit_expired_cto`) was **removed**
 on 2026-11-01. If an earlier install scheduled it, delete that task:
 `schtasks /delete /tn "<its name>" /f`.
