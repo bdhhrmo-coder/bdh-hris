@@ -105,7 +105,12 @@ class BatchForm(forms.Form):
             self.add_error("destination", "Required for Travel.")
         employees = c.get("employees")
         if kind and employees is not None:
-            role = self.filer_role()
+            # Scope comes from the roles held NOW, also when editing a returned
+            # batch (the saved filer_role only decides the route).
+            role = self.rules.filing_role_for(self.acting_employee, kind)
+            if role is None:
+                self.add_error("kind", "You no longer hold a role that may file this type.")
+                return c
             allowed = set(self.rules.employees_for(self.acting_employee, role, kind).values_list("pk", flat=True))
             outside = [e.full_name for e in employees if e.pk not in allowed]
             if self.acting_employee is not None and any(e.pk == self.acting_employee.pk for e in employees):

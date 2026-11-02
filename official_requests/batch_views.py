@@ -110,6 +110,9 @@ def batch_edit(request, pk):
     if batch.status != OfficialRequest.RETURNED:
         messages.error(request, "Only a returned group request can be edited.")
         return redirect("official_requests:batch_detail", pk=pk)
+    kind = next(k for k, v in rules.KINDS.items() if v[1] == batch.request_type and v[2] == batch.work_kind)
+    if rules.filing_role_for(acting_employee, kind) is None:
+        raise PermissionDenied("You no longer hold a role that may file this type of group request.")
     latest_return = batch.actions.filter(action="return").order_by("-acted_at").first()
 
     if request.method == "POST":
@@ -132,7 +135,6 @@ def batch_edit(request, pk):
             ctx = _form_context(request, form, acting_employee, _rows_from_post(request.POST),
                                 request.POST.getlist("employees"), batch=batch)
     else:
-        kind = next(k for k, v in rules.KINDS.items() if v[1] == batch.request_type and v[2] == batch.work_kind)
         form = BatchForm(acting_employee=acting_employee, batch=batch,
                          initial={"kind": kind, "purpose": batch.purpose, "destination": batch.destination,
                                   "past_date_reason": batch.past_date_reason, "apply_same": False})
