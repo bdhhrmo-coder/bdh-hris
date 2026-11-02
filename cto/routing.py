@@ -1,15 +1,12 @@
 """
-Routing for OT requests and CTO claims (CLAUDE.md §6.2 / §7.1).
+Routing for CTO claims (CLAUDE.md §6.2 / §7.1). OT requests are routed by
+main's official_requests module (owner decision D4, 2026-11-02).
 
 Routes (snapshotted on the record at submission as RoutedRecord.route):
-  OT filed as Supervisor:  [Chief Nurse if the filer is a Nursing Unit Head] -> HR -> AO -> COH
-  OT filed as HR:          AO -> COH
-  OT filed as AO:          COH
   Claim (OT / Medical Transport): Supervisor (Unit Head in Nursing) -> [Chief Nurse in Nursing] -> HR -> AO -> COH
   Exception claim (HR Administrator): AO -> COH
 
-Approver is the subject: nobody on the record (any OT line's employee,
-the OT filer, or the claimant) may act on it; another holder of the
+Approver is the subject: nobody on the record (the claimant) may act on it; another holder of the
 step's role takes it. When nobody can act on a step:
   - Supervisor / Chief Nurse: the step is skipped (no holder, or every
     holder is on the record — e.g. the Chief Nurse's own claim).
@@ -45,7 +42,6 @@ from .models import (
     STEP_COH,
     STEP_HR,
     STEP_SUPERVISOR,
-    OvertimeRequest,
     RoutedRecord,
 )
 
@@ -101,16 +97,6 @@ def require_nursing_section():
         )
 
 
-def ot_route(filer, filed_as):
-    if filed_as == OvertimeRequest.CAPACITY_AO:
-        return [STEP_COH]
-    if filed_as == OvertimeRequest.CAPACITY_HR:
-        return [STEP_AO, STEP_COH]
-    require_nursing_section()
-    steps = [STEP_CHIEF_NURSE] if is_nursing_unit_head(filer) else []
-    return steps + [STEP_HR, STEP_AO, STEP_COH]
-
-
 def claim_route(claim):
     if claim.is_exception():
         return [STEP_AO, STEP_COH]
@@ -141,16 +127,6 @@ def _role_holders(record, step):
 def step_actors(record, step):
     subjects = record.subject_employee_ids()
     return {e for e in _role_holders(record, step) if e.pk not in subjects}
-
-
-def people_on_route(record, route):
-    """Role holders on any step of the route who are also on the record —
-    used to warn an OT filer (non-blocking)."""
-    subjects = record.subject_employee_ids()
-    found = set()
-    for step in route:
-        found |= {e for e in _role_holders(record, step) if e.pk in subjects}
-    return found
 
 
 def can_act(employee, record):

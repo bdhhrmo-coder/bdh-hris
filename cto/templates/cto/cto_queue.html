@@ -2,27 +2,13 @@
 {% load badges %}
 {% block title %}CTO queue — BDH HRIS{% endblock %}
 {% block content %}
-<h1>CTO and overtime queue</h1>
+<h1>CTO queue</h1>
 <p>
-  {% if can_file_ot %}<a href="{% url 'cto:ot_new' %}" class="btn">+ File OT request</a>{% endif %}
   {% if can_file_exception %}<a href="{% url 'cto:exception_claim_new' %}" class="btn">+ Exception CTO claim</a>{% endif %}
   {% if can_enter_opening %}<a href="{% url 'cto:opening_balances' %}" class="btn">Opening CTO balances</a>{% endif %}
   <a href="{% url 'cto:carry_over' %}" class="btn">Year-end carry-over</a>
   {% if can_set_separation %}<a href="{% url 'cto:separation' %}" class="btn">Separation status</a>{% endif %}
 </p>
-
-<div class="card">
-<h2 class="mt-0">OT requests awaiting my action</h2>
-<table>
-  <tr><th>#</th><th>Filed by</th><th>Lines</th><th>Step</th><th></th></tr>
-  {% for ot in pending_ot %}
-  <tr><td>{{ ot.pk }}</td><td>{{ ot.filed_by.full_name }}</td><td>{{ ot.lines.count }}</td>
-      <td>{{ ot.get_current_step_display }}</td><td><a href="{% url 'cto:ot_detail' ot.pk %}">Open</a></td></tr>
-  {% empty %}
-  <tr><td colspan="5" class="empty-note">Nothing awaiting your action.</td></tr>
-  {% endfor %}
-</table>
-</div>
 
 <div class="card">
 <h2 class="mt-0">CTO claims awaiting my action</h2>
@@ -36,19 +22,6 @@
   {% endfor %}
 </table>
 </div>
-
-{% if my_filed_ot %}
-<div class="card">
-<h2 class="mt-0">OT requests I filed</h2>
-<table>
-  <tr><th>#</th><th>Filed</th><th>Status</th><th>Step</th><th></th></tr>
-  {% for ot in my_filed_ot %}
-  <tr><td>{{ ot.pk }}</td><td>{{ ot.created_at|date:"Y-m-d" }}</td><td>{{ ot.get_status_display }}</td>
-      <td>{{ ot.get_current_step_display }}</td><td><a href="{% url 'cto:ot_detail' ot.pk %}">Open</a></td></tr>
-  {% endfor %}
-</table>
-</div>
-{% endif %}
 
 <div class="card">
 <h2 class="mt-0">CTO usage applications awaiting my action</h2>

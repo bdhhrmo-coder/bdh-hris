@@ -4,33 +4,9 @@ from django import forms
 
 from employees.models import Employee
 
-from .models import DAY_TYPE_CHOICES, CTOClaim, CTOUsageApplication, OvertimeRequest
+from .models import DAY_TYPE_CHOICES, CTOClaim, CTOUsageApplication
 
 DATE = forms.DateInput(attrs={"type": "date"})
-
-
-class OvertimeRequestForm(forms.Form):
-    filed_as = forms.ChoiceField(choices=OvertimeRequest.CAPACITY_CHOICES)
-    purpose = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}))
-    past_date_reason = forms.CharField(
-        required=False, widget=forms.Textarea(attrs={"rows": 2}),
-        help_text="Required when any line is dated before today.",
-    )
-
-    def __init__(self, *args, capacities, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["filed_as"].choices = [c for c in OvertimeRequest.CAPACITY_CHOICES if c[0] in capacities]
-
-
-class OvertimeLineForm(forms.Form):
-    employee = forms.ModelChoiceField(queryset=Employee.objects.filter(is_active=True))
-    work_date = forms.DateField(widget=DATE)
-    approved_hours = forms.DecimalField(max_digits=5, decimal_places=2)
-    day_type = forms.ChoiceField(choices=DAY_TYPE_CHOICES)
-
-
-# 3 rows to start (1 required + 2 extra); the page's "Add row" button adds more.
-OvertimeLineFormSet = forms.formset_factory(OvertimeLineForm, extra=2, min_num=1, validate_min=True, max_num=200)
 
 
 class ClaimStartForm(forms.Form):

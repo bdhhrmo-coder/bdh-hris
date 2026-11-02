@@ -9,14 +9,11 @@ from .models import (
     CTOMultiplierRate,
     CTOUsageApplication,
     CTOUsageApplicationAction,
-    OvertimeLine,
-    OvertimeRequest,
-    OvertimeRequestAction,
 )
 
 
 class NoDeleteAdmin(admin.ModelAdmin):
-    """OT requests and claims are audit records: never deleted from admin
+    """Claims are audit records: never deleted from admin
     (cancel through the app instead). Lines are read-only inlines."""
 
     def has_delete_permission(self, request, obj=None):
@@ -39,23 +36,6 @@ class ReadOnlyInline(admin.TabularInline):
 @admin.register(CTOMultiplierRate)
 class CTOMultiplierRateAdmin(admin.ModelAdmin):
     list_display = ("effective_date", "weekday_multiplier", "restday_holiday_multiplier", "notes")
-
-
-class OvertimeLineInline(ReadOnlyInline):
-    model = OvertimeLine
-
-
-class OvertimeRequestActionInline(ReadOnlyInline):
-    model = OvertimeRequestAction
-
-
-@admin.register(OvertimeRequest)
-class OvertimeRequestAdmin(NoDeleteAdmin):
-    # Status/route are read-only: approval only happens through cto/routing.py.
-    list_display = ("pk", "filed_by", "filed_as", "status", "current_step", "created_at")
-    list_filter = ("status", "filed_as")
-    readonly_fields = ("status", "route", "current_step", "approved_on")
-    inlines = [OvertimeLineInline, OvertimeRequestActionInline]
 
 
 class CTOClaimLineInline(ReadOnlyInline):

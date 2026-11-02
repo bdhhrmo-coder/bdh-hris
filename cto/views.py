@@ -36,8 +36,6 @@ from .forms import (
     OpeningLineForm,
     SeparationForm,
     OTClaimLineForm,
-    OvertimeLineFormSet,
-    OvertimeRequestForm,
 )
 from .models import (
     DAY_TYPE_CHOICES,
@@ -47,12 +45,10 @@ from .models import (
     CTOCreditAllocation,
     CTOUsageApplication,
     CTOUsageApplicationAction,
-    OvertimeRequest,
     RoutedRecord,
 )
 from .notifications import notify_status_change
 from .opening import add_opening_line, can_enter_opening, entry_is_open, opening_entry_actors, void_opening_line
-from .overtime import file_ot, filing_capacities
 from . import carryover
 from .separation import can_set_separation, is_separating, set_separation
 from .permissions import (
@@ -97,102 +93,7 @@ def _can_view_record(employee, record, owners):
 
 
 def record_people(record):
-    if isinstance(record, OvertimeRequest):
-        return [line.employee for line in record.lines.select_related("employee")]
     return [record.employee]
-
-
-# --- OT requests ---------------------------------------------------------
-
-def _ot_form_view(request, ot=None):
-    filer = _employee_or_403(request)
-    capacities = filing_capacities(filer)
-    if not capacities:
-        raise PermissionDenied("Only a Supervisor, HR or the AO can file OT.")
-    initial_lines = []
-    initial = {}
-    if ot is not None:
-        initial = {"filed_as": ot.filed_as, "purpose": ot.purpose, "past_date_reason": ot.past_date_reason}
-        initial_lines = [
-            {"employee": l.employee, "work_date": l.work_date, "approved_hours": l.approved_hours, "day_type": l.day_type}
-            for l in ot.lines.all()
-        ]
-    if request.method == "POST":
-        form = OvertimeRequestForm(request.POST, capacities=capacities)
-        formset = OvertimeLineFormSet(request.POST, prefix="lines")
-        if form.is_valid() and formset.is_valid():
-            lines = [f.cleaned_data for f in formset if f.cleaned_data]
-            try:
-                ot, warnings = file_ot(
-                    filer, form.cleaned_data["filed_as"], form.cleaned_data["purpose"],
-                    form.cleaned_data["past_date_reason"], lines, request.user, timezone.localdate(), ot=ot,
-                )
-            except ValidationError as exc:
-                _show_errors(request, exc)
-            else:
-                for w in warnings:
-                    messages.warning(request, w)
-                messages.success(request, "OT request submitted.")
-                return redirect(ot.get_absolute_url())
-    else:
-        form = OvertimeRequestForm(initial=initial, capacities=capacities)
-        formset = OvertimeLineFormSet(initial=initial_lines, prefix="lines")
-    return render(request, "cto/ot_form.html", {"form": form, "formset": formset, "ot": ot})
-
-
-@login_required
-def ot_new(request):
-    return _ot_form_view(request)
-
-
-@login_required
-def ot_edit(request, pk):
-    ot = get_object_or_404(OvertimeRequest, pk=pk, status=RoutedRecord.RETURNED)
-    if ot.filed_by_id != _employee_or_403(request).pk:
-        raise PermissionDenied("Only the filer can edit a returned OT request.")
-    return _ot_form_view(request, ot)
-
-
-@login_required
-def ot_detail(request, pk):
-    employee = _employee_or_403(request)
-    ot = get_object_or_404(OvertimeRequest, pk=pk)
-    if not _can_view_record(employee, ot, {ot.filed_by_id}):
-        raise PermissionDenied("You are not authorized to view this OT request.")
-    return render(request, "cto/ot_detail.html", {
-        "ot": ot,
-        "lines": ot.lines.select_related("employee"),
-        "can_act": routing.can_act(employee, ot),
-        "is_filer": employee.pk == ot.filed_by_id,
-        "step_label": routing.STEP_LABELS.get(ot.current_step, ""),
-    })
-
-
-@login_required
-def ot_action(request, pk):
-    if request.method != "POST":
-        return redirect("cto:ot_detail", pk=pk)
-    employee = _employee_or_403(request)
-    ot = get_object_or_404(OvertimeRequest, pk=pk)
-    action = request.POST.get("action")
-    notes = request.POST.get("notes", "")
-    try:
-        with transaction.atomic():
-            if action == "approve":
-                routing.approve_step(ot, employee, request.user, notes)
-            elif action == "return":
-                routing.return_record(ot, employee, request.user, notes)
-            elif action == "cancel" and ot.filed_by_id == employee.pk and ot.status == RoutedRecord.RETURNED:
-                ot.status = RoutedRecord.CANCELLED
-                ot.save(update_fields=["status", "updated_at"])
-                ot.actions.create(action="cancel", acted_by=request.user)
-            else:
-                raise PermissionDenied("You cannot take this action.")
-    except ValidationError as exc:
-        _show_errors(request, exc)
-    else:
-        messages.success(request, "Action recorded.")
-    return redirect("cto:ot_detail", pk=pk)
 
 
 # --- CTO claims ----------------------------------------------------------
@@ -500,7 +401,6 @@ def cto_apply(request):
 @login_required
 def cto_queue(request):
     employee = get_acting_employee(request.user)
-    pending_ot = [ot for ot in OvertimeRequest.objects.filter(status=RoutedRecord.PENDING) if routing.can_act(employee, ot)]
     pending_claims = [
         c for c in CTOClaim.objects.filter(status=RoutedRecord.PENDING).select_related("employee")
         if routing.can_act(employee, c)
@@ -508,10 +408,7 @@ def cto_queue(request):
     return render(request, "cto/cto_queue.html", {
         # oldest first: first filed, first acted on (owner, 2026-10-06)
         "applications": visible_cto_applications_for(employee).select_related("employee").order_by("submitted_at", "pk"),
-        "pending_ot": pending_ot,
         "pending_claims": pending_claims,
-        "my_filed_ot": OvertimeRequest.objects.filter(filed_by=employee) if employee else [],
-        "can_file_ot": bool(filing_capacities(employee)),
         "can_file_exception": employee is not None and employee.is_hr_administrator(),
         "can_enter_opening": can_enter_opening(employee),
         "can_set_separation": can_set_separation(employee),

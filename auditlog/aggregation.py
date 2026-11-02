@@ -16,7 +16,7 @@ Row shape (a plain dict, not a model — nothing here is ever saved):
     }
 """
 
-from cto.models import CTOClaimAction, CTOUsageApplicationAction, OvertimeRequestAction
+from cto.models import CTOClaimAction, CTOUsageApplicationAction
 from documents.models import UploadedDocumentEvent
 from employees.models import EmployeeEditHistory
 from exchange.models import DutyExchangeRequestAction
@@ -38,8 +38,6 @@ def _employees_for_object(obj):
     """Best-effort list of Employee objects a transaction record concerns."""
     if obj is None:
         return []
-    if hasattr(obj, "filed_as"):  # cto.OvertimeRequest: filer plus everyone on a line
-        return [obj.filed_by] + [line.employee for line in obj.lines.select_related("employee")]
     if hasattr(obj, "employee_a_id"):  # DutyExchangeRequest
         return [e for e in (obj.employee_a, obj.employee_b) if e is not None]
     if hasattr(obj, "employee"):
@@ -180,7 +178,6 @@ def audit_rows(employee_id=None, module=None, date_from=None, date_to=None):
     rows += _rows_from_employee_edit_history(EmployeeEditHistory.objects.all())
     rows += _rows_from_request_actions(LeaveApplicationAction.objects.all(), "Leave", "application")
     rows += _rows_from_request_actions(CTOUsageApplicationAction.objects.all(), "CTO", "application")
-    rows += _rows_from_request_actions(OvertimeRequestAction.objects.all(), "Overtime", "request")
     rows += _rows_from_request_actions(CTOClaimAction.objects.all(), "CTO Claim", "claim")
     rows += _rows_from_request_actions(DutyExchangeRequestAction.objects.all(), "Exchange of Duty", "request")
     rows += _rows_from_request_actions(

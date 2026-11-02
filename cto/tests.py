@@ -33,10 +33,8 @@ from .models import (
     CTOClaimLine,
     CTOMultiplierRate,
     CTOUsageApplication,
-    OvertimeRequest,
     RoutedRecord,
 )
-from .overtime import file_ot
 from .permissions import is_cto_eligible
 
 NURSING = "Nursing Service Section"
@@ -76,10 +74,6 @@ def make_rate(effective_date=date(2025, 12, 16), weekday="1.00", restday="1.50")
 def on(day):
     """Freeze 'today' for routing's approval date."""
     return patch("django.utils.timezone.localdate", return_value=day)
-
-
-def ot_line(employee, work_date, hours="8", day_type=WEEKDAY):
-    return {"employee": employee, "work_date": work_date, "approved_hours": Decimal(hours), "day_type": day_type}
 
 
 def upload_all_required(claim, actor_user):
@@ -327,158 +321,6 @@ class FilingDeadlineAndUsageCutoffTests(TestCase):
         self.assertTrue(violates_filing_deadline(date(2026, 6, 1), date(2026, 11, 1)))
 
 
-
-
-class OTRoutingTests(TestCase):
-    """CLAUDE.md §7.1 OT routes, approver-is-subject rule, and the
-    never-skip-HR/AO/COH-when-unassigned rule."""
-
-    def setUp(self):
-        self.org = Org()
-
-    def test_supervisor_filed_batch_goes_hr_ao_coh(self):
-        ot, _ = file_ot(self.org.lab_sup, "SUPERVISOR", "x", "", [ot_line(self.org.lab_staff, date(2026, 11, 5))],
-                        self.org.lab_sup.user, date(2026, 11, 1))
-        self.assertEqual(ot.route_steps(), ["HR", "AO", "COH"])
-
-    def test_nursing_unit_head_batch_goes_through_chief_nurse(self):
-        ot, _ = file_ot(self.org.er_head, "SUPERVISOR", "x", "", [ot_line(self.org.nurse, date(2026, 11, 5))],
-                        self.org.er_head.user, date(2026, 11, 1))
-        self.assertEqual(ot.route_steps(), ["CHIEF_NURSE", "HR", "AO", "COH"])
-        self.assertEqual(ot.current_step, "CHIEF_NURSE")
-        self.assertTrue(routing.can_act(self.org.chief_nurse, ot))
-
-    def test_hr_filed_batch_goes_ao_coh(self):
-        ot, _ = file_ot(self.org.hr, "HR", "x", "", [ot_line(self.org.lab_staff, date(2026, 11, 5))],
-                        self.org.hr.user, date(2026, 11, 1))
-        self.assertEqual(ot.route_steps(), ["AO", "COH"])
-
-    def test_ao_filed_batch_waits_for_coh(self):
-        ot, _ = file_ot(self.org.ao, "AO", "x", "", [ot_line(self.org.lab_staff, date(2026, 11, 5))],
-                        self.org.ao.user, date(2026, 11, 1))
-        self.assertEqual(ot.status, RoutedRecord.PENDING)
-        self.assertEqual(ot.current_step, "COH")
-        self.assertEqual(routing.step_actors(ot, "COH"), {self.org.coh})
-
-    def test_no_coh_assigned_leaves_batch_pending_and_tells_hr_admin(self):
-        RoleAssignment.objects.filter(role=RoleAssignment.CHIEF_OF_HOSPITAL).update(is_active=False)
-        ot, _ = file_ot(self.org.ao, "AO", "x", "", [ot_line(self.org.lab_staff, date(2026, 11, 5))],
-                        self.org.ao.user, date(2026, 11, 1))
-        self.assertEqual(ot.status, RoutedRecord.PENDING)
-        self.assertEqual(ot.current_step, "COH")
-        self.assertFalse(ot.actions.filter(action="skip").exists())
-        self.assertTrue(Notification.objects.filter(recipient=self.org.hr_admin, message__contains="nobody can act").exists())
-
-    def test_no_ao_assigned_waits_at_ao_not_skipped(self):
-        RoleAssignment.objects.filter(role=RoleAssignment.ADMINISTRATIVE_OFFICER).update(is_active=False)
-        ot, _ = file_ot(self.org.hr, "HR", "x", "", [ot_line(self.org.lab_staff, date(2026, 11, 5))],
-                        self.org.hr.user, date(2026, 11, 1))
-        self.assertEqual(ot.current_step, "AO")
-        self.assertEqual(ot.status, RoutedRecord.PENDING)
-
-    def test_approver_on_a_line_cannot_act_and_another_holder_takes_the_step(self):
-        hr2 = make_employee("hr2", "E-HR2", role=RoleAssignment.HR_PROCESSOR)
-        ot, _ = file_ot(self.org.lab_sup, "SUPERVISOR", "x", "",
-                        [ot_line(self.org.lab_staff, date(2026, 11, 5)), ot_line(self.org.hr, date(2026, 11, 5))],
-                        self.org.lab_sup.user, date(2026, 11, 1))
-        self.assertEqual(ot.current_step, "HR")
-        self.assertFalse(routing.can_act(self.org.hr, ot))
-        self.assertTrue(routing.can_act(hr2, ot))
-        with self.assertRaises(ValidationError):
-            routing.approve_step(ot, self.org.hr, self.org.hr.user)
-
-    def test_subject_conflict_skip_is_logged(self):
-        # The only AO is on the batch: the AO step is skipped and logged.
-        ot, _ = file_ot(self.org.hr, "HR", "x", "", [ot_line(self.org.ao, date(2026, 11, 5))],
-                        self.org.hr.user, date(2026, 11, 1))
-        self.assertEqual(ot.current_step, "COH")
-        skip = ot.actions.get(action="skip")
-        self.assertEqual(skip.step, "AO")
-        self.assertIn("every holder is on this record", skip.notes)
-
-    def test_batch_is_approved_as_a_whole(self):
-        ot, _ = file_ot(self.org.hr, "HR", "x", "",
-                        [ot_line(self.org.lab_staff, date(2026, 11, 5)), ot_line(self.org.lab_staff2, date(2026, 11, 5))],
-                        self.org.hr.user, date(2026, 11, 1))
-        approve_all(ot)
-        self.assertEqual(ot.status, RoutedRecord.APPROVED)
-        self.assertEqual(ot.actions.filter(action="approve").count(), 2)
-
-    def test_return_needs_a_remark_and_goes_back_to_filer(self):
-        ot, _ = file_ot(self.org.hr, "HR", "x", "", [ot_line(self.org.lab_staff, date(2026, 11, 5))],
-                        self.org.hr.user, date(2026, 11, 1))
-        with self.assertRaises(ValidationError):
-            routing.return_record(ot, self.org.ao, self.org.ao.user, "  ")
-        routing.return_record(ot, self.org.ao, self.org.ao.user, "Wrong date")
-        self.assertEqual(ot.status, RoutedRecord.RETURNED)
-        ot, _ = file_ot(self.org.hr, "HR", "x", "", [ot_line(self.org.lab_staff, date(2026, 11, 6))],
-                        self.org.hr.user, date(2026, 11, 1), ot=ot)
-        self.assertEqual(ot.current_step, "AO")  # chain restarts
-        self.assertTrue(ot.actions.filter(action="resubmit").exists())
-
-    def test_filer_cannot_add_themselves(self):
-        with self.assertRaises(ValidationError):
-            file_ot(self.org.lab_sup, "SUPERVISOR", "x", "", [ot_line(self.org.lab_sup, date(2026, 11, 5))],
-                    self.org.lab_sup.user, date(2026, 11, 1))
-
-    def test_coh_cannot_be_added(self):
-        with self.assertRaises(ValidationError):
-            file_ot(self.org.hr, "HR", "x", "", [ot_line(self.org.coh, date(2026, 11, 5))],
-                    self.org.hr.user, date(2026, 11, 1))
-
-    def test_employee_without_filing_role_cannot_file(self):
-        with self.assertRaises(ValidationError):
-            file_ot(self.org.lab_staff, "SUPERVISOR", "x", "", [ot_line(self.org.lab_staff2, date(2026, 11, 5))],
-                    self.org.lab_staff.user, date(2026, 11, 1))
-
-    def test_past_dates_need_a_reason(self):
-        with self.assertRaises(ValidationError):
-            file_ot(self.org.hr, "HR", "x", "", [ot_line(self.org.lab_staff, date(2026, 10, 5))],
-                    self.org.hr.user, date(2026, 11, 1))
-        file_ot(self.org.hr, "HR", "x", "Emergency, filed late", [ot_line(self.org.lab_staff, date(2026, 10, 5))],
-                self.org.hr.user, date(2026, 11, 1))
-
-    def test_warns_when_line_employee_is_on_the_route(self):
-        _, warnings = file_ot(self.org.hr, "HR", "x", "", [ot_line(self.org.ao, date(2026, 11, 5))],
-                              self.org.hr.user, date(2026, 11, 1))
-        self.assertEqual(len(warnings), 1)
-
-    def test_employees_supervisor_gets_notice_when_added_by_someone_else(self):
-        file_ot(self.org.hr, "HR", "x", "", [ot_line(self.org.lab_staff, date(2026, 11, 5))],
-                self.org.hr.user, date(2026, 11, 1))
-        self.assertTrue(Notification.objects.filter(recipient=self.org.lab_sup, message__contains="added to an OT").exists())
-
-    def test_oic_counts_as_chief_nurse_and_unit_head(self):
-        oic = make_employee("oic", "E-OIC")
-        RoleAssignment.objects.create(employee=oic, role=RoleAssignment.SUPERVISOR, section=self.org.nursing,
-                                      is_oic=True, delegated_by=self.org.chief_nurse)
-        oic_unit = make_employee("oicunit", "E-OICU")
-        RoleAssignment.objects.create(employee=oic_unit, role=RoleAssignment.SUPERVISOR, unit=self.org.er,
-                                      is_oic=True, delegated_by=self.org.er_head)
-        self.assertIn(oic, routing.chief_nurses())
-        self.assertIn(oic_unit, routing.unit_heads_of(self.org.nurse))
-
-
-class OTBatchFormTests(TestCase):
-    """The OT form's 'Add row' button only raises TOTAL_FORMS; the server
-    must accept any number of rows."""
-
-    def setUp(self):
-        self.org = Org()
-        self.staff = [make_employee(f"bulk{i}", f"E-B{i}", section=self.org.lab) for i in range(12)]
-
-    def test_twelve_line_batch(self):
-        data = {"filed_as": "HR", "purpose": "Unit-wide coverage", "past_date_reason": "",
-                "lines-TOTAL_FORMS": "13", "lines-INITIAL_FORMS": "0",
-                "lines-MIN_NUM_FORMS": "1", "lines-MAX_NUM_FORMS": "200"}
-        for i, emp in enumerate(self.staff):
-            data.update({f"lines-{i}-employee": emp.pk, f"lines-{i}-work_date": "2099-01-05",
-                         f"lines-{i}-approved_hours": "4", f"lines-{i}-day_type": WEEKDAY})
-        client = Client()
-        client.force_login(self.org.hr.user)  # row 12 left blank on purpose
-        response = client.post(reverse("cto:ot_new"), data)
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(OvertimeRequest.objects.get().lines.count(), 12)
 
 
 class ClaimRoutingTests(TestCase):
@@ -776,9 +618,6 @@ class PageSmokeTests(TestCase):
         self.org = Org()
         emp = self.org.lab_staff
         ot = approved_ot(self.org, emp, date(2026, 10, 5), today=date(2026, 10, 1))
-        # cto's own OT request page still exists until step 1 removes it.
-        self.ot, _ = file_ot(self.org.hr, OvertimeRequest.CAPACITY_HR, "Coverage", "past",
-                             [ot_line(self.org.lab_staff2, date(2026, 10, 5))], self.org.hr.user, date(2026, 10, 1))
         self.claim = filed_claim(self.org, emp, [(ot, "8", None, None)], date(2026, 10, 6))
         self.client = Client()
 
@@ -789,8 +628,6 @@ class PageSmokeTests(TestCase):
         return response
 
     def test_pages(self):
-        self._get(self.org.hr, "cto:ot_new")
-        self._get(self.org.hr, "cto:ot_detail", self.ot.pk)
         self._get(self.org.lab_sup, "cto:cto_queue")
         self._get(self.org.lab_sup, "cto:claim_detail", self.claim.pk)
         self._get(self.org.lab_staff, "cto:my_cto")
@@ -798,42 +635,17 @@ class PageSmokeTests(TestCase):
         self._get(self.org.lab_staff, "cto:cto_apply")
         self._get(self.org.hr_admin, "cto:exception_claim_new")
 
-    def test_ot_form_has_add_row_template(self):
-        response = self._get(self.org.hr, "cto:ot_new")
-        self.assertContains(response, "__prefix__")
-        self.assertContains(response, 'name="lines-TOTAL_FORMS"')
-
     def test_draft_claim_page_shows_add_line_form(self):
         draft = CTOClaim.objects.create(employee=self.org.lab_staff2, filed_by=self.org.lab_staff2.user)
         response = self._get(self.org.lab_staff2, "cto:claim_detail", draft.pk)
         self.assertContains(response, "add_line")
 
-    def test_employee_cannot_open_ot_form(self):
-        self.client.force_login(self.org.lab_staff.user)
-        self.assertEqual(self.client.get(reverse("cto:ot_new")).status_code, 403)
 
 
 class HardeningTests(TestCase):
     def setUp(self):
         self.org = Org()
         self.emp = self.org.lab_staff
-
-    # 1. same employee + date on another live OT request
-    def test_same_employee_and_date_blocked_on_second_pending_or_approved_request(self):
-        file_ot(self.org.hr, "HR", "x", "", [ot_line(self.emp, date(2026, 11, 5))], self.org.hr.user, date(2026, 11, 1))
-        with self.assertRaises(ValidationError):  # first is pending
-            file_ot(self.org.lab_sup, "SUPERVISOR", "x", "", [ot_line(self.emp, date(2026, 11, 5))],
-                    self.org.lab_sup.user, date(2026, 11, 1))
-        approve_all(OvertimeRequest.objects.get())
-        with self.assertRaises(ValidationError):  # first is approved
-            file_ot(self.org.lab_sup, "SUPERVISOR", "x", "", [ot_line(self.emp, date(2026, 11, 5))],
-                    self.org.lab_sup.user, date(2026, 11, 1))
-
-    def test_returned_request_does_not_block_and_its_own_lines_are_not_duplicates(self):
-        ot, _ = file_ot(self.org.hr, "HR", "x", "", [ot_line(self.emp, date(2026, 11, 5))], self.org.hr.user, date(2026, 11, 1))
-        routing.return_record(ot, self.org.ao, self.org.ao.user, "fix hours")
-        file_ot(self.org.hr, "HR", "x", "", [ot_line(self.emp, date(2026, 11, 5), "4")], self.org.hr.user,
-                date(2026, 11, 1), ot=ot)  # re-filing the same line on the same request is fine
 
     # 2. HR Administrator cannot file an exception claim for themselves
     def test_hr_admin_cannot_file_exception_claim_for_self(self):
@@ -877,59 +689,29 @@ class HardeningTests(TestCase):
         self.assertTrue(Section.objects.filter(name=settings.NURSING_SECTION_NAME).exists())
 
     # 7. no deletes from admin
-    def test_admin_cannot_delete_ot_requests_claims_or_lines(self):
+    def test_admin_cannot_delete_claims_or_lines(self):
         from django.contrib import admin
         from django.test import RequestFactory
 
         request = RequestFactory().get("/")
         request.user = User.objects.create_superuser("root", "r@x.test", "x")
-        for model in (OvertimeRequest, CTOClaim):
-            self.assertFalse(admin.site._registry[model].has_delete_permission(request))
-        for model_admin in (admin.site._registry[OvertimeRequest], admin.site._registry[CTOClaim]):
-            for inline in model_admin.get_inline_instances(request):
-                if inline.model in (CTOClaimLine,) or inline.model.__name__ == "OvertimeLine":
-                    self.assertFalse(inline.has_delete_permission(request))
+        self.assertFalse(admin.site._registry[CTOClaim].has_delete_permission(request))
+        for inline in admin.site._registry[CTOClaim].get_inline_instances(request):
+            if inline.model is CTOClaimLine:
+                self.assertFalse(inline.has_delete_permission(request))
 
 
 class PermissionViewTests(TestCase):
-    """6. Who can view and act on OT requests and claims."""
+    """6. Who can view and act on claims (OT requests: official_requests.test_batch)."""
 
     def setUp(self):
         self.org = Org()
         self.outsider = make_employee("outsider", "E-OUT")
-        self.ot, _ = file_ot(self.org.lab_sup, "SUPERVISOR", "x", "", [ot_line(self.org.lab_staff, date(2099, 1, 5))],
-                             self.org.lab_sup.user, date(2099, 1, 1))
         self.client = Client()
 
     def _as(self, employee):
         self.client.force_login(employee.user)
         return self.client
-
-    def test_who_can_view_an_ot_request(self):
-        url = reverse("cto:ot_detail", args=[self.ot.pk])
-        for allowed in (self.org.lab_sup, self.org.hr, self.org.ao, self.org.coh):
-            self.assertEqual(self._as(allowed).get(url).status_code, 200, allowed)
-        self.assertEqual(self._as(self.outsider).get(url).status_code, 403)
-
-    def test_only_the_current_step_can_approve_an_ot_request(self):
-        url = reverse("cto:ot_action", args=[self.ot.pk])
-        for wrong in (self.org.ao, self.org.coh, self.outsider, self.org.lab_sup, self.org.lab_staff):
-            self._as(wrong).post(url, {"action": "approve"})
-            self.ot.refresh_from_db()
-            self.assertEqual(self.ot.current_step, "HR", wrong)
-        self._as(self.org.hr).post(url, {"action": "approve"})
-        self.ot.refresh_from_db()
-        self.assertEqual(self.ot.current_step, "AO")
-
-    def test_only_the_filer_can_edit_a_returned_ot_request(self):
-        routing.return_record(self.ot, self.org.hr, self.org.hr.user, "wrong hours")
-        url = reverse("cto:ot_edit", args=[self.ot.pk])
-        self.assertEqual(self._as(self.org.hr).get(url).status_code, 403)
-        self.assertEqual(self._as(self.org.lab_staff).get(url).status_code, 403)
-        self.assertEqual(self._as(self.org.lab_sup).get(url).status_code, 200)
-
-    def test_pending_ot_request_cannot_be_edited(self):
-        self.assertEqual(self._as(self.org.lab_sup).get(reverse("cto:ot_edit", args=[self.ot.pk])).status_code, 404)
 
     def test_who_can_view_and_act_on_a_claim(self):
         ot = approved_ot(self.org, self.org.lab_staff, date(2026, 10, 5), today=date(2026, 10, 1))
@@ -1144,12 +926,6 @@ class NursingSectionSettingTests(TestCase):
         self.assertEqual(claim.status, RoutedRecord.DRAFT)
         self.assertIsNone(claim.first_filed_on)
 
-    @override_settings(NURSING_SECTION_NAME="Nursing Services (renamed)")
-    def test_supervisor_ot_filing_fails_loudly_too(self):
-        with self.assertRaises(ValidationError):
-            file_ot(self.org.er_head, "SUPERVISOR", "x", "", [ot_line(self.org.nurse, date(2099, 1, 5))],
-                    self.org.er_head.user, date(2099, 1, 1))
-        self.assertFalse(OvertimeRequest.objects.exists())
 
 
 class ExceptionClaimDeadlineTests(TestCase):
@@ -1543,12 +1319,6 @@ class SeparationTests(TestCase):
         claim.refresh_from_db()
         self.assertEqual(claim.status, RoutedRecord.LAPSED)
         self.assertTrue(claim.actions.filter(action="lapse").exists())
-
-    def test_ot_line_after_last_day_is_blocked(self):
-        self._set(Employee.SEPARATION_RESIGNED, date(2026, 11, 15))
-        with self.assertRaises(ValidationError):
-            file_ot(self.org.hr, "HR", "x", "", [ot_line(self.cosp, date(2026, 11, 16))], self.org.hr.user,
-                    date(2026, 11, 1))
 
     def test_clearing_restores_normal_rules(self):
         ot = approved_ot(self.org, self.cosp, date(2026, 11, 20), today=date(2026, 11, 20))

@@ -3,9 +3,8 @@ CTO (Compensatory Time Off) models — CLAUDE.md §7 / §7.1 (rules decided
 2026-11-01, pending approved HR memo). Highest compliance-risk module; the
 date/credit math lives in cto/balances.py so it can be unit-tested alone.
 
-  - OvertimeRequest + OvertimeLine: authorized OT filed by a Supervisor
-    (Unit Head in Nursing), HR or the AO for one or more employees, one
-    line per employee per date. Approving OT never creates CTO credit.
+  - Authorized OT lives in main's official_requests module (owner decision
+    D4, 2026-11-02); approving it never creates CTO credit.
   - CTOClaim + CTOClaimLine: the employee's claim against approved OT
     lines (or a Medical Transport / HR Admin exception claim). Credit,
     effective date and year earned are tracked per line.
@@ -13,7 +12,7 @@ date/credit math lives in cto/balances.py so it can be unit-tested alone.
     draws from (oldest effective date first), held from filing.
   - CTOUsageApplication: spending CTO as time off (unchanged chain).
 
-Routing for OT requests and claims is in cto/routing.py.
+Routing for claims is in cto/routing.py.
 """
 
 from django.conf import settings
@@ -66,7 +65,7 @@ class CTOMultiplierRate(models.Model):
 
 
 class RoutedRecord(models.Model):
-    """Shared status/route fields for OvertimeRequest and CTOClaim. `route`
+    """Status/route fields for CTOClaim. `route`
     is the ordered step list snapshotted at submission (comma-separated
     STEP_* codes); `current_step` is the step now waiting to act."""
 
@@ -98,79 +97,6 @@ class RoutedRecord(models.Model):
 
     def route_steps(self):
         return [s for s in self.route.split(",") if s]
-
-
-class OvertimeRequest(RoutedRecord):
-    """A batch of authorized OT lines, approved or returned as a whole."""
-
-    CAPACITY_SUPERVISOR = "SUPERVISOR"
-    CAPACITY_HR = "HR"
-    CAPACITY_AO = "AO"
-    CAPACITY_CHOICES = [
-        (CAPACITY_SUPERVISOR, "Supervisor / Unit Head"),
-        (CAPACITY_HR, "HR"),
-        (CAPACITY_AO, "Administrative Officer"),
-    ]
-
-    filed_by = models.ForeignKey(
-        "employees.Employee", on_delete=models.PROTECT, related_name="overtime_requests_filed"
-    )
-    filed_as = models.CharField(max_length=15, choices=CAPACITY_CHOICES)
-    purpose = models.TextField()
-    past_date_reason = models.TextField(blank=True, help_text="Required when any line is dated before filing.")
-
-    class Meta:
-        ordering = ["-created_at"]
-
-    def __str__(self):
-        return f"OT request #{self.pk} filed by {self.filed_by}"
-
-    def get_absolute_url(self):
-        return reverse("cto:ot_detail", args=[self.pk])
-
-    def owner_employee(self):
-        return self.filed_by
-
-    def subject_employee_ids(self):
-        """People who may not act on this batch: everyone on a line, plus
-        the filer."""
-        return set(self.lines.values_list("employee_id", flat=True)) | {self.filed_by_id}
-
-
-class OvertimeLine(models.Model):
-    request = models.ForeignKey(OvertimeRequest, on_delete=models.CASCADE, related_name="lines")
-    employee = models.ForeignKey("employees.Employee", on_delete=models.PROTECT, related_name="overtime_lines")
-    work_date = models.DateField()
-    approved_hours = models.DecimalField(max_digits=5, decimal_places=2)
-    day_type = models.CharField(max_length=10, choices=DAY_TYPE_CHOICES)
-
-    class Meta:
-        ordering = ["work_date", "employee"]
-        constraints = [
-            models.UniqueConstraint(fields=["request", "employee", "work_date"], name="one_ot_line_per_employee_date"),
-        ]
-
-    def __str__(self):
-        return f"{self.employee} — {self.work_date} ({self.approved_hours}h {self.get_day_type_display()})"
-
-
-class OvertimeRequestAction(models.Model):
-    """Audit trail per OT request step (submit, approve, return, skip...)."""
-
-    request = models.ForeignKey(OvertimeRequest, on_delete=models.CASCADE, related_name="actions")
-    action = models.CharField(max_length=30)
-    step = models.CharField(max_length=15, blank=True)
-    notes = models.TextField(blank=True)
-    acted_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
-    )
-    acted_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["acted_at", "id"]
-
-    def __str__(self):
-        return f"{self.request} — {self.action} @ {self.acted_at:%Y-%m-%d %H:%M}"
 
 
 class CTOClaim(RoutedRecord):
