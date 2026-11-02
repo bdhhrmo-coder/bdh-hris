@@ -264,9 +264,12 @@ Scheduler times below mean Manila time. Some older modules (leave,
 exchange) still use the server's own date, which is one more reason to
 keep the server on Manila time.
 
-**Jobs.** Each runs through `scripts\run_manage.bat`, which loads `.env`
-(Task Scheduler does not) and appends output to
-`logs\scheduled-jobs.log`. Register them once, from an elevated prompt:
+**Jobs.** Each runs through `scripts\run_manage.bat`, which moves to the
+project folder (Task Scheduler starts in `C:\Windows\System32`), runs the
+command, and appends its output and exit code to
+`logs\scheduled-jobs.log`. `manage.py` loads `.env` from its own folder, so
+the jobs use the same database as the service. Register them once, from an
+elevated prompt:
 
 ```powershell
 schtasks /create /tn "BDH HRIS CTO year-end"          /tr "C:\BDH-HRIS\scripts\run_manage.bat cto_year_end"            /sc daily /st 00:30 /ru SYSTEM
@@ -280,16 +283,18 @@ schtasks /create /tn "BDH HRIS CTO carry-over reminders" /tr "C:\BDH-HRIS\script
 | Separation lapse | `cto_separation_lapse` | Daily, **00:45** | For employees whose last day of service has passed: lapses their remaining CTO credit and any CTO claim still in the approval chain. Safe to run again. |
 | Carry-over reminders | `cto_carryover_reminders` | Daily, **07:00** | Does nothing except on the dates in `CTO_CARRYOVER_REMINDER_DATES` (default Dec 1, Dec 10, Dec 16). On those days: Supervisors/Unit Heads (or fallback submitters) and HR get the list of employees with at-risk CTO and no reason; the COH gets the count of reasons waiting for a decision. |
 
-The old whole-balance year-end job (`forfeit_expired_cto`) was **removed**
-on 2026-11-01. If an earlier install scheduled it, delete that task:
-`schtasks /delete /tn "<its name>" /f`.
+The old yearly task `forfeit_expired_cto` (section 13 of the earlier guide)
+no longer exists. If it was scheduled on the server, delete it:
+`schtasks /delete /tn "<its name>" /f`. Check with
+`schtasks /query | findstr /i cto`.
 
-**Upgrading an existing install:** migration `cto 0005` drops the old CTO
-claim and ledger tables (`CTOCreditEntry`, `CTOCreditTransaction`) and
-creates the per-line credit tables. This was approved on the basis that
-no real CTO data exists yet. If real CTO data has been entered, **stop
-and take a backup first**, and talk to the project owner before running
-`migrate`.
+**Upgrading an existing install:** migration `cto 0006_ot_cto_claims` drops
+the old CTO claim and ledger tables (`CTOCreditEntry`,
+`CTOCreditTransaction`) and creates the per-line credit tables. Its first
+step checks those old tables: if they hold any rows, `migrate` stops with a
+message and no CTO data is changed. In that case take a backup and talk to
+the project owner. Existing CTO credit is entered as opening lines
+(HR Administration -> CTO Opening Balances), not migrated.
 
 ## 9. Day-to-day operations
 
@@ -405,25 +410,3 @@ Do these in order, on the real server, after the §11 QC pass:
    date.
 
 Leave balances are kept to 2 decimal places.
-
-## 13. Yearly task: CTO forfeiture (first working day of January)
-
-CLAUDE.md §7: CTO must be used within the calendar year earned; unused CTO
-is forfeited unless the Chief of Hospital grants a documented exception.
-This is deliberately run by a person, not automatically, so the COH's
-exceptions stay a human decision.
-
-1. Get the COH's list of approved exceptions (Employee IDs and reason).
-2. Back up the database (§9).
-3. Preview first - this changes nothing:
-   ```powershell
-   cd C:\BDH-HRIS
-   .venv\Scripts\python manage.py forfeit_expired_cto --year 2026 --actor-username <hr-admin-username> --dry-run
-   ```
-4. Run it for real, adding one `--exempt` per approved exception:
-   ```powershell
-   .venv\Scripts\python manage.py forfeit_expired_cto --year 2026 --actor-username <hr-admin-username> --exempt EMP-0007 --exempt-reason "COH memo dated ..."
-   ```
-5. Keep the COH's exception memo on file. Running it twice for the same
-   year does no harm. **Do not skip a year** - the calculation assumes it
-   runs every year.

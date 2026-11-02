@@ -1,36 +1,29 @@
 @echo off
-REM Wrapper for Windows Task Scheduler: runs one manage.py command with the
-REM BDH_HRIS_* settings from .env loaded (Task Scheduler does not read .env,
-REM so without this the command would quietly use a local SQLite database).
-REM Same .env convention as run_backup.bat. Output is appended to
-REM logs\scheduled-jobs.log. See DEPLOYMENT.md section 8a.
+REM Wrapper for Windows Task Scheduler: runs one manage.py command from the
+REM project folder and appends its output and exit code to
+REM logs\scheduled-jobs.log. manage.py loads .env from its own folder, so
+REM this script does not read .env itself. See DEPLOYMENT.md section 8a.
 REM
 REM Usage:  run_manage.bat cto_year_end
 
 setlocal
 
-set PROJECT_DIR=%~dp0..
-set PYTHON_EXE=%PROJECT_DIR%\.venv\Scripts\python.exe
-set LOG_FILE=%PROJECT_DIR%\logs\scheduled-jobs.log
+REM Task Scheduler starts in C:\Windows\System32: move to the project folder.
+cd /d "%~dp0.."
+set LOG_FILE=logs\scheduled-jobs.log
 
 if "%~1"=="" (
     echo Usage: run_manage.bat ^<manage.py command^>
     exit /b 2
 )
-if not exist "%PYTHON_EXE%" (
-    echo Could not find %PYTHON_EXE% - is the virtualenv set up at %PROJECT_DIR%\.venv?
+if not exist ".venv\Scripts\python.exe" (
+    echo Could not find .venv\Scripts\python.exe in %CD% - is the virtualenv set up?
     exit /b 1
 )
-if not exist "%PROJECT_DIR%\logs" mkdir "%PROJECT_DIR%\logs"
-
-if exist "%PROJECT_DIR%\.env" (
-    for /f "usebackq eol=# tokens=1,* delims==" %%A in ("%PROJECT_DIR%\.env") do (
-        set "%%A=%%B"
-    )
-)
+if not exist logs mkdir logs
 
 echo [%DATE% %TIME%] manage.py %* >> "%LOG_FILE%"
-"%PYTHON_EXE%" "%PROJECT_DIR%\manage.py" %* >> "%LOG_FILE%" 2>&1
+".venv\Scripts\python.exe" manage.py %* >> "%LOG_FILE%" 2>&1
 set RESULT=%ERRORLEVEL%
 echo [%DATE% %TIME%] exit %RESULT% >> "%LOG_FILE%"
 exit /b %RESULT%
