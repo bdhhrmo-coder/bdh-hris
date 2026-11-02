@@ -125,10 +125,19 @@ class Org:
 
 
 def approved_ot(org, employee, work_date, hours="8", day_type=WEEKDAY, today=None):
-    ot, _ = file_ot(org.hr, OvertimeRequest.CAPACITY_HR, "Coverage", "past", [ot_line(employee, work_date, hours, day_type)],
-                    org.hr.user, today or work_date)
-    approve_all(ot)
-    return ot.lines.get()
+    """One approved line of main's OT module (official_requests, D4): an
+    approved group request with one employee-date. Its routing is tested in
+    official_requests.test_batch; here only the approved line matters."""
+    from official_requests.models import OfficialRequest, OfficialRequestBatch as B
+
+    kind = {WEEKDAY: B.WORK_OT, REST_DAY: B.WORK_REST_DAY, HOLIDAY: B.WORK_HOLIDAY}[day_type]
+    batch = B.objects.create(request_type=OfficialRequest.OT_RESTDAY_HOLIDAY, work_kind=kind, purpose="Coverage",
+                             filed_by=org.hr_admin.user, filer_role=B.FILER_HR_ADMINISTRATOR,
+                             status=OfficialRequest.APPROVED)
+    return OfficialRequest.objects.create(
+        batch=batch, request_type=OfficialRequest.OT_RESTDAY_HOLIDAY, employee=employee, start_date=work_date,
+        end_date=work_date, purpose="Coverage", hours_requested=Decimal(hours),
+        is_restday_or_holiday=day_type != WEEKDAY, status=OfficialRequest.APPROVED)
 
 
 def filed_claim(org, employee, lines, today, duty_type=CTOClaim.DUTY_REGULAR):
@@ -535,6 +544,40 @@ class ClaimRuleTests(TestCase):
         self.org = Org()
         self.emp = self.org.lab_staff
 
+    def test_day_type_comes_from_the_batch(self):
+        for day_type in (WEEKDAY, REST_DAY, HOLIDAY):
+            ot = approved_ot(self.org, self.emp, date(2026, 10, 5), day_type=day_type)
+            claim = CTOClaim.objects.create(employee=self.emp, filed_by=self.emp.user)
+            self.assertEqual(add_line(claim, Decimal("4"), date(2026, 10, 6), ot_line=ot).day_type, day_type)
+
+    def test_line_without_a_batch_maps_old_flag(self):
+        # Owner decision 8h: rest-day-or-holiday yes -> rest day, no -> weekday.
+        from official_requests.models import OfficialRequest as R
+
+        from .claims import ot_day_type
+
+        def single(flag):
+            return R(request_type=R.OT_RESTDAY_HOLIDAY, employee=self.emp, start_date=date(2026, 10, 5),
+                     end_date=date(2026, 10, 5), purpose="x", hours_requested=8, is_restday_or_holiday=flag)
+
+        self.assertEqual((ot_day_type(single(True)), ot_day_type(single(False))), (REST_DAY, WEEKDAY))
+
+    def test_cohs_recorded_ot_and_unapproved_or_multi_day_ot_are_not_claimable(self):
+        # D2: the COH's own OT is recorded by HR and never creates CTO.
+        from official_requests.models import OfficialRequest as R
+
+        from .claims import claimable_ot_lines
+
+        common = dict(request_type=R.OT_RESTDAY_HOLIDAY, purpose="x", hours_requested=8)
+        R.objects.create(employee=self.org.coh, start_date=date(2026, 10, 5), end_date=date(2026, 10, 5),
+                         recorded_only=True, status=R.RECORDED, **common)
+        R.objects.create(employee=self.emp, start_date=date(2026, 10, 6), end_date=date(2026, 10, 6),
+                         status=R.SUBMITTED, **common)
+        R.objects.create(employee=self.emp, start_date=date(2026, 10, 7), end_date=date(2026, 10, 8),
+                         status=R.APPROVED, **common)
+        self.assertFalse(claimable_ot_lines(self.org.coh).exists())
+        self.assertFalse(claimable_ot_lines(self.emp).exists())
+
     def test_approved_ot_alone_credits_nothing(self):
         approved_ot(self.org, self.emp, date(2026, 10, 5), today=date(2026, 10, 1))
         self.assertEqual(compute_available_cto_balance(self.emp, date(2026, 12, 1)), Decimal("0"))
@@ -639,7 +682,7 @@ class ClaimRuleTests(TestCase):
         ot.refresh_from_db()
         self.assertEqual(line.day_type, HOLIDAY)
         self.assertEqual(line.credited_days, Decimal("1.50"))
-        self.assertEqual(ot.day_type, WEEKDAY)
+        self.assertEqual((ot.batch.work_kind, ot.is_restday_or_holiday), ("OT", False))  # OT line unchanged
         self.assertTrue(claim.actions.filter(action="correct_day_type", notes__contains="declared holiday").exists())
 
     def test_day_type_cannot_be_corrected_outside_hr_step(self):
@@ -733,7 +776,9 @@ class PageSmokeTests(TestCase):
         self.org = Org()
         emp = self.org.lab_staff
         ot = approved_ot(self.org, emp, date(2026, 10, 5), today=date(2026, 10, 1))
-        self.ot = ot.request
+        # cto's own OT request page still exists until step 1 removes it.
+        self.ot, _ = file_ot(self.org.hr, OvertimeRequest.CAPACITY_HR, "Coverage", "past",
+                             [ot_line(self.org.lab_staff2, date(2026, 10, 5))], self.org.hr.user, date(2026, 10, 1))
         self.claim = filed_claim(self.org, emp, [(ot, "8", None, None)], date(2026, 10, 6))
         self.client = Client()
 

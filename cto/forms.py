@@ -43,8 +43,17 @@ class ExceptionClaimForm(forms.Form):
     exception_reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}))
 
 
+class OTLineChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        from .claims import ot_day_type
+        from .models import DAY_TYPE_CHOICES
+
+        where = f"group request #{obj.batch_id}" if obj.batch_id else f"request #{obj.pk}"
+        return f"{obj.start_date:%b %d, %Y} — {obj.hours_requested} h approved — {dict(DAY_TYPE_CHOICES)[ot_day_type(obj)]} ({where})"
+
+
 class OTClaimLineForm(forms.Form):
-    ot_line = forms.ModelChoiceField(queryset=None, label="Approved OT line")
+    ot_line = OTLineChoiceField(queryset=None, label="Approved OT line")
     hours_worked = forms.DecimalField(max_digits=5, decimal_places=2, label="Actual hours (from DTR)")
 
     def __init__(self, *args, ot_lines, **kwargs):

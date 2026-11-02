@@ -267,12 +267,12 @@ class BatchTests(TestCase):
             self.assertTrue(Notification.objects.filter(recipient=e, message__contains="was approved").exists())
 
     def test_approved_ot_batch_creates_no_cto_and_lines_are_claimable(self):
-        from cto.claims import claimable_ot_requests
+        from cto.claims import claimable_ot_lines
+        from cto.models import CTOClaimLine
 
         self.run_route(self.sup, "OT", [self.a], ["process", "recommend", "approve"])
-        self.assertFalse(CTOCreditTransaction.objects.exists())
-        self.assertFalse(CTOCreditEntry.objects.exists())
-        self.assertIn(R.objects.get(employee=self.a).pk, [r.pk for r in claimable_ot_requests()])
+        self.assertFalse(CTOClaimLine.objects.exists())  # approval alone credits nothing
+        self.assertEqual([r.pk for r in claimable_ot_lines(self.a)], [R.objects.get(employee=self.a).pk])
 
     def test_employee_sees_own_lines_and_can_open_the_batch(self):
         self.file(self.sup, post_data("TRAVEL", [self.a], [{"date": "2026-10-20"}]))

@@ -5,8 +5,11 @@ credited per line only on COH approval. Approving OT never credits CTO.
 
 Checks when a line is added (judged on today):
   - the claim is a draft or returned, and the employee is CTO-eligible
-  - OT line: from an approved OT request, the claimant's own, not already
-    on another live claim; actual hours <= approved hours
+  - OT line: an approved one-day line of main's OT module (official_requests,
+    owner decision D4), the claimant's own, not recorded-only (the COH's own
+    OT never creates CTO, D2), not already on another live claim; actual
+    hours <= approved hours. Day type comes from the batch (D4/8d; 8h for a
+    line filed without a batch).
   - the workday is not in the future
   - the line is not past its filing deadline (exception claims skip this)
   - no more than 24 hours per employee per date across all live claims
@@ -20,7 +23,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import F, Sum
 
 from documents.requirements import requirement_status_for
 from notifications.services import notify
@@ -28,7 +31,9 @@ from notifications.services import notify
 from . import routing
 from .carryover import initial_use_deadline
 from .balances import compute_credit, effective_date_for, filing_deadline_for, violates_filing_deadline
-from .models import WEEKDAY, CTOClaim, CTOClaimLine, CTOMultiplierRate, OvertimeLine, OvertimeRequest, RoutedRecord
+from official_requests.models import OfficialRequest, OfficialRequestBatch
+
+from .models import HOLIDAY, REST_DAY, WEEKDAY, CTOClaim, CTOClaimLine, CTOMultiplierRate, RoutedRecord
 from .permissions import is_cto_eligible
 
 MAX_HOURS_PER_DATE = Decimal("24")
@@ -38,13 +43,36 @@ def _live_lines():
     return CTOClaimLine.objects.exclude(claim__status=RoutedRecord.CANCELLED)
 
 
+WORK_KIND_DAY_TYPE = {
+    OfficialRequestBatch.WORK_OT: WEEKDAY,
+    OfficialRequestBatch.WORK_REST_DAY: REST_DAY,
+    OfficialRequestBatch.WORK_HOLIDAY: HOLIDAY,
+}
+
+
+def ot_day_type(ot_line):
+    """Day type of an approved OT line: the batch's kind (one per batch, 8d).
+    A line filed without a batch has only the yes/no rest-day-or-holiday
+    flag: yes -> rest day, no -> weekday (owner decision 8h). HR may correct
+    it on the claim with a remark."""
+    if ot_line.batch_id and ot_line.batch.work_kind:
+        return WORK_KIND_DAY_TYPE[ot_line.batch.work_kind]
+    return REST_DAY if ot_line.is_restday_or_holiday else WEEKDAY
+
+
 def claimable_ot_lines(employee):
-    """Approved OT lines of this employee not on a live claim yet."""
+    """Approved one-day OT lines of this employee not on a live claim yet.
+    RECORDED (the COH's own OT, approved outside BDH) never counts, and a
+    multi-day request filed without a batch cannot be split into lines."""
     taken = _live_lines().filter(ot_line__isnull=False).values_list("ot_line_id", flat=True)
     return (
-        OvertimeLine.objects.filter(employee=employee, request__status=OvertimeRequest.APPROVED)
+        OfficialRequest.objects.filter(
+            employee=employee, request_type=OfficialRequest.OT_RESTDAY_HOLIDAY, status=OfficialRequest.APPROVED,
+            recorded_only=False, start_date=F("end_date"), hours_requested__isnull=False,
+        )
         .exclude(pk__in=taken)
-        .order_by("work_date")
+        .select_related("batch")
+        .order_by("start_date", "pk")
     )
 
 
@@ -84,9 +112,9 @@ def add_line(claim, hours_worked, today, ot_line=None, work_date=None, day_type=
             raise ValidationError("Pick an approved OT line.")
         if not claimable_ot_lines(employee).filter(pk=ot_line.pk).exists():
             raise ValidationError("That OT line is not approved for you or is already on another claim.")
-        if hours_worked > ot_line.approved_hours:
-            raise ValidationError(f"Actual hours cannot exceed the {ot_line.approved_hours} approved hours.")
-        work_date, day_type = ot_line.work_date, ot_line.day_type
+        if hours_worked > ot_line.hours_requested:
+            raise ValidationError(f"Actual hours cannot exceed the {ot_line.hours_requested} approved hours.")
+        work_date, day_type = ot_line.start_date, ot_day_type(ot_line)
     else:
         if ot_line is not None:
             raise ValidationError("Medical Transport and exception claims do not use OT lines.")

@@ -23,7 +23,7 @@
     <tr><th>Workday</th><th>Day type</th><th>Hours</th><th>{% if claim.status == "APPROVED" %}Credited{% else %}Would credit{% endif %}</th><th>Filing deadline</th><th>Effective</th><th></th></tr>
     {% for l in lines %}
     <tr>
-      <td>{{ l.work_date }}{% if l.ot_line %} <small>(OT #{{ l.ot_line.request_id }}, {{ l.ot_line.approved_hours }}h approved)</small>{% endif %}</td>
+      <td>{{ l.work_date }}{% if l.ot_line %} <small class="muted">({% if l.ot_line.batch_id %}<a href="{% url 'official_requests:batch_detail' l.ot_line.batch_id %}">OT group request #{{ l.ot_line.batch_id }}</a>{% else %}OT request #{{ l.ot_line.pk }}{% endif %}, {{ l.ot_line.hours_requested }} h approved)</small>{% endif %}</td>
       <td>{{ l.get_day_type_display }}</td>
       <td>{{ l.hours_worked }}</td>
       <td>{{ l.credited_days }} day(s) at {{ l.multiplier_applied }}x</td>

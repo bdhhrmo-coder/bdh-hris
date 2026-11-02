@@ -263,8 +263,11 @@ class CTOClaimLine(models.Model):
     ]
 
     claim = models.ForeignKey(CTOClaim, on_delete=models.CASCADE, related_name="lines")
+    # An approved one-day OT line of main's OT module (owner decision D4,
+    # 2026-11-02): an OfficialRequest of type OT_RESTDAY_HOLIDAY.
     ot_line = models.ForeignKey(
-        OvertimeLine, on_delete=models.PROTECT, null=True, blank=True, related_name="claim_lines",
+        "official_requests.OfficialRequest", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="cto_claim_lines", limit_choices_to={"request_type": "OT_RESTDAY_HOLIDAY"},
         help_text="Blank for Medical Transport and exception lines.",
     )
     work_date = models.DateField()
