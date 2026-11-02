@@ -246,20 +246,24 @@ class BatchTests(TestCase):
         self.assertEqual(list(batch.actions.values_list("action", flat=True)),
                          ["submit", "process", "return", "resubmit"])
 
-    def test_filer_who_lost_the_role_cannot_edit_or_widen_a_returned_batch(self):
-        # Security review 2026-11-02: scope comes from the roles held now, not the saved filer_role.
-        self.file(self.proc, post_data("TRAVEL", [self.a], [{"date": "2026-10-20"}]))
+    def test_filer_whose_role_changed_cannot_edit_a_returned_batch(self):
+        # Security review 2026-11-02: the saved filer_role decides the route, so a returned batch is
+        # edited only while the filer would still file it under that role (else: file a new one).
+        self.file(self.hradmin, post_data("OT", [self.a], self.ot_lines()[:1]))  # route AO -> COH
         batch = B.objects.get()
         self.act(self.ao, batch, "return", notes="Fix it")
-        RoleAssignment.objects.filter(employee=self.proc).delete()
-        RoleAssignment.objects.create(employee=self.proc, role="SUPERVISOR", section=self.lab)  # now a lab Supervisor
         edit_url = reverse("official_requests:batch_edit", args=[batch.pk])
-        self.file(self.proc, post_data("TRAVEL", [self.a, self.outsider], [{"date": "2026-10-20"}]), url=edit_url)
-        batch.refresh_from_db()
-        self.assertEqual(batch.status, R.RETURNED)  # outsider is outside a Supervisor's Travel scope
-        RoleAssignment.objects.filter(employee=self.proc).delete()  # no filing role at all
-        self.client.force_login(self.proc.user)
+        RoleAssignment.objects.filter(employee=self.hradmin).delete()
+        RoleAssignment.objects.create(employee=self.hradmin, role="SUPERVISOR", section=self.lab)  # now a Supervisor
+        self.client.force_login(self.hradmin.user)
         self.assertEqual(self.client.get(edit_url).status_code, 403)
+        self.assertEqual(self.client.post(edit_url, post_data("OT", [self.a], self.ot_lines()[:1])).status_code, 403)
+        RoleAssignment.objects.filter(employee=self.hradmin).delete()  # no filing role at all
+        self.assertEqual(self.client.get(edit_url).status_code, 403)
+        batch.refresh_from_db()
+        self.assertEqual(batch.status, R.RETURNED)
+        RoleAssignment.objects.create(employee=self.hradmin, role="HR_ADMINISTRATOR")  # same role again: allowed
+        self.assertEqual(self.client.get(edit_url).status_code, 200)
 
     def test_only_the_filer_edits_and_only_when_returned(self):
         self.file(self.sup, post_data("TRAVEL", [self.a], [{"date": "2026-10-20"}]))

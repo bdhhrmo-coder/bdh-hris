@@ -111,8 +111,8 @@ def batch_edit(request, pk):
         messages.error(request, "Only a returned group request can be edited.")
         return redirect("official_requests:batch_detail", pk=pk)
     kind = next(k for k, v in rules.KINDS.items() if v[1] == batch.request_type and v[2] == batch.work_kind)
-    if rules.filing_role_for(acting_employee, kind) is None:
-        raise PermissionDenied("You no longer hold a role that may file this type of group request.")
+    if rules.filing_role_for(acting_employee, kind) != batch.filer_role:  # the role decides the route
+        raise PermissionDenied("Your roles have changed since this group request was filed. File a new one.")
     latest_return = batch.actions.filter(action="return").order_by("-acted_at").first()
 
     if request.method == "POST":
