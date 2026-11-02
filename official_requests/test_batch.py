@@ -454,6 +454,17 @@ class OtFilingTests(TestCase):
         batch.refresh_from_db()
         self.assertEqual(batch.status, R.APPROVED)
 
+    def test_unit_head_ot_including_the_chief_nurse_goes_to_the_ao(self):
+        # 8i: the Chief Nurse is on the request, so the Supervisor step goes to the next level up, the AO.
+        self.ot(self.er_head, [self.nurse, self.chief_nurse])
+        batch = B.objects.get()
+        self.assertEqual(batch.filer_role, "UNIT_HEAD")
+        self.assertEqual(self.act(self.chief_nurse, batch, "endorse").status_code, 403)
+        self.assertTrue(Notification.objects.filter(recipient=self.ao, message__contains="awaiting your action").exists())
+        self.assertEqual(self.act(self.ao, batch, "endorse").status_code, 302)
+        batch.refresh_from_db()
+        self.assertEqual(batch.status, R.ENDORSED_BY_SUPERVISOR)
+
     def test_ot_batch_with_no_coh_waits(self):
         RoleAssignment.objects.filter(role="CHIEF_OF_HOSPITAL").delete()
         self.ot(self.hradmin, [self.a])

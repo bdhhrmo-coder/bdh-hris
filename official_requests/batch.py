@@ -218,9 +218,16 @@ def common_supervisors(employees, exclude_employee=None):
 
 
 def unit_head_step_actors(batch):
-    """OT filed by a unit head: the section head above the filer (D6)."""
+    """OT filed by a unit head: the section head above the filer (D6). Nobody
+    on the batch acts on it; with no section head left, the next level up:
+    the AO, or the COH when the AO is on it (8i, D1)."""
     filer = getattr(batch.filed_by, "employee", None)
-    return second_endorsers_for([filer]) if filer is not None else []
+    if filer is None:
+        return []
+    people = batch_people(batch)
+    excluded = {p.pk for p in people}
+    heads = [s for s in second_endorsers_for([filer]) if s.pk not in excluded]
+    return heads or ao_step_actors(people)
 
 
 def batch_people(batch):
