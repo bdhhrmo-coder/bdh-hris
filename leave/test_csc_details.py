@@ -80,11 +80,12 @@ class ValidationTests(Base):
         self.assertEqual(a.dates_label, "Not applicable")
         # An ordinary leave still needs dates.
         self.assertIn("start_date", self.errors(self.post("VL", location="PH", start_date="", end_date="")))
-        # HR can record it; the ledger uses the filing date.
+        # HR can record it (after the Supervisor step); the ledger uses the filing date.
+        L.objects.filter(pk=a.pk).update(status=L.ENDORSED_BY_SUPERVISOR)
         self.client.force_login(self.hr.user)
         self.client.post(reverse("leave:leave_action", args=[a.pk]), {"action": "record"})
         a.refresh_from_db()
-        self.assertEqual(a.status, L.RECORDED)
+        self.assertEqual(a.status, L.PROCESSED_BY_HR)
         entry = LeaveCreditTransaction.objects.get(leave_application=a)
         self.assertEqual(entry.transaction_date, a.submitted_at.date())
 
@@ -109,6 +110,7 @@ class EditAndViewTests(Base):
         a = self.last()
         self.client.force_login(self.hr.user)
         self.assertEqual(self.client.get(reverse("leave:leave_edit", args=[a.pk])).status_code, 403)
+        L.objects.filter(pk=a.pk).update(status=L.ENDORSED_BY_SUPERVISOR)
         self.client.post(reverse("leave:leave_action", args=[a.pk]), {"action": "record"})
         self.client.force_login(self.emp.user)
         r = self.client.get(reverse("leave:leave_edit", args=[a.pk]))

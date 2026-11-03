@@ -1,12 +1,11 @@
 """
 Leave routing permissions.
 
-CRITICAL rule from CLAUDE.md §6.2: Regular Leave (and every other CSC-listed
-type) must NEVER be routed through the internal approval engine — only COSP
-Leave does. This is enforced structurally, not just by convention: every
-queue/action helper below filters on leave_type.requires_full_routing so a
-Supervisor/AO/COH simply cannot see or act on a non-COSP-Leave application,
-regardless of its status.
+Two chains, chosen per application by LeaveApplication.route (dry-run items
+2 and 3, owner decisions 2026-11-03; replaces "regular leave is data entry
+only"): COSP leave is approved inside BDH; regular leave goes through the
+same internal steps but the COH only recommends it, and it ends "For
+Capitol approval" - the HRIS never marks a regular leave approved.
 """
 
 from accounts.models import RoleAssignment
@@ -342,63 +341,60 @@ def can_view_application(acting_employee, application):
     return is_supervisor_of(acting_employee, application.employee, viewing=True)
 
 
+def coh_filed_regular(application):
+    """The COH's own regular leave has no level above for the Supervisor,
+    AO and COH steps: HR records and verifies it and it goes straight to
+    "For Capitol approval" (like the COH's other requests, recorded by HR)."""
+    return application.route == LeaveApplication.ROUTE_REGULAR and _is_coh_filed([application.employee])
+
+
+def can_record_capitol_decision(acting_employee, application):
+    """HR records a Capitol return or rejection of a regular leave."""
+    return (application.status == LeaveApplication.FOR_CAPITOL_APPROVAL and is_hr(acting_employee)
+            and acting_employee.pk != application.employee_id)
+
+
+def capitol_applications_for(acting_employee):
+    """Regular leave waiting at the Capitol, for HR (not counted as waiting
+    for HR's action: the next move is the Capitol's)."""
+    if acting_employee is None or not is_hr(acting_employee):
+        return LeaveApplication.objects.none()
+    return LeaveApplication.objects.filter(status=LeaveApplication.FOR_CAPITOL_APPROVAL).exclude(
+        employee=acting_employee)
+
+
 def visible_applications_for(acting_employee):
     """
     Applications this user may act on right now, scoped by role AND status.
     Used to build each role's queue — never used for the employee's own
     "my applications" list, which shows everything of theirs regardless of
-    status.
+    status. Both routes share the steps up to the COH.
     """
     if acting_employee is None:
         return LeaveApplication.objects.none()
-
-    qs = LeaveApplication.objects.none()
+    A = LeaveApplication
+    ids = set()
 
     if is_hr(acting_employee):
-        # HR acts on: SUBMITTED for data-entry-only types, plus
-        # SUBMITTED/ENDORSED_BY_SUPERVISOR for COSP Leave.
-        data_entry_only = LeaveApplication.objects.filter(
-            leave_type__requires_full_routing=False, status=LeaveApplication.SUBMITTED
-        )
-        cosp_leave_stage = LeaveApplication.objects.filter(
-            leave_type__requires_full_routing=True,
-            status__in=[LeaveApplication.SUBMITTED, LeaveApplication.ENDORSED_BY_SUPERVISOR],
-        )
-        qs = qs | data_entry_only | cosp_leave_stage
+        ids |= set(A.objects.filter(status=A.ENDORSED_BY_SUPERVISOR).values_list("pk", flat=True))
+        ids |= {a.pk for a in A.objects.filter(status=A.SUBMITTED, route=A.ROUTE_REGULAR)
+                .select_related("employee") if coh_filed_regular(a)}
 
-    ao_ids = [
-        app.pk for app in LeaveApplication.objects.filter(
-            leave_type__requires_full_routing=True, status=LeaveApplication.PROCESSED_BY_HR
-        ).select_related("employee")
-        if can_act_ao_step(acting_employee, [app.employee])
-    ]
-    qs = qs | LeaveApplication.objects.filter(pk__in=ao_ids)
-
-    if is_chief_of_hospital(acting_employee):
-        qs = qs | LeaveApplication.objects.filter(
-            leave_type__requires_full_routing=True, status=LeaveApplication.RECOMMENDED_BY_AO
-        )
-
-    # Supervisor queue is scoped per-employee, so it's filtered in Python
-    # rather than a single queryset filter.
-    supervisor_candidates = LeaveApplication.objects.filter(
-        leave_type__requires_full_routing=True, status=LeaveApplication.SUBMITTED
-    ).select_related("employee")
-    supervisor_ids = [
-        app.pk for app in supervisor_candidates if can_endorse(acting_employee, [app.employee])
-    ]
-    qs = qs | LeaveApplication.objects.filter(pk__in=supervisor_ids)
-
-    # Second endorsement (section head), after the unit head - 2026-10-27.
-    second_ids = [
-        app.pk for app in LeaveApplication.objects.filter(
-            leave_type__requires_full_routing=True, status=LeaveApplication.ENDORSED_BY_UNIT_HEAD
-        ).select_related("employee")
-        if can_endorse_second(acting_employee, [app.employee])
-    ]
-    qs = qs | LeaveApplication.objects.filter(pk__in=second_ids)
+    for app in A.objects.filter(status=A.PROCESSED_BY_HR).select_related("employee"):
+        if can_act_ao_step(acting_employee, [app.employee]):
+            ids.add(app.pk)
+    for app in A.objects.filter(status=A.RECOMMENDED_BY_AO).select_related("employee"):
+        if can_act_coh_step(acting_employee, [app.employee]):
+            ids.add(app.pk)
+    for app in A.objects.filter(status=A.SUBMITTED).select_related("employee"):
+        if can_endorse(acting_employee, [app.employee]):
+            ids.add(app.pk)
+    for app in A.objects.filter(status=A.ENDORSED_BY_UNIT_HEAD).select_related("employee"):
+        if can_endorse_second(acting_employee, [app.employee]):
+            ids.add(app.pk)
 
     # Never one's own application, at any step (owner decision 2026-10-26),
     # and never at the HR step after endorsing it (2026-11-03).
+    qs = A.objects.filter(pk__in=ids)
     qs = exclude_own_endorsements(qs, acting_employee)
     return qs.exclude(employee=acting_employee).distinct()

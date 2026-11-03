@@ -119,7 +119,7 @@ def headcount(section=None):
 def on_leave_today(section=None, today=None):
     today = today or date.today()
     qs = LeaveApplication.objects.filter(
-        status__in=[LeaveApplication.APPROVED, LeaveApplication.RECORDED],
+        LeaveApplication.counted_q(),
         start_date__lte=today,
         end_date__gte=today,
     )

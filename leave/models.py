@@ -127,20 +127,26 @@ class LeaveCreditTransaction(models.Model):
 
 class LeaveApplication(models.Model):
     """
-    A leave application. Status choices are shared, but which ones are
-    reachable depends entirely on leave_type.requires_full_routing —
-    enforced in leave/views.py, not here. This is deliberate: CLAUDE.md is
-    explicit that Regular Leave must never be routed through the internal
-    approval engine, so the two paths are kept structurally distinct in the
-    view/permission layer rather than relying on this model alone.
+    A leave application. Two chains, fixed per application by `route`
+    (dry-run items 2 and 3, owner decisions 2026-11-03):
 
-    Data-entry-only path (everything except COSP Leave):
-        SUBMITTED -> RECORDED (by HR)  or  REJECTED
+    COSP route (every leave of a COSP employee: COSP Leave, Wellness,
+    Emergency) - approved inside BDH, prints on BDH-ADM-HR-01F04-A:
+        SUBMITTED [-> ENDORSED_BY_UNIT_HEAD] -> ENDORSED_BY_SUPERVISOR
+          -> PROCESSED_BY_HR -> RECOMMENDED_BY_AO -> APPROVED (credits deducted)
 
-    Full routing path (COSP Leave only):
-        SUBMITTED -> ENDORSED_BY_SUPERVISOR -> PROCESSED_BY_HR
-                   -> RECOMMENDED_BY_AO -> APPROVED
-        (REJECTED or RETURNED possible at any stage)
+    Regular route (every leave of a regular employee) - reviewed inside
+    BDH, approved at the Capitol, prints on CSC Form No. 6 (no stamps):
+        SUBMITTED [-> ENDORSED_BY_UNIT_HEAD] -> ENDORSED_BY_SUPERVISOR
+          -> PROCESSED_BY_HR ("recorded and verified", credits deducted)
+          -> RECOMMENDED_BY_AO ("reviewed and endorsed")
+          -> FOR_CAPITOL_APPROVAL (COH recommends approval)
+        HR then records a Capitol return or rejection, if any. HR cannot
+        reject; the other steps may. Credits come back automatically on
+        any return or rejection after HR deducted them.
+
+    RECORDED is the older regular-leave path (HR only), kept for records
+    filed before 2026-11-03. Returns and rejections need a remark.
     """
 
     SUBMITTED = "SUBMITTED"
@@ -150,6 +156,10 @@ class LeaveApplication(models.Model):
     RECOMMENDED_BY_AO = "RECOMMENDED_BY_AO"
     APPROVED = "APPROVED"
     RECORDED = "RECORDED"
+    # Regular leave (dry-run item 2, owner 2026-11-03): the COH recommends
+    # approval and the application waits for the Capitol. The HRIS never
+    # marks a regular leave "approved".
+    FOR_CAPITOL_APPROVAL = "FOR_CAPITOL_APPROVAL"
     RETURNED = "RETURNED"
     REJECTED = "REJECTED"
     CANCELLED = "CANCELLED"
@@ -161,6 +171,7 @@ class LeaveApplication(models.Model):
         (RECOMMENDED_BY_AO, "Recommended by AO"),
         (APPROVED, "Approved"),
         (RECORDED, "Recorded"),
+        (FOR_CAPITOL_APPROVAL, "For Capitol approval"),
         (RETURNED, "Returned for correction"),
         (REJECTED, "Rejected"),
         (CANCELLED, "Cancelled"),
@@ -185,6 +196,17 @@ class LeaveApplication(models.Model):
         blank=True, help_text="Required for Emergency Leave; optional otherwise."
     )
     status = models.CharField(max_length=25, choices=STATUS_CHOICES, default=SUBMITTED)
+
+    # Which chain this application follows, fixed when it is filed
+    # (dry-run items 2 and 3, owner 2026-11-03): every leave of a COSP
+    # employee (COSP Leave, Wellness, Emergency) is approved inside BDH;
+    # every leave of a regular employee is reviewed inside BDH and approved
+    # at the Capitol. route_for() decides.
+    ROUTE_COSP = "COSP"
+    ROUTE_REGULAR = "REGULAR"
+    ROUTE_CHOICES = [(ROUTE_COSP, "Approved inside BDH (COSP)"),
+                     (ROUTE_REGULAR, "Reviewed inside BDH, approved at the Capitol")]
+    route = models.CharField(max_length=10, choices=ROUTE_CHOICES, default=ROUTE_REGULAR)
 
     # --- CSC Form No. 6 (Revised 2020), 6.B Details of Leave and 6.D (Batch 8) ---
     # Which fields apply to which leave type: DETAIL_FIELDS_BY_TYPE below.
@@ -241,8 +263,63 @@ class LeaveApplication(models.Model):
     def __str__(self):
         return f"{self.employee} — {self.leave_type.code} {self.dates_label} ({self.status})"
 
+    def save(self, *args, **kwargs):
+        # The route is fixed whenever the application is (re)submitted, so a
+        # test or import that creates one directly gets the right chain too.
+        if self.status == self.SUBMITTED and self.employee_id and self.leave_type_id:
+            self.route = self.route_for(self.employee, self.leave_type)
+            if kwargs.get("update_fields") is not None and "route" not in kwargs["update_fields"]:
+                kwargs["update_fields"] = list(kwargs["update_fields"]) + ["route"]
+        super().save(*args, **kwargs)
+
     def is_terminal(self):
         return self.status in self.TERMINAL_STATUSES
+
+    @staticmethod
+    def route_for(employee, leave_type):
+        from employees.models import Employee
+
+        if leave_type is not None and leave_type.requires_full_routing:
+            return LeaveApplication.ROUTE_COSP
+        if employee is not None and employee.employment_status == Employee.EMPLOYMENT_STATUS_COSP:
+            return LeaveApplication.ROUTE_COSP
+        return LeaveApplication.ROUTE_REGULAR
+
+    @property
+    def coh_own(self):
+        """The COH's own regular leave (HR records it; see permissions.coh_filed_regular)."""
+        from .permissions import coh_filed_regular
+
+        return coh_filed_regular(self)
+
+    @property
+    def is_cosp_route(self):
+        return self.route == self.ROUTE_COSP
+
+    @classmethod
+    def counted_q(cls):
+        """Applications whose days are taken (credits deducted): approved
+        (COSP), recorded (older regular leave), or regular leave from the
+        moment HR recorded and verified it until the Capitol decides."""
+        from django.db.models import Q
+
+        return Q(status__in=[cls.APPROVED, cls.RECORDED, cls.FOR_CAPITOL_APPROVAL]) | Q(
+            route=cls.ROUTE_REGULAR, status__in=[cls.PROCESSED_BY_HR, cls.RECOMMENDED_BY_AO])
+
+    # Regular-leave step names (owner 2026-11-03); COSP keeps the stored labels.
+    _REGULAR_LABELS = {
+        "PROCESSED_BY_HR": "Recorded and verified by HR",
+        "RECOMMENDED_BY_AO": "Reviewed and endorsed by AO",
+    }
+
+    @property
+    def status_label(self):
+        if self.route == self.ROUTE_REGULAR and self.status in self._REGULAR_LABELS:
+            return self._REGULAR_LABELS[self.status]
+        if self.status == self.ENDORSED_BY_SUPERVISOR and self.pk \
+                and self.actions.filter(action="endorse_unit").exists():
+            return "Recommended by Section Head"
+        return self.get_status_display()
 
     @property
     def dates_label(self):
@@ -303,6 +380,21 @@ class LeaveApplicationAction(models.Model):
 
     class Meta:
         ordering = ["acted_at"]
+
+    LABELS = {
+        "submit": "Filed", "resubmit": "Resubmitted", "edit": "Edited",
+        "endorse_unit": "Endorsed by Unit Head", "endorse": "Endorsed",
+        "process": "Processed by HR", "record": "Recorded and verified by HR (credits deducted)",
+        "recommend": "Recommended by AO", "review": "Reviewed and endorsed by AO",
+        "approve": "Approved by COH", "recommend_capitol": "Recommended for approval by COH (for Capitol approval)",
+        "return": "Returned", "reject": "Rejected",
+        "capitol_return": "Returned by the Capitol (recorded by HR)",
+        "capitol_reject": "Rejected by the Capitol (recorded by HR)",
+    }
+
+    @property
+    def label(self):
+        return self.LABELS.get(self.action, self.action.replace("_", " ").capitalize())
 
     def __str__(self):
         return f"{self.application} — {self.action} @ {self.acted_at:%Y-%m-%d %H:%M}"

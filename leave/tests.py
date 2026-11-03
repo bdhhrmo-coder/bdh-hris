@@ -206,44 +206,116 @@ class RoutingTests(TestCase):
         defaults.update(overrides)
         return LeaveApplication.objects.create(**defaults)
 
-    def test_regular_leave_type_never_appears_in_supervisor_ao_coh_queues(self):
+    # Regular leave: internal chain ending "For Capitol approval" (dry-run
+    # item 2, owner decisions 2026-11-03; replaces "data entry only").
+    def _act(self, username, application, action, notes=""):
+        self.client.login(username=username, password="testpass123")
+        r = self.client.post(reverse("leave:leave_action", args=[application.pk]),
+                             {"action": action, "notes": notes})
+        application.refresh_from_db()
+        return r
+
+    def _used(self, application):
+        from django.db.models import Sum
+        return LeaveCreditTransaction.objects.filter(leave_application=application).aggregate(
+            t=Sum("days"))["t"] or Decimal("0")
+
+    def _to_hr(self, application):
+        self._act("supervisor1", application, "endorse")
+        self.assertEqual(application.status, LeaveApplication.ENDORSED_BY_SUPERVISOR)
+
+    def test_regular_leave_goes_through_the_internal_chain_to_the_capitol(self):
         application = self._submit(self.employee, self.vl)
-        self.assertNotIn(application, visible_applications_for(self.supervisor))
-        self.assertNotIn(application, visible_applications_for(self.ao))
-        self.assertNotIn(application, visible_applications_for(self.coh))
+        self.assertEqual(application.route, LeaveApplication.ROUTE_REGULAR)
+        self.assertIn(application, visible_applications_for(self.supervisor))
+        self.assertNotIn(application, visible_applications_for(self.hr))
+        self._to_hr(application)
         self.assertIn(application, visible_applications_for(self.hr))
+        self._act("hrleave1", application, "record")
+        self.assertEqual(application.status, LeaveApplication.PROCESSED_BY_HR)
+        self.assertEqual(application.status_label, "Recorded and verified by HR")
+        self.assertEqual(self._used(application), Decimal("-2"))  # days taken at HR
+        self._act("aoleave1", application, "review")
+        self.assertEqual(application.status, LeaveApplication.RECOMMENDED_BY_AO)
+        self.assertEqual(self._act("cohleave1", application, "approve").status_code, 403)  # never "approved"
+        self._act("cohleave1", application, "recommend_capitol")
+        self.assertEqual(application.status, LeaveApplication.FOR_CAPITOL_APPROVAL)
+        self.assertEqual(self._used(application), Decimal("-2"))
+        self.assertNotIn(application, visible_applications_for(self.hr))
+        self.assertTrue(LeaveApplication.objects.filter(LeaveApplication.counted_q(), pk=application.pk).exists())
 
-    def test_supervisor_cannot_endorse_a_regular_leave_application(self):
+    def test_hr_cannot_reject_regular_leave_but_may_return_it(self):
         application = self._submit(self.employee, self.vl)
-        self.client.login(username="supervisor1", password="testpass123")
-        response = self.client.post(
-            reverse("leave:leave_action", args=[application.pk]), {"action": "endorse"}
-        )
-        self.assertEqual(response.status_code, 403)
-        application.refresh_from_db()
-        self.assertEqual(application.status, LeaveApplication.SUBMITTED)
+        self._to_hr(application)
+        self.assertEqual(self._act("hrleave1", application, "reject", "no").status_code, 403)
+        self.assertEqual(application.status, LeaveApplication.ENDORSED_BY_SUPERVISOR)
+        self._act("hrleave1", application, "return", "Attach the certificate")
+        self.assertEqual(application.status, LeaveApplication.RETURNED)
 
-    def test_hr_records_regular_leave_directly_no_chain(self):
-        # Give enough accrued VL balance first (24 months * 1.25 = 30 by 2026-03-02)
-        application = self._submit(self.employee, self.vl, days=Decimal("2"))
-        self.client.login(username="hrleave1", password="testpass123")
-        response = self.client.post(
-            reverse("leave:leave_action", args=[application.pk]), {"action": "record"}
-        )
-        application.refresh_from_db()
-        self.assertEqual(application.status, LeaveApplication.RECORDED)
-        self.assertTrue(
-            LeaveCreditTransaction.objects.filter(
-                employee=self.employee, leave_type=self.vl, leave_application=application
-            ).exists()
-        )
+    def test_ao_or_coh_rejection_gives_the_days_back(self):
+        for step_user, action_before in (("aoleave1", None), ("cohleave1", "review")):
+            application = self._submit(self.employee, self.vl)
+            self._to_hr(application)
+            self._act("hrleave1", application, "record")
+            if action_before:
+                self._act("aoleave1", application, action_before)
+            self._act(step_user, application, "reject", "Not justified")
+            self.assertEqual(application.status, LeaveApplication.REJECTED)
+            self.assertEqual(self._used(application), Decimal("0"))
+
+    def test_hr_records_capitol_return_and_rejection_and_days_come_back(self):
+        for action, status in (("capitol_return", LeaveApplication.RETURNED),
+                               ("capitol_reject", LeaveApplication.REJECTED)):
+            application = self._submit(self.employee, self.vl)
+            self._to_hr(application)
+            self._act("hrleave1", application, "record")
+            self._act("aoleave1", application, "review")
+            self._act("cohleave1", application, "recommend_capitol")
+            self._act("hrleave1", application, action)  # no remark: refused
+            self.assertEqual(application.status, LeaveApplication.FOR_CAPITOL_APPROVAL)
+            self._act("hrleave1", application, action, "Capitol: incomplete papers")
+            self.assertEqual(application.status, status)
+            self.assertEqual(self._used(application), Decimal("0"))
+            self.assertEqual(application.actions.last().action, action)
+
+    def test_resubmitted_after_capitol_return_takes_the_days_again(self):
+        application = self._submit(self.employee, self.vl)
+        self._to_hr(application)
+        self._act("hrleave1", application, "record")
+        self._act("aoleave1", application, "review")
+        self._act("cohleave1", application, "recommend_capitol")
+        self._act("hrleave1", application, "capitol_return", "Wrong dates")
+        application.status = LeaveApplication.SUBMITTED
+        application.save()
+        self._to_hr(application)
+        self._act("hrleave1", application, "record")
+        self.assertEqual(self._used(application), Decimal("-2"))
 
     def test_hr_cannot_record_beyond_available_balance(self):
         application = self._submit(self.employee, self.vl, days=Decimal("999"))
-        self.client.login(username="hrleave1", password="testpass123")
-        self.client.post(reverse("leave:leave_action", args=[application.pk]), {"action": "record"})
-        application.refresh_from_db()
-        self.assertEqual(application.status, LeaveApplication.SUBMITTED, "Must not record beyond balance")
+        self._to_hr(application)
+        self._act("hrleave1", application, "record")
+        self.assertEqual(application.status, LeaveApplication.ENDORSED_BY_SUPERVISOR, "Must not record beyond balance")
+
+    def test_coh_own_regular_leave_is_recorded_by_hr_then_goes_to_the_capitol(self):
+        application = self._submit(self.coh, self.vl)
+        self.assertIn(application, visible_applications_for(self.hr))
+        self._act("hrleave1", application, "record")
+        self.assertEqual(application.status, LeaveApplication.FOR_CAPITOL_APPROVAL)
+
+    def test_cosp_wellness_goes_through_the_full_chain(self):
+        cosp_employee = make_employee("cospwell", "EMP-LW", date_hired=date(2024, 1, 1), employment_status="COSP")
+        cosp_employee.sections.add(self.section)
+        wellness = LeaveType.objects.get(code="WELLNESS")
+        application = self._submit(cosp_employee, wellness, days=Decimal("1"), wellness_reason="GENERAL_BREAK")
+        self.assertEqual(application.route, LeaveApplication.ROUTE_COSP)
+        self.assertIn(application, visible_applications_for(self.supervisor))
+        self._act("supervisor1", application, "endorse")
+        self._act("hrleave1", application, "process")
+        self._act("aoleave1", application, "recommend")
+        self._act("cohleave1", application, "approve")
+        self.assertEqual(application.status, LeaveApplication.APPROVED)
+        self.assertEqual(self._used(application), Decimal("-1"))
 
     def test_cosp_leave_goes_through_full_chain(self):
         cosp_employee = make_employee(
@@ -426,7 +498,8 @@ class QueueOrderTests(TestCase):
             emp = make_employee(name, f"EMP-Q-{i + 1}", date_hired=date(2020, 1, 1))
             app = LeaveApplication.objects.create(employee=emp, leave_type=vl, start_date=date(2026, 11, 2),
                                                   end_date=date(2026, 11, 2), number_of_days=Decimal("1"))
-            LeaveApplication.objects.filter(pk=app.pk).update(submitted_at=timezone.now() - timedelta(days=10 - i))
+            LeaveApplication.objects.filter(pk=app.pk).update(
+                submitted_at=timezone.now() - timedelta(days=10 - i), status=LeaveApplication.ENDORSED_BY_SUPERVISOR)
             made.append(app.pk)
         self.client.force_login(hr.user)
         listed = [a.pk for a in self.client.get(reverse("leave:leave_queue")).context["applications"]]

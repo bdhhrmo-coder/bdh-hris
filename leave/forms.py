@@ -75,7 +75,7 @@ class LeaveApplicationForm(forms.ModelForm):
         for name in L.ALL_DETAIL_FIELDS:
             if name not in used:
                 cleaned[name] = ""
-        on_csc_form = leave_type is not None and not leave_type.requires_full_routing
+        on_csc_form = leave_type is not None and L.route_for(self.employee, leave_type) == L.ROUTE_REGULAR
         if not on_csc_form or not cleaned.get("commutation"):
             cleaned["commutation"] = L.COMMUTATION_NOT_REQUESTED
         purpose = cleaned.get("other_purpose")

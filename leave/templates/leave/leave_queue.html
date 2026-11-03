@@ -12,9 +12,9 @@
     <td><strong>{{ a.leave_type.name }}</strong>{% with d=a.queue_details %}{% if d %}<br><small>{{ d }}</small>{% endif %}{% endwith %}</td>
     <td>{{ a.dates_label }}</td>
     <td>{{ a.number_of_days }}</td>
-    <td>{% status_badge a.status a.get_status_display %}</td>
+    <td>{% status_badge a.status a.status_label %}</td>
     <td>
-      {% if a.leave_type.requires_full_routing %}
+      {% if a.is_cosp_route %}
         <a href="{% url 'leave:print_cosp_leave_form' a.pk %}" target="_blank">Print COSP Leave Form</a>
       {% else %}
         <a href="{% url 'leave:print_csc_form6' a.pk %}" target="_blank">Print CSC Form 6</a>
@@ -24,23 +24,31 @@
       <form method="post" action="{% url 'leave:leave_action' a.pk %}" x-data="{ remark: '' }">
         {% csrf_token %}
         <input type="text" name="notes" maxlength="255" x-model="remark" class="remark-input" placeholder="Remark (required to return or reject)" aria-label="Remark (required to return or reject)">
-        {% if a.status == "SUBMITTED" and not a.leave_type.requires_full_routing %}
-          <button type="submit" name="action" value="record">Record</button>
-          <button type="submit" name="action" value="reject" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Reject</button>
-        {% elif a.status == "SUBMITTED" or a.status == "ENDORSED_BY_UNIT_HEAD" %}
+        {% if a.status == "SUBMITTED" or a.status == "ENDORSED_BY_UNIT_HEAD" %}
+          {% if a.coh_own %}
+          <button type="submit" name="action" value="record">Record and verify</button>
+          <button type="submit" name="action" value="return" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Return</button>
+          {% else %}
           <button type="submit" name="action" value="endorse">Endorse</button>
           <button type="submit" name="action" value="reject" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Reject</button>
           <button type="submit" name="action" value="return" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Return</button>
+          {% endif %}
         {% elif a.status == "ENDORSED_BY_SUPERVISOR" %}
+          {% if a.route == "REGULAR" %}
+          <button type="submit" name="action" value="record">Record and verify</button>
+          {% else %}
           <button type="submit" name="action" value="process">Process</button>
           <button type="submit" name="action" value="reject" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Reject</button>
+          {% endif %}
           <button type="submit" name="action" value="return" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Return</button>
         {% elif a.status == "PROCESSED_BY_HR" %}
-          <button type="submit" name="action" value="recommend">Recommend</button>
+          {% if a.route == "REGULAR" %}<button type="submit" name="action" value="review">Review and endorse</button>
+          {% else %}<button type="submit" name="action" value="recommend">Recommend</button>{% endif %}
           <button type="submit" name="action" value="reject" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Reject</button>
           <button type="submit" name="action" value="return" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Return</button>
         {% elif a.status == "RECOMMENDED_BY_AO" %}
-          <button type="submit" name="action" value="approve">Approve</button>
+          {% if a.route == "REGULAR" %}<button type="submit" name="action" value="recommend_capitol">Recommend for approval</button>
+          {% else %}<button type="submit" name="action" value="approve">Approve</button>{% endif %}
           <button type="submit" name="action" value="reject" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Reject</button>
           <button type="submit" name="action" value="return" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Return</button>
         {% endif %}
@@ -52,4 +60,20 @@
   {% endfor %}
 </table>
 </div>
+{% if at_capitol %}
+<h2>Regular leave for Capitol approval</h2>
+<p class="help">Recommended for approval by the Chief of Hospital and waiting for the Capitol. If the Capitol returns or rejects one, open it and record that; the leave days are given back automatically.</p>
+<div class="card"><div class="table-scroll">
+<table>
+  <tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th>Form</th></tr>
+  {% for a in at_capitol %}
+  <tr>
+    <td><a href="{% url 'leave:leave_detail' a.pk %}">{{ a.employee.full_name }}</a></td>
+    <td>{{ a.leave_type.name }}</td><td>{{ a.dates_label }}</td><td>{{ a.number_of_days }}</td>
+    <td><a href="{% url 'leave:print_csc_form6' a.pk %}" target="_blank">Print CSC Form 6</a></td>
+  </tr>
+  {% endfor %}
+</table>
+</div></div>
+{% endif %}
 {% endblock %}

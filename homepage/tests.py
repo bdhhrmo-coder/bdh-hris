@@ -125,7 +125,7 @@ class HomepageTests(TestCase):
         self.assertNotIn("Pharmstaff", mine)
 
     def test_waiting_for_my_action_uses_the_queues(self):
-        leave(self.staff, "VL", "SUBMITTED")  # Regular leave: HR records it
+        leave(self.staff, "VL", "ENDORSED_BY_SUPERVISOR")  # Regular leave at the HR step (2026-11-03)
         waiting = dict((label, n) for label, n, _ in self.page(self.hr).context["waiting"])
         self.assertEqual(waiting.get("Leave"), 1)
         self.assertEqual(self.page(self.staff).context["waiting_total"], 0)

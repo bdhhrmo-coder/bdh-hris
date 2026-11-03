@@ -76,8 +76,8 @@ def _used_leave_this_year(employee, leave_type, today):
 
 def _emergency_used_this_year(employee, leave_type, today):
     return LeaveApplication.objects.filter(
-        employee=employee, leave_type=leave_type, start_date__year=today.year,
-        status__in=[LeaveApplication.APPROVED, LeaveApplication.RECORDED],
+        LeaveApplication.counted_q(), employee=employee, leave_type=leave_type, start_date__year=today.year,
+        
     ).aggregate(t=Sum("number_of_days"))["t"] or Decimal("0")
 
 

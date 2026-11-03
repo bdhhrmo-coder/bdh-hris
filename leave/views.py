@@ -24,7 +24,10 @@ from .permissions import (
     can_endorse,
     can_endorse_second,
     supervisor_step_result,
+    can_record_capitol_decision,
     can_view_application,
+    capitol_applications_for,
+    coh_filed_regular,
     visible_applications_for,
 )
 
@@ -36,6 +39,7 @@ def _render_form(request, form, acting_employee, application=None):
     return render(request, "leave/leave_apply.html", {
         "form": form, "cards": balance_cards(acting_employee), "selected_type": str(selected),
         "type_codes": json.dumps(form.type_codes()), "application": application,
+        "is_cosp": acting_employee.employment_status == "COSP",
     })
 
 
@@ -111,6 +115,7 @@ def leave_detail(request, pk):
         "history": application.actions.select_related("acted_by__employee"),
         "can_edit": acting_employee is not None and application.employee_id == acting_employee.pk
         and application.is_editable_by_filer(),
+        "can_record_capitol": can_record_capitol_decision(acting_employee, application),
     })
 
 
@@ -129,17 +134,17 @@ def leave_queue(request):
     applications = visible_applications_for(acting_employee).select_related("employee", "leave_type").order_by(
         "submitted_at", "pk"
     )  # oldest first: first filed, first acted on (owner, 2026-10-06)
-    return render(request, "leave/leave_queue.html", {"applications": applications})
+    at_capitol = capitol_applications_for(acting_employee).select_related("employee", "leave_type").order_by(
+        "submitted_at", "pk")
+    return render(request, "leave/leave_queue.html", {"applications": applications, "at_capitol": at_capitol})
 
 
 def _finalize_success(application, actor_user):
     """
-    Called exactly once, at the step that finally commits a leave
-    application (RECORDED for data-entry-only types, APPROVED for COSP
-    Leave). This is where the balance is actually checked and the ledger
-    usage entry is posted — the "check balance before allowing" gate
-    lives here, at the single point of commitment, not earlier stages
-    that might still be reversed.
+    Called exactly once per cycle, at the step that takes the days: COH
+    approval for the COSP route, HR "record and verify" for the regular
+    route (owner 2026-11-03). This is where the balance is actually checked
+    and the ledger usage entry is posted.
 
     Returns an error string if the balance check fails, else None.
     """
@@ -165,29 +170,52 @@ def _finalize_success(application, actor_user):
     return None
 
 
+def _restore_credits(application, actor_user, reason):
+    """Gives back the days taken for this application, if any are still
+    taken (owner 2026-11-03: restored automatically when a regular leave is
+    returned or rejected inside BDH or by the Capitol). Adds a ledger line;
+    nothing is deleted. Safe to call when nothing was taken."""
+    from django.db.models import Sum
+
+    entries = LeaveCreditTransaction.objects.filter(leave_application=application)
+    net = entries.aggregate(t=Sum("days"))["t"] or 0
+    if net >= 0:
+        return
+    used = entries.filter(transaction_type=LeaveCreditTransaction.USED).order_by("-pk").first()
+    LeaveCreditTransaction.objects.create(
+        employee=application.employee, leave_type=application.leave_type,
+        transaction_type=LeaveCreditTransaction.ADJUSTMENT, days=-net,
+        transaction_date=used.transaction_date if used else date.today(),
+        leave_application=application, notes=f"Restored: {reason}"[:255], created_by=actor_user,
+    )
+
+
 @login_required
 def leave_action(request, pk):
     """
     Single POST endpoint for every routing step. `action` in POST decides
     what happens; which actions are allowed depends on the acting
-    employee's role AND the application's current status AND (critically)
-    whether its leave_type.requires_full_routing — a non-COSP-Leave
-    application can only ever go SUBMITTED -> RECORDED/REJECTED, no matter
-    what action name is posted.
+    employee's role, the application's current status and its route
+    (owner decisions 2026-11-03).
     """
     acting_employee = get_acting_employee(request.user)
     application = get_object_or_404(LeaveApplication, pk=pk)
     action = request.POST.get("action")
     notes = request.POST.get("notes", "").strip()
+    back = request.POST.get("next") == "detail"
+
+    def done():
+        return redirect("leave:leave_detail", pk=application.pk) if back else redirect("leave:leave_queue")
 
     if acting_employee is None:
         raise PermissionDenied("No employee record is linked to your account.")
     # A return or rejection always carries a remark (owner requests 2026-11-03).
-    if action in ("return", "reject") and not notes:
+    if action in ("return", "reject", "capitol_return", "capitol_reject") and not notes:
         messages.error(request, RETURN_NEEDS_REMARK)
-        return redirect("leave:leave_queue")
+        return done()
 
-    full_routing = application.leave_type.requires_full_routing
+    A = LeaveApplication
+    regular = application.route == A.ROUTE_REGULAR
     status = application.status
     filers = [application.employee]  # never acts on their own (owner decision 2026-10-26)
 
@@ -198,73 +226,86 @@ def leave_action(request, pk):
             application=application, action=action_name, resulting_status=new_status,
             notes=notes, acted_by=request.user,
         )
+        if new_status in (A.RETURNED, A.REJECTED):
+            _restore_credits(application, request.user, f"{action_name.replace('_', ' ')} - {notes}")
         notify_status_change(application)
+
+    def stop(action_name):
+        """Return or reject at an internal step."""
+        apply_transition(A.REJECTED if action_name == "reject" else A.RETURNED, action_name)
 
     allowed = False
     error = None
 
-    if not full_routing:
-        if status == LeaveApplication.SUBMITTED and can_act_hr_step(acting_employee, filers, application):
-            if action == "record":
-                error = _finalize_success(application, request.user)
-                if error is None:
-                    allowed = True
-                    apply_transition(LeaveApplication.RECORDED, "record")
-            elif action == "reject":
+    if status == A.SUBMITTED and regular and coh_filed_regular(application) \
+            and can_act_hr_step(acting_employee, filers, application):
+        # The COH's own regular leave: HR records and verifies, then it goes to the Capitol.
+        if action == "record":
+            error = _finalize_success(application, request.user)
+            if error is None:
                 allowed = True
-                apply_transition(LeaveApplication.REJECTED, "reject")
-    else:
-        if status == LeaveApplication.SUBMITTED and can_endorse(acting_employee, filers):
-            if action == "endorse":
+                apply_transition(A.FOR_CAPITOL_APPROVAL, "record")
+        elif action == "return":
+            allowed = True
+            stop(action)
+    elif status == A.SUBMITTED and can_endorse(acting_employee, filers):
+        if action == "endorse":
+            allowed = True
+            # Two-level endorsement (2026-10-27): the unit head first, then the section head.
+            if supervisor_step_result(acting_employee, filers) == UNIT_STEP:
+                apply_transition(A.ENDORSED_BY_UNIT_HEAD, "endorse_unit")
+            else:
+                apply_transition(A.ENDORSED_BY_SUPERVISOR, "endorse")
+        elif action in ("reject", "return"):
+            allowed = True
+            stop(action)
+    elif status == A.ENDORSED_BY_UNIT_HEAD and can_endorse_second(acting_employee, filers):
+        if action == "endorse":
+            allowed = True
+            apply_transition(A.ENDORSED_BY_SUPERVISOR, "endorse")
+        elif action in ("reject", "return"):
+            allowed = True
+            stop(action)
+    elif status == A.ENDORSED_BY_SUPERVISOR and can_act_hr_step(acting_employee, filers, application):
+        if regular and action == "record":
+            # Regular leave: HR records and verifies; the days are taken here.
+            error = _finalize_success(application, request.user)
+            if error is None:
                 allowed = True
-                # Two-level endorsement (2026-10-27): the unit head first, then the section head.
-                if supervisor_step_result(acting_employee, filers) == UNIT_STEP:
-                    apply_transition(LeaveApplication.ENDORSED_BY_UNIT_HEAD, "endorse_unit")
-                else:
-                    apply_transition(LeaveApplication.ENDORSED_BY_SUPERVISOR, "endorse")
-            elif action in ("reject", "return"):
+                apply_transition(A.PROCESSED_BY_HR, "record")
+        elif not regular and action == "process":
+            allowed = True
+            apply_transition(A.PROCESSED_BY_HR, "process")
+        elif action == "return" or (action == "reject" and not regular):  # HR never rejects regular leave
+            allowed = True
+            stop(action)
+    elif status == A.PROCESSED_BY_HR and can_act_ao_step(acting_employee, filers):
+        if action == ("review" if regular else "recommend"):
+            allowed = True
+            apply_transition(A.RECOMMENDED_BY_AO, action)
+        elif action in ("reject", "return"):
+            allowed = True
+            stop(action)
+    elif status == A.RECOMMENDED_BY_AO and can_act_coh_step(acting_employee, filers):
+        if regular and action == "recommend_capitol":
+            allowed = True
+            apply_transition(A.FOR_CAPITOL_APPROVAL, "recommend_capitol")
+        elif not regular and action == "approve":
+            error = _finalize_success(application, request.user)
+            if error is None:
                 allowed = True
-                apply_transition(
-                    LeaveApplication.REJECTED if action == "reject" else LeaveApplication.RETURNED, action
-                )
-        elif status == LeaveApplication.ENDORSED_BY_UNIT_HEAD and can_endorse_second(acting_employee, filers):
-            if action == "endorse":
-                allowed = True
-                apply_transition(LeaveApplication.ENDORSED_BY_SUPERVISOR, "endorse")
-            elif action in ("reject", "return"):
-                allowed = True
-                apply_transition(
-                    LeaveApplication.REJECTED if action == "reject" else LeaveApplication.RETURNED, action
-                )
-        elif status == LeaveApplication.ENDORSED_BY_SUPERVISOR and can_act_hr_step(acting_employee, filers, application):
-            if action == "process":
-                allowed = True
-                apply_transition(LeaveApplication.PROCESSED_BY_HR, "process")
-            elif action in ("reject", "return"):
-                allowed = True
-                apply_transition(
-                    LeaveApplication.REJECTED if action == "reject" else LeaveApplication.RETURNED, action
-                )
-        elif status == LeaveApplication.PROCESSED_BY_HR and can_act_ao_step(acting_employee, filers):
-            if action == "recommend":
-                allowed = True
-                apply_transition(LeaveApplication.RECOMMENDED_BY_AO, "recommend")
-            elif action in ("reject", "return"):
-                allowed = True
-                apply_transition(
-                    LeaveApplication.REJECTED if action == "reject" else LeaveApplication.RETURNED, action
-                )
-        elif status == LeaveApplication.RECOMMENDED_BY_AO and can_act_coh_step(acting_employee, filers):
-            if action == "approve":
-                error = _finalize_success(application, request.user)
-                if error is None:
-                    allowed = True
-                    apply_transition(LeaveApplication.APPROVED, "approve")
-            elif action in ("reject", "return"):
-                allowed = True
-                apply_transition(
-                    LeaveApplication.REJECTED if action == "reject" else LeaveApplication.RETURNED, action
-                )
+                apply_transition(A.APPROVED, "approve")
+        elif action in ("reject", "return"):
+            allowed = True
+            stop(action)
+    elif can_record_capitol_decision(acting_employee, application):
+        # HR records what the Capitol decided, when it returns or rejects it.
+        if action == "capitol_return":
+            allowed = True
+            apply_transition(A.RETURNED, "capitol_return")
+        elif action == "capitol_reject":
+            allowed = True
+            apply_transition(A.REJECTED, "capitol_reject")
 
     if error:
         messages.error(request, error)
@@ -273,7 +314,7 @@ def leave_action(request, pk):
     else:
         raise PermissionDenied("You are not authorized to take this action on this application.")
 
-    return redirect("leave:leave_queue")
+    return done()
 
 
 def _pdf_unavailable(request, exc):
@@ -306,8 +347,8 @@ def print_csc_form6(request, pk):
     if not can_view_application(acting_employee, application):
         raise PermissionDenied("You are not authorized to view this application.")
 
-    if application.leave_type.requires_full_routing:
-        raise PermissionDenied("COSP Leave prints on the custom COSP leave form, not CSC Form 6.")
+    if application.is_cosp_route:
+        raise PermissionDenied("COSP employees' leave prints on the COSP leave form (01F04-A), not CSC Form 6.")
 
     try:
         pdf_bytes = render_csc_form6_pdf(application)
@@ -322,9 +363,9 @@ def print_csc_form6(request, pk):
 @login_required
 def print_cosp_leave_form(request, pk):
     """
-    Renders the custom BDH COSP Leave form for this application as a PDF.
-    Only COSP Leave itself prints here — Wellness/Emergency Leave availed
-    by a COSP employee still prints on CSC Form 6.
+    Renders the custom BDH COSP leave form (01F04-A) as a PDF: every leave
+    of a COSP employee, incl. Wellness and Emergency Leave (owner
+    2026-11-03). Regular employees' leave prints on CSC Form 6.
     """
     acting_employee = get_acting_employee(request.user)
     application = get_object_or_404(LeaveApplication, pk=pk)
@@ -332,8 +373,8 @@ def print_cosp_leave_form(request, pk):
     if not can_view_application(acting_employee, application):
         raise PermissionDenied("You are not authorized to view this application.")
 
-    if not application.leave_type.requires_full_routing:
-        raise PermissionDenied("This leave type prints on CSC Form 6, not the COSP leave form.")
+    if not application.is_cosp_route:
+        raise PermissionDenied("Regular employees' leave prints on CSC Form 6, not the COSP leave form.")
 
     try:
         pdf_bytes = render_cosp_leave_form_pdf(application, printed_by=request.user)

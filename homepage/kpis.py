@@ -28,7 +28,7 @@ from leave.models import LeaveApplication
 from leave.permissions import is_administrative_officer, is_chief_of_hospital, is_hr
 from official_requests.models import OfficialRequest
 
-LEAVE_DONE = [LeaveApplication.APPROVED, LeaveApplication.RECORDED]
+# Leave counts once its days are taken: LeaveApplication.counted_q() (2026-11-03).
 
 
 def scope_for(acting_employee):
@@ -73,7 +73,7 @@ def absent_today(today=None, ids=None, with_type=False):
     for HR), and the dates. Sorted by first section, then name."""
     today = today or timezone.localdate()
     rows = OrderedDict()
-    leave = _limit(LeaveApplication.objects.filter(status__in=LEAVE_DONE, start_date__lte=today, end_date__gte=today),
+    leave = _limit(LeaveApplication.objects.filter(LeaveApplication.counted_q(), start_date__lte=today, end_date__gte=today),
                    ids).select_related("employee", "leave_type")
     cto = _limit(CTOUsageApplication.objects.filter(status=CTOUsageApplication.APPROVED, start_date__lte=today,
                                                     end_date__gte=today), ids).select_related("employee")
@@ -120,7 +120,7 @@ def _month_rows(qs, label_of):
 def on_leave_this_month(today=None, ids=None, with_type=False):
     """Approved or recorded leave with any day in the current month."""
     first, last = _month_bounds(today)
-    qs = _limit(LeaveApplication.objects.filter(status__in=LEAVE_DONE, start_date__lte=last, end_date__gte=first),
+    qs = _limit(LeaveApplication.objects.filter(LeaveApplication.counted_q(), start_date__lte=last, end_date__gte=first),
                 ids).select_related("employee", "leave_type").order_by("start_date")
     return _month_rows(qs, lambda a: a.leave_type.name if with_type else "Leave")
 

@@ -6,7 +6,7 @@
 {% else %}<p><a href="{% url 'leave:leave_queue' %}">&larr; Leave queue</a></p>{% endif %}
 <div class="split-row spread">
   <h1>{{ a.leave_type.name }}</h1>
-  {% status_badge a.status a.get_status_display %}
+  {% status_badge a.status a.status_label %}
 </div>
 <div class="card form-card">
   <table class="detail-table">
@@ -18,11 +18,12 @@
     {% endfor %}
     <tr><th>6.C Working days</th><td>{{ a.number_of_days|floatformat:"-2" }}</td></tr>
     <tr><th>Inclusive dates</th><td>{{ a.dates_label }}</td></tr>
-    {% if not a.leave_type.requires_full_routing %}<tr><th>6.D Commutation</th><td>{{ a.get_commutation_display }}</td></tr>{% endif %}
+    {% if not a.is_cosp_route %}<tr><th>6.D Commutation</th><td>{{ a.get_commutation_display }}</td></tr>{% endif %}
     {% if a.justification %}<tr><th>Justification</th><td>{{ a.justification|linebreaksbr }}</td></tr>{% endif %}
+    <tr><th>Approval</th><td>{{ a.get_route_display }}</td></tr>
   </table>
   <p class="row-actions">
-    {% if a.leave_type.requires_full_routing %}
+    {% if a.is_cosp_route %}
       <a class="btn btn-secondary" href="{% url 'leave:print_cosp_leave_form' a.pk %}" target="_blank">Print COSP Leave Form</a>
     {% else %}
       <a class="btn btn-secondary" href="{% url 'leave:print_csc_form6' a.pk %}" target="_blank">Print CSC Form 6</a>
@@ -30,13 +31,23 @@
     <a class="btn btn-secondary" href="{% documents_url a %}">Documents</a>
     {% if can_edit %}<a class="btn" href="{% url 'leave:leave_edit' a.pk %}">{% if a.status == "RETURNED" %}Edit and resubmit{% else %}Edit{% endif %}</a>{% endif %}
   </p>
+  {% if can_record_capitol %}
+  <form method="post" action="{% url 'leave:leave_action' a.pk %}" x-data="{ remark: '' }" class="capitol-box">
+    {% csrf_token %}<input type="hidden" name="next" value="detail">
+    <h2>Record the Capitol's decision</h2>
+    <p class="help">Use only when the Capitol returns or rejects this leave. The leave days are given back automatically and the employee is told.</p>
+    <input type="text" name="notes" maxlength="255" x-model="remark" class="remark-input" placeholder="Remark (required): what the Capitol said" aria-label="Remark (required)">
+    <button type="submit" name="action" value="capitol_return" :disabled="!remark.trim()">Returned by the Capitol</button>
+    <button type="submit" name="action" value="capitol_reject" :disabled="!remark.trim()">Rejected by the Capitol</button>
+  </form>
+  {% endif %}
 </div>
 <h2>History</h2>
 <div class="card"><div class="table-scroll">
 <table>
   <tr><th>When</th><th>Action</th><th>By</th><th>Remarks</th></tr>
   {% for h in history %}
-  <tr><td>{{ h.acted_at|date:"M d, Y g:i A" }}</td><td>{{ h.action|capfirst }}</td>
+  <tr><td>{{ h.acted_at|date:"M d, Y g:i A" }}</td><td>{{ h.label }}</td>
       <td>{{ h.acted_by.employee.full_name|default:h.acted_by.username }}</td><td>{{ h.notes|default:"—" }}</td></tr>
   {% endfor %}
 </table>

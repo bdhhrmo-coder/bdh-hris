@@ -96,7 +96,7 @@ def _excused_days(employee_ids, start_date, end_date):
     """(employee_id, date) pairs covered by approved time away from work."""
     covered = set()
     sources = [
-        LeaveApplication.objects.filter(status__in=[LeaveApplication.APPROVED, LeaveApplication.RECORDED]),
+        LeaveApplication.objects.filter(LeaveApplication.counted_q()),
         CTOUsageApplication.objects.filter(status=CTOUsageApplication.APPROVED),
         OfficialRequest.objects.filter(
             status__in=[OfficialRequest.APPROVED, OfficialRequest.RECORDED],
@@ -147,8 +147,8 @@ def leave_utilization(start_date, end_date, section=None):
                 earned += _annual_entitlement(lt) * share
     used = sum(
         (a.number_of_days for a in LeaveApplication.objects.filter(
-            employee__in=employees, leave_type__in=types, start_date__range=(start_date, end_date),
-            status__in=[LeaveApplication.APPROVED, LeaveApplication.RECORDED],
+            LeaveApplication.counted_q(), employee__in=employees, leave_type__in=types, start_date__range=(start_date, end_date),
+            
         )),
         Decimal("0"),
     )
