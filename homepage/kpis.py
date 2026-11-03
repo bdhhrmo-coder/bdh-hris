@@ -131,7 +131,7 @@ def _pending_querysets():
         ("Attendance correction", AttendanceCorrectionRequest.objects.filter(
             status__in=AttendanceCorrectionRequest.OPEN_STATUSES - {AttendanceCorrectionRequest.RETURNED}),
          "employee_id"),
-        ("Official Business/Time/Travel/OT", R.objects.exclude(
+        ("Official Business/Errand/OT", R.objects.exclude(
             status__in=list(R.TERMINAL_STATUSES) + [R.RETURNED]), "employee_id"),
     ]
 
@@ -181,7 +181,7 @@ def waiting_for_me(acting_employee, user):
         ("Exchange of Duty", visible_exchange_requests_for(acting_employee).count(), "exchange:exchange_queue"),
         ("Attendance correction", visible_correction_requests_for(acting_employee).count(),
          "attendance:correction_queue"),
-        ("Official Business/Time/Travel/OT",
+        ("Official Business/Errand/OT",
          visible_requests_for(acting_employee).count() + len(batches_awaiting(acting_employee, user)),
          "official_requests:request_queue"),
         ("Duty schedule", len(schedules_waiting_for(acting_employee, user)), "schedules:list"),

@@ -242,19 +242,25 @@ class OfficialRequestNotificationIntegrationTests(TestCase):
     Supervisor step (§6.2), so filing one must notify HR directly, not a
     supervisor who has no authority to act on it."""
 
-    def test_official_time_notifies_hr_not_supervisor(self):
-        make_employee("ortnotif_sup", "EMP-ON-1", role=RoleAssignment.SUPERVISOR)
-        hr = make_employee("ortnotif_hr", "EMP-ON-2", role=RoleAssignment.HR_PROCESSOR)
-        applicant = make_employee("ortnotif_emp", "EMP-ON-3")
+    def test_official_time_is_no_longer_filed_and_an_errand_goes_to_the_ao(self):
+        # Owner decisions 2026-11-03: Official Time is retired; a Local Official
+        # Errand is endorsed by the Supervisor, then approved by the AO.
+        sup = make_employee("ortnotif_sup", "EMP-ON-1", role=RoleAssignment.SUPERVISOR)
+        ao = make_employee("ortnotif_ao", "EMP-ON-2", role=RoleAssignment.ADMINISTRATIVE_OFFICER)
+        make_employee("ortnotif_emp", "EMP-ON-3")
         client = Client()
         client.login(username="ortnotif_emp", password="testpass123")
         client.post(reverse("official_requests:request_apply"), {
-            "request_type": OfficialRequest.OFFICIAL_TIME,
-            "start_date": "2026-06-01",
-            "end_date": "2026-06-01",
+            "request_type": OfficialRequest.OFFICIAL_TIME, "start_date": "2026-06-01", "end_date": "2026-06-01",
             "purpose": "Training",
         })
-        self.assertTrue(Notification.objects.filter(recipient=hr).exists())
-        self.assertFalse(
-            Notification.objects.filter(message__icontains="awaiting your endorsement").exists()
-        )
+        self.assertFalse(OfficialRequest.objects.exists())
+        client.post(reverse("official_requests:request_apply"), {
+            "request_type": OfficialRequest.TRAVEL, "start_date": "2026-06-01", "end_date": "2026-06-01",
+            "destination": "Municipal Hall", "purpose": "Submit documents",
+        })
+        req = OfficialRequest.objects.get()
+        self.assertTrue(Notification.objects.filter(recipient=sup, message__icontains="awaiting your endorsement").exists())
+        client.login(username="ortnotif_sup", password="testpass123")
+        client.post(reverse("official_requests:request_action", args=[req.pk]), {"action": "endorse"})
+        self.assertTrue(Notification.objects.filter(recipient=ao, message__icontains="awaiting your approval").exists())

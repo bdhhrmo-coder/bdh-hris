@@ -91,9 +91,20 @@
         {% if batch %}<input type="hidden" name="kind" :value="kind">{% endif %}
         {% for e in form.kind.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
       </label>
-      <label x-show="kind === 'TRAVEL'">Destination
+      <label x-show="kind === 'TRAVEL' || kind === 'OFFICIAL_BUSINESS'">Destination
         <input type="text" name="destination" maxlength="255" value="{{ form.destination.value|default:'' }}">
         {% for e in form.destination.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+      </label>
+      <label x-show="kind === 'OFFICIAL_BUSINESS'">Expenses authorized
+        <select name="expenses_authorized">
+          <option value="">— choose —</option>
+          {% for value, label in form.fields.expenses_authorized.choices %}{% if value %}<option value="{{ value }}" {% if form.expenses_authorized.value == value %}selected{% endif %}>{{ label }}</option>{% endif %}{% endfor %}
+        </select>
+        {% for e in form.expenses_authorized.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+      </label>
+      <label x-show="kind === 'OFFICIAL_BUSINESS'">Transportation allowed
+        <input type="text" name="transportation_allowed" maxlength="100" value="{{ form.transportation_allowed.value|default:'Government Vehicle' }}">
+        {% for e in form.transportation_allowed.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
       </label>
       <label class="span-all">Purpose / reason (shared by every line)
         <textarea name="purpose" rows="2">{{ form.purpose.value|default:'' }}</textarea>

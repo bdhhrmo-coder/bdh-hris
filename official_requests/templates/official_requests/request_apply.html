@@ -2,11 +2,35 @@
 {% block title %}New request — BDH HRIS{% endblock %}
 {% block content %}
 <h1>File a request</h1>
-<p class="muted">Official Business, Official Time, Travel, or Authorized OT/rest day/holiday work. Routing depends on the type you pick.</p>
-<div class="card form-card">
+<p class="muted">
+  <strong>Official Business (Travel Order)</strong>: an official trip outside the area, approved by the Governor (with or without per diem).<br>
+  <strong>Local Official Errand</strong>: official work away from your workstation during office hours, nearby (for example the Municipal Hall or a bank).<br>
+  <strong>Authorized OT / rest day / holiday work</strong>.
+</p>
+{% comment %}Fields show by type (owner decisions 2026-11-03). The server checks the same rules.{% endcomment %}
+<div class="card form-card" x-data="{ t: '{{ form.request_type.value|default_if_none:''|escapejs }}' }">
   <form method="post" class="form-2col">
     {% csrf_token %}
-    {{ form.as_p }}
+    {{ form.non_field_errors }}
+    {% include "official_requests/_field.html" with field=form.request_type %}
+    {% include "official_requests/_field.html" with field=form.start_date %}
+    {% include "official_requests/_field.html" with field=form.end_date %}
+    <template x-if="t === 'TRAVEL' || t === 'OT_RESTDAY_HOLIDAY'"><div>
+      {% include "official_requests/_field.html" with field=form.time_from %}
+      {% include "official_requests/_field.html" with field=form.time_to %}
+    </div></template>
+    <template x-if="t === 'OFFICIAL_BUSINESS' || t === 'TRAVEL'"><div>
+      {% include "official_requests/_field.html" with field=form.destination %}
+    </div></template>
+    <template x-if="t === 'OFFICIAL_BUSINESS'"><div>
+      {% include "official_requests/_field.html" with field=form.expenses_authorized %}
+      {% include "official_requests/_field.html" with field=form.transportation_allowed %}
+    </div></template>
+    {% include "official_requests/_field.html" with field=form.purpose %}
+    <template x-if="t === 'OT_RESTDAY_HOLIDAY'"><div>
+      {% include "official_requests/_field.html" with field=form.hours_requested %}
+      {% include "official_requests/_field.html" with field=form.is_restday_or_holiday %}
+    </div></template>
     <button type="submit">Submit</button>
   </form>
 </div>

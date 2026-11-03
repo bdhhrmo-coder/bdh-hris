@@ -55,10 +55,9 @@ def find_libreoffice() -> str:
     )
 
 
-def workbook_to_pdf(workbook, label: str) -> bytes:
-    """Save `workbook` (an openpyxl Workbook) to a temp file, convert it to
-    PDF with headless LibreOffice, and return the PDF bytes. `label` names
-    the form in error messages (e.g. "CSC Form 6").
+def _convert_to_pdf(save, filename: str, label: str) -> bytes:
+    """Save the document with `save(path)` to a temp file, convert it to PDF
+    with headless LibreOffice, and return the PDF bytes.
 
     Each conversion uses its own throw-away LibreOffice profile folder
     (-env:UserInstallation, fix 2026-11-03). Without it, LibreOffice run by
@@ -69,23 +68,33 @@ def workbook_to_pdf(workbook, label: str) -> bytes:
     the same moment."""
     executable = find_libreoffice()
     with tempfile.TemporaryDirectory() as tmpdir:
-        xlsx_path = Path(tmpdir) / "form.xlsx"
-        workbook.save(xlsx_path)
+        src = Path(tmpdir) / filename
+        save(src)
         profile = (Path(tmpdir) / "lo_profile").resolve().as_uri()
         try:
             result = subprocess.run(
                 [
                     executable, f"-env:UserInstallation={profile}",
                     "--headless", "--norestore", "--nologo", "--nodefault", "--nolockcheck",
-                    "--convert-to", "pdf", "--outdir", tmpdir, str(xlsx_path),
+                    "--convert-to", "pdf", "--outdir", tmpdir, str(src),
                 ],
                 capture_output=True, timeout=120,
             )
         except subprocess.TimeoutExpired:
             raise RuntimeError(f"{label} PDF conversion timed out after 120 seconds ({executable}).")
-        pdf_path = Path(tmpdir) / "form.pdf"
+        pdf_path = src.with_suffix(".pdf")
         if not pdf_path.exists():
             detail = (result.stderr or result.stdout or b"").decode(errors="replace").strip() or "no message"
             raise RuntimeError(f"{label} PDF conversion failed (exit code {result.returncode}, "
                                f"{executable}): {detail}")
         return pdf_path.read_bytes()
+
+
+def workbook_to_pdf(workbook, label: str) -> bytes:
+    """An openpyxl Workbook -> PDF bytes. `label` names the form in errors."""
+    return _convert_to_pdf(workbook.save, "form.xlsx", label)
+
+
+def docx_to_pdf(document, label: str) -> bytes:
+    """A python-docx Document -> PDF bytes (the Travel Order, 2026-11-03)."""
+    return _convert_to_pdf(document.save, "form.docx", label)

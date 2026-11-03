@@ -9,7 +9,7 @@ from leave.permissions import remark_suffix, ao_step_actors, coh_step_actors, en
 from notifications.services import notify
 
 from .models import OfficialRequest
-from .routing import next_status_for
+from .routing import approver_role, next_status_for
 
 
 def notify_status_change(official_request):
@@ -44,18 +44,40 @@ def notify_status_change(official_request):
             f"A {type_name} request for {official_request.employee} is ready for AO recommendation.",
             queue_url,
         )
-    elif target_status == OfficialRequest.APPROVED:
+    elif target_status == OfficialRequest.FORWARDED_TO_CAPITOL:
         notify(
             coh_step_actors(filers),
-            f"A {type_name} request for {official_request.employee} is awaiting your approval.",
+            f"A Travel Order for {official_request.employee} is awaiting your recommending approval.",
             queue_url,
         )
+    elif target_status == OfficialRequest.APPROVED:
+        role = approver_role(official_request.request_type, target_status)
+        if role == "HR":
+            # Travel Order forwarded to the Capitol (owner decision 2026-11-03).
+            notify(
+                official_request.employee,
+                f"Your {type_name} request was recommended by the Chief of Hospital and forwarded to the "
+                "Capitol for the Governor's approval.",
+                mine_url,
+            )
+            notify(
+                hr_step_actors(filers, official_request),
+                f"A Travel Order for {official_request.employee} is at the Capitol. Print it for signing, then "
+                "record the Governor's decision.",
+                queue_url,
+            )
+        else:
+            notify(
+                ao_step_actors(filers) if role == "AO" else coh_step_actors(filers),
+                f"A {type_name} request for {official_request.employee} is awaiting your approval.",
+                queue_url,
+            )
     elif target_status is None:
         # Either just reached APPROVED (a terminal status with no further
         # step), or was REJECTED/RETURNED (not part of the chain at all) —
         # either way, the employee is the one who needs to know.
         notify(
             official_request.employee,
-            f"Your {type_name} request was {official_request.get_status_display().lower()}.{remark_suffix(official_request)}",
+            f"Your {type_name} request was {official_request.status_label.lower()}.{remark_suffix(official_request)}",
             mine_url,
         )

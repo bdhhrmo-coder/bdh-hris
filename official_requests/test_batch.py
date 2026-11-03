@@ -34,6 +34,7 @@ def emp(username, section=None, *roles, **ra_extra):
 def post_data(kind, employees, lines, apply_same=True, purpose="Hospital outreach", destination="Brooke's Point",
               **extra):
     data = {"kind": kind, "purpose": purpose, "destination": destination,
+            "expenses_authorized": "PER_DIEM", "transportation_allowed": "Government Vehicle",
             "employees": [str(e.pk) for e in employees],
             "lines-TOTAL_FORMS": str(len(lines)), "lines-INITIAL_FORMS": "0",
             "lines-MIN_NUM_FORMS": "1", "lines-MAX_NUM_FORMS": "1000"}
@@ -137,7 +138,7 @@ class BatchTests(TestCase):
         r = self.file(self.sup, data)
         self.assertContains(r, "Conflicts found (2)")
         self.assertContains(r, "On approved leave")
-        self.assertContains(r, "Already has a pending Official Business request")
+        self.assertContains(r, "Already has a pending Official Business (Travel Order) request")
         self.assertFalse(B.objects.exists())
         data["skip"] = [f"{self.a.pk}|2026-10-20", f"{self.b.pk}|2026-10-21"]
         self.file(self.sup, data)
@@ -158,10 +159,14 @@ class BatchTests(TestCase):
         self.file(filer, post_data(kind, employees, [{"date": day, "time_from": "17:00", "time_to": "20:00"}]))
         self.assertEqual(B.objects.count(), before + 1)
         batch = B.objects.latest("pk")
-        actors = {"endorse": self.sup, "process": self.proc, "recommend": self.ao, "approve": self.coh}
+        # 2026-11-03: the AO approves a Local Official Errand; a Travel Order is
+        # recommended by the COH and HR records the Governor's approval.
+        actors = {"endorse": self.sup, "process": self.proc, "recommend": self.ao, "forward": self.coh,
+                  "record_approval": self.hradmin if filer == self.proc else self.proc,
+                  "approve": self.ao if kind == "TRAVEL" else self.coh}
         done = []
         while rules.next_status(batch):
-            code = rules.STEP_ACTIONS[rules.next_status(batch)][0]
+            code = rules.step_action(batch.request_type, rules.next_status(batch))[0]
             self.assertEqual(self.act(actors[code], batch, code).status_code, 302, code)
             batch.refresh_from_db()
             done.append(code)
@@ -173,10 +178,12 @@ class BatchTests(TestCase):
     def test_routes_follow_the_owner_table(self):
         self.run_route(self.sup, "OT", [self.a], ["process", "recommend", "approve"], "2026-10-01")
         self.run_route(self.hradmin, "REST_DAY", [self.a], ["recommend", "approve"], "2026-10-02")
-        self.run_route(self.sup, "TRAVEL", [self.a], ["recommend", "approve"], "2026-10-03")
-        self.run_route(self.proc, "TRAVEL", [self.a], ["recommend", "approve"], "2026-10-04")
-        self.run_route(self.sup, "OFFICIAL_BUSINESS", [self.a], ["process", "recommend", "approve"], "2026-10-05")
-        self.run_route(self.proc, "OFFICIAL_BUSINESS", [self.a, self.b], ["endorse", "recommend", "approve"], "2026-10-06")
+        self.run_route(self.sup, "TRAVEL", [self.a], ["approve"], "2026-10-03")
+        self.run_route(self.proc, "TRAVEL", [self.a], ["approve"], "2026-10-04")
+        self.run_route(self.sup, "OFFICIAL_BUSINESS", [self.a], ["process", "recommend", "forward", "record_approval"],
+                       "2026-10-05")
+        self.run_route(self.proc, "OFFICIAL_BUSINESS", [self.a, self.b],
+                       ["endorse", "recommend", "forward", "record_approval"], "2026-10-06")
 
     def test_ob_by_hr_needs_a_shared_supervisor(self):
         r = self.file(self.proc, post_data("OFFICIAL_BUSINESS", [self.a, self.outsider], [{"date": "2026-10-20"}]))
@@ -251,7 +258,7 @@ class BatchTests(TestCase):
         self.client.force_login(self.sup.user)
         self.assertEqual(self.client.get(url).status_code, 200)
         self.assertContains(self.client.get(reverse("official_requests:batch_detail", args=[batch.pk])), "edit it")
-        self.act(self.ao, batch, "recommend")
+        self.act(self.ao, batch, "approve")
         self.client.force_login(self.sup.user)
         self.assertEqual(self.client.get(url).status_code, 302)   # an approver acted: no more edits
 
@@ -278,11 +285,11 @@ class BatchTests(TestCase):
 
     def test_employees_are_notified_when_filed_and_on_final_decision(self):
         self.file(self.sup, post_data("TRAVEL", [self.a, self.b], [{"date": "2026-10-20"}]))
-        self.assertTrue(Notification.objects.filter(recipient=self.a, message__contains="filed a Travel").exists())
+        self.assertTrue(Notification.objects.filter(recipient=self.a,
+                                                    message__contains="filed a Local Official Errand").exists())
         self.assertTrue(Notification.objects.filter(recipient=self.ao, message__contains="awaiting your action").exists())
         batch = B.objects.get()
-        self.act(self.ao, batch, "recommend")
-        self.act(self.coh, batch, "approve")
+        self.act(self.ao, batch, "approve")
         for e in (self.a, self.b):
             self.assertTrue(Notification.objects.filter(recipient=e, message__contains="was approved").exists())
 

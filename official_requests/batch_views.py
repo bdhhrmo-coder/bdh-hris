@@ -95,7 +95,9 @@ def batch_file(request):
             elif not found:
                 c = form.cleaned_data
                 batch = rules.create_batch(request.user, form.filer_role(), c["kind"], c["purpose"].strip(),
-                                           (c.get("destination") or "").strip(), entries)
+                                           (c.get("destination") or "").strip(), entries,
+                                           c.get("expenses_authorized") or "",
+                                           (c.get("transportation_allowed") or "").strip())
                 messages.success(request, f"Group request #{batch.pk} filed for {len(entries)} employee-date line(s).")
                 return redirect("official_requests:batch_detail", pk=batch.pk)
             ctx = _form_context(request, form, acting_employee, _rows_from_post(request.POST),
@@ -134,7 +136,8 @@ def batch_edit(request, pk):
                 else:
                     msg = "Group request updated. It is still waiting at the first approval step."
                 rules.resubmit_batch(batch, request.user, c["purpose"].strip(), (c.get("destination") or "").strip(),
-                                     entries, request.POST.get("resubmit_note", "").strip())
+                                     entries, request.POST.get("resubmit_note", "").strip(),
+                                     c.get("expenses_authorized") or "", (c.get("transportation_allowed") or "").strip())
                 messages.success(request, msg)
                 return redirect("official_requests:batch_detail", pk=pk)
             ctx = _form_context(request, form, acting_employee, _rows_from_post(request.POST),
@@ -146,6 +149,8 @@ def batch_edit(request, pk):
         kind = next(k for k, v in rules.KINDS.items() if v[1] == batch.request_type and v[2] == batch.work_kind)
         form = BatchForm(acting_employee=acting_employee, batch=batch,
                          initial={"kind": kind, "purpose": batch.purpose, "destination": batch.destination,
+                                  "expenses_authorized": batch.expenses_authorized,
+                                  "transportation_allowed": batch.transportation_allowed,
                                   "apply_same": False})
         selected = sorted({line.employee_id for line in batch.active_lines()})
         ctx = _form_context(request, form, acting_employee, _rows_from_batch(batch), selected, batch=batch)
@@ -179,7 +184,8 @@ def batch_detail(request, pk):
         "actions": rules.available_actions(acting_employee, request.user, batch),
         "route": rules.route_labels(batch),
         "skipped": rules.skipped_steps(batch),
-        "next_step": rules.STEP_ACTIONS.get(rules.next_status(batch), (None, None, None))[2]
+        "next_step": (rules.step_action(batch.request_type, rules.next_status(batch))[2]
+                      if rules.next_status(batch) else None)
         if batch.status not in OfficialRequest.TERMINAL_STATUSES | {OfficialRequest.RETURNED} else None,
         "is_filer": batch.filed_by_id == request.user.pk,
         "can_edit_pending": rules.pending_untouched(batch) and batch.filed_by_id == request.user.pk,
@@ -202,3 +208,23 @@ def batch_action(request, pk):
     rules.apply_action(batch, request.user, action, notes)
     messages.success(request, "Action recorded for the whole group request.")
     return redirect("official_requests:request_queue")
+
+
+@login_required
+def print_batch_travel_order(request, pk):
+    """One Travel Order listing everyone on a group Official Business request."""
+    from .models import OfficialRequest as R
+    from .travel_order import data_for_batch, printable
+    from .views import _travel_order_response
+
+    acting_employee = get_acting_employee(request.user)
+    batch = get_object_or_404(OfficialRequestBatch, pk=pk)
+    if not can_view_batch(acting_employee, request.user, batch):
+        raise PermissionDenied("You are not authorized to view this group request.")
+    if batch.request_type != R.OFFICIAL_BUSINESS:
+        raise PermissionDenied("Only Official Business (Travel Order) requests print a Travel Order.")
+    if not printable(batch.status):
+        messages.error(request, "The Travel Order prints once the Chief of Hospital has recommended approval.")
+        return redirect("official_requests:batch_detail", pk=pk)
+    return _travel_order_response(request, data_for_batch(batch), f"Travel-Order_group-{batch.pk}.pdf",
+                                  "official_requests:request_queue")

@@ -39,17 +39,17 @@
     <td>{{ r.employee.full_name }}</td>
     <td>{{ r.get_request_type_display }}</td>
     <td>{{ r.start_date }} to {{ r.end_date }}</td>
-    <td>{{ r.purpose|truncatechars:60 }}</td>
-    <td>{% status_badge r.status r.get_status_display %}</td>
+    <td>{{ r.purpose|truncatechars:60 }}{% if r.at_capitol %}<br><a href="{% url 'official_requests:print_travel_order' r.pk %}" target="_blank">Print Travel Order</a>{% endif %}</td>
+    <td>{% status_badge r.status r.status_label %}</td>
     <td class="row-actions">
       <form method="post" action="{% url 'official_requests:request_action' r.pk %}" x-data="{ remark: '' }">
         {% csrf_token %}
         <input type="text" name="notes" maxlength="255" x-model="remark" class="remark-input" placeholder="Remark (required to return or reject)" aria-label="Remark (required to return or reject)">
         {% if r.next_action %}
-          <button type="submit" name="action" value="{{ r.next_action }}">{{ r.next_action|capfirst }}</button>
+          <button type="submit" name="action" value="{{ r.next_action }}">{{ r.next_label }}</button>
         {% endif %}
-        <button type="submit" name="action" value="reject" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Reject</button>
-        {% if r.next_action != "approve" %}
+        <button type="submit" name="action" value="reject" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">{% if r.at_capitol %}Record disapproval{% else %}Reject{% endif %}</button>
+        {% if r.next_action != "approve" and not r.at_capitol %}
           <button type="submit" name="action" value="return" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Return</button>
         {% endif %}
       </form>

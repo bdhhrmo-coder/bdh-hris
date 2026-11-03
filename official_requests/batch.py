@@ -56,8 +56,8 @@ MAX_ENTRIES = 300
 
 # kind code -> (label, request_type, work_kind)
 KINDS = {
-    "TRAVEL": ("Travel", R.TRAVEL, ""),
-    "OFFICIAL_BUSINESS": ("Official Business", R.OFFICIAL_BUSINESS, ""),
+    "TRAVEL": ("Local Official Errand", R.TRAVEL, ""),
+    "OFFICIAL_BUSINESS": ("Official Business (Travel Order)", R.OFFICIAL_BUSINESS, ""),
     "OT": ("Authorized overtime", R.OT_RESTDAY_HOLIDAY, B.WORK_OT),
     "REST_DAY": ("Rest-day work", R.OT_RESTDAY_HOLIDAY, B.WORK_REST_DAY),
     "HOLIDAY": ("Holiday work", R.OT_RESTDAY_HOLIDAY, B.WORK_HOLIDAY),
@@ -81,10 +81,13 @@ def _route_key(request_type, filer_role):
 ROUTES = {
     (R.OT_RESTDAY_HOLIDAY, "SUPERVISOR"): [R.PROCESSED_BY_HR, R.RECOMMENDED_BY_AO, R.APPROVED],
     (R.OT_RESTDAY_HOLIDAY, "HR"): [R.RECOMMENDED_BY_AO, R.APPROVED],
-    (R.TRAVEL, "SUPERVISOR"): [R.RECOMMENDED_BY_AO, R.APPROVED],
-    (R.TRAVEL, "HR"): [R.RECOMMENDED_BY_AO, R.APPROVED],
-    (R.OFFICIAL_BUSINESS, "SUPERVISOR"): [R.PROCESSED_BY_HR, R.RECOMMENDED_BY_AO, R.APPROVED],
-    (R.OFFICIAL_BUSINESS, "HR"): [R.ENDORSED_BY_SUPERVISOR, R.RECOMMENDED_BY_AO, R.APPROVED],
+    # Local Official Errand (owner decision 2026-11-03): approved by the AO.
+    (R.TRAVEL, "SUPERVISOR"): [R.APPROVED],
+    (R.TRAVEL, "HR"): [R.APPROVED],
+    # Official Business (Travel Order): the COH recommends approval, the
+    # Governor approves at the Capitol and HR records it (2026-11-03).
+    (R.OFFICIAL_BUSINESS, "SUPERVISOR"): [R.PROCESSED_BY_HR, R.RECOMMENDED_BY_AO, R.FORWARDED_TO_CAPITOL, R.APPROVED],
+    (R.OFFICIAL_BUSINESS, "HR"): [R.ENDORSED_BY_SUPERVISOR, R.RECOMMENDED_BY_AO, R.FORWARDED_TO_CAPITOL, R.APPROVED],
 }
 # Steps of the normal single-request route that the batch route leaves out.
 SKIPPED = {
@@ -99,8 +102,19 @@ STEP_ACTIONS = {
     R.ENDORSED_BY_SUPERVISOR: ("endorse", "Endorse", "Supervisor"),
     R.PROCESSED_BY_HR: ("process", "Process", "HR"),
     R.RECOMMENDED_BY_AO: ("recommend", "Recommend", "Administrative Officer"),
+    R.FORWARDED_TO_CAPITOL: ("forward", "Recommend approval (forward to the Capitol)",
+                             "Chief of Hospital (recommending approval)"),
     R.APPROVED: ("approve", "Approve", "Chief of Hospital"),
 }
+TYPE_STEP_ACTIONS = {
+    (R.TRAVEL, R.APPROVED): ("approve", "Approve", "Administrative Officer"),
+    (R.OFFICIAL_BUSINESS, R.APPROVED): ("record_approval", "Record the Governor's approval",
+                                        "Governor (recorded by HR)"),
+}
+
+
+def step_action(request_type, status):
+    return TYPE_STEP_ACTIONS.get((request_type, status)) or STEP_ACTIONS[status]
 
 
 # -- who may file -------------------------------------------------------------
@@ -218,7 +232,7 @@ def next_status(batch):
 
 
 def route_labels(batch):
-    return ["Filed by " + batch.get_filer_role_display()] + [STEP_ACTIONS[s][2] for s in route(batch)]
+    return ["Filed by " + batch.get_filer_role_display()] + [step_action(batch.request_type, s)[2] for s in route(batch)]
 
 
 def may_act(acting_employee, user, batch):
@@ -232,11 +246,14 @@ def may_act(acting_employee, user, batch):
         lines = list(batch.active_lines())
         return bool(lines) and acting_employee.pk in {
             s.pk for s in common_supervisors([line.employee for line in lines])}
-    if target == R.PROCESSED_BY_HR:
+    from .routing import approver_role
+
+    role = approver_role(batch.request_type, target)
+    if role == "HR":
         return can_act_hr_step(acting_employee, people, batch)
-    if target == R.RECOMMENDED_BY_AO:
+    if role == "AO":
         return can_act_ao_step(acting_employee, people)
-    if target == R.APPROVED:
+    if role == "COH":
         return can_act_coh_step(acting_employee, people)
     return False
 
@@ -244,7 +261,10 @@ def may_act(acting_employee, user, batch):
 def available_actions(acting_employee, user, batch):
     if not may_act(acting_employee, user, batch):
         return []
-    code, label, _ = STEP_ACTIONS[next_status(batch)]
+    code, label, _ = step_action(batch.request_type, next_status(batch))
+    if batch.status == R.FORWARDED_TO_CAPITOL:
+        # At the Capitol: HR records the Governor's decision; no return.
+        return [(code, label), ("reject", "Record disapproval")]
     return [(code, label), ("return", "Return"), ("reject", "Reject")]
 
 
@@ -332,6 +352,7 @@ def _line_values(batch, entry):
     return dict(
         request_type=batch.request_type, employee=entry["employee"], start_date=entry["date"], end_date=entry["date"],
         time_from=entry.get("time_from"), time_to=entry.get("time_to"), destination=batch.destination,
+        expenses_authorized=batch.expenses_authorized, transportation_allowed=batch.transportation_allowed,
         purpose=batch.purpose, is_restday_or_holiday=restday,
         hours_requested=hours_between(entry.get("time_from"), entry.get("time_to")) if is_ot else None,
         line_note=entry.get("note", "")[:255], status=batch.status,
@@ -345,10 +366,13 @@ def filing_note(batch, count):
 
 
 @transaction.atomic
-def create_batch(user, filer_role, kind, purpose, destination, entries):
+def create_batch(user, filer_role, kind, purpose, destination, entries, expenses="", transport=""):
     _, request_type, work_kind = KINDS[kind]
+    is_ob = request_type == R.OFFICIAL_BUSINESS
     batch = B.objects.create(request_type=request_type, work_kind=work_kind, purpose=purpose,
-                             destination=destination if request_type == R.TRAVEL else "",
+                             destination=destination if request_type in (R.TRAVEL, R.OFFICIAL_BUSINESS) else "",
+                             expenses_authorized=expenses if is_ob else "",
+                             transportation_allowed=transport if is_ob else "",
                              filed_by=user, filer_role=filer_role)
     lines = [R.objects.create(batch=batch, **_line_values(batch, e)) for e in entries]
     _log(batch, "submit", user, filing_note(batch, len(lines)), lines)
@@ -373,7 +397,7 @@ def filer_may_edit(batch, user):
 
 
 @transaction.atomic
-def resubmit_batch(batch, user, purpose, destination, entries, note=""):
+def resubmit_batch(batch, user, purpose, destination, entries, note="", expenses="", transport=""):
     """The filer's edit: after a return, or while still pending with nobody
     having acted yet (2026-11-03). Same batch, lines updated/added, removed
     lines cancelled (kept for the audit trail). A returned batch starts again
@@ -384,7 +408,9 @@ def resubmit_batch(batch, user, purpose, destination, entries, note=""):
         raise PermissionDenied("An approver acted on this group request while you were editing it.")
     was_pending = batch.status != R.RETURNED
     batch.purpose = purpose
-    batch.destination = destination if batch.request_type == R.TRAVEL else ""
+    batch.destination = destination if batch.request_type in (R.TRAVEL, R.OFFICIAL_BUSINESS) else ""
+    if batch.request_type == R.OFFICIAL_BUSINESS:
+        batch.expenses_authorized, batch.transportation_allowed = expenses, transport
     batch.status = R.SUBMITTED
     batch.save()
     existing = {(line.employee_id, line.start_date): line for line in batch.active_lines()}
@@ -441,13 +467,16 @@ def _url(batch):
 def _next_actors(batch):
     target = next_status(batch)
     involved = batch_people(batch)
-    if target == R.ENDORSED_BY_SUPERVISOR:
+    from .routing import approver_role
+
+    role = approver_role(batch.request_type, target) if target else None
+    if role == "SUPERVISOR":
         people = common_supervisors([line.employee for line in batch.active_lines()])
-    elif target == R.PROCESSED_BY_HR:
+    elif role == "HR":
         people = hr_step_actors(involved, batch)
-    elif target == R.RECOMMENDED_BY_AO:
+    elif role == "AO":
         people = ao_step_actors(involved)
-    elif target == R.APPROVED:
+    elif role == "COH":
         people = coh_step_actors(involved)
     else:
         people = []
