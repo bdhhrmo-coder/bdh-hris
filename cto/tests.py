@@ -630,7 +630,7 @@ class UsageAllocationTests(TestCase):
         self._apply("2026-11-10", "2026-11-10", "1", date(2026, 11, 2))
         app = CTOUsageApplication.objects.get()
         self.client.force_login(self.org.lab_sup.user)
-        self.client.post(reverse("cto:cto_action", args=[app.pk]), {"action": "return"})
+        self.client.post(reverse("cto:cto_action", args=[app.pk]), {"action": "return", "notes": "Change the date"})
         self.assertEqual(compute_available_cto_balance(self.emp, date(2026, 11, 2)), Decimal("1.00"))
 
     def test_use_dated_by_dec_15_approved_later_counts_against_that_year(self):

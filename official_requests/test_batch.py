@@ -413,7 +413,9 @@ class OtFilingTests(TestCase):
             "request_type": R.OT_RESTDAY_HOLIDAY, "start_date": "2026-10-20", "end_date": "2026-10-20",
             "purpose": "Coverage", "hours_requested": "3"})
         self.assertFalse(R.objects.exists())
-        self.assertNotContains(self.client.get(reverse("official_requests:request_apply")), R.OT_RESTDAY_HOLIDAY)
+        # No OT choice in the type list (the field-showing rules may still name the code).
+        self.assertNotContains(self.client.get(reverse("official_requests:request_apply")),
+                               f'<option value="{R.OT_RESTDAY_HOLIDAY}"')
 
     def test_coh_files_own_ot_on_the_single_form_and_hr_records_it(self):
         # ...except the COH's own OT, which HR records (approval is outside BDH).
