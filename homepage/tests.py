@@ -243,3 +243,11 @@ class PendingInvolvementTests(TestCase):
         leave(self.staff2, "VL", "ENDORSED_BY_SUPERVISOR")
         self.assertEqual(self.total(self.hra), 2)
         self.assertEqual(self.total(self.hrp), 1)
+
+    def test_supervisor_also_sees_pending_requests_of_own_section(self):
+        # Owner update 2026-11-03: Supervisors also see pending requests in their unit/section.
+        sup = emp("pi_sup", self.lab, RoleAssignment.SUPERVISOR)
+        leave(self.staff, "VL", "ENDORSED_BY_SUPERVISOR")   # in the lab, not waiting for the Supervisor
+        leave(emp("pi_pharm", Section.objects.get(name="Pharmacy Section")), "VL", "ENDORSED_BY_SUPERVISOR")
+        self.assertEqual(self.total(sup), 1)
+        self.assertEqual(self.total(self.hrp), 2)  # both wait for HR

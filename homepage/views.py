@@ -26,15 +26,19 @@ def _context(request):
 
 
 def _request_filter(request, acting, scope, ids):
-    """(ids, only) for the PENDING-REQUEST lists (owner decision 2026-11-03,
-    dry-run item 4): everyone for the HR Administrator, AO and COH; only the
-    requests they are involved in for HR Processors and Supervisors; their
-    own for everyone else."""
+    """(ids, only) for the PENDING-REQUEST lists (owner decisions 2026-11-03,
+    dry-run item 4): everyone for the HR Administrator, AO and COH; for HR
+    Processors the requests they are involved in; for Supervisors those plus
+    every pending request of their own units/sections; their own for
+    everyone else."""
     if scope == "self":
         return ids, None
     if kpis.sees_all_requests(acting):
         return None, None
-    return None, kpis.involved_requests(acting, request.user)
+    only = kpis.involved_requests(acting, request.user)
+    if acting.has_role("SUPERVISOR", viewing=True):
+        kpis.add_area_requests(only, kpis.scoped_employee_ids(acting, "sections"))
+    return None, only
 
 
 def _pending_lc_rows(request, acting, scope, ids, with_type):

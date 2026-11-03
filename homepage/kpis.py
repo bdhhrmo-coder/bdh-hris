@@ -88,6 +88,14 @@ def involved_requests(acting_employee, user):
     return out
 
 
+def add_area_requests(only, employee_ids):
+    """Add to `only` every pending request of these employees (a
+    Supervisor's own units/sections, owner update 2026-11-03)."""
+    for label, qs, field in _pending_querysets():
+        only.setdefault(label, set()).update(_in_scope(qs, field, employee_ids).values_list("pk", flat=True))
+    return only
+
+
 def shows_leave_type(acting_employee):
     return acting_employee is not None and is_hr(acting_employee, True)
 
