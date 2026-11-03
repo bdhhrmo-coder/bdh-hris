@@ -967,3 +967,21 @@ body.is-test-system { padding-bottom: 40px; }
 
 /* Approver lists show the whole reason, not a cut-off one (dry-run item 9, 2026-11-03). */
 .reason-cell { display: inline-block; min-width: 14rem; max-width: 32rem; white-space: normal; }
+
+/* -- Dark menu bar (owner request 2026-11-03) ----------------------------------------
+   The side menu uses a deep Royal Blue, darker than the top bar, with light
+   text and a slightly smaller font. Structure, behaviour and the phone/tablet
+   slide-in menu are unchanged; the gold current-page marker stays. */
+:root { --nav-bg: #0f2a4f; --nav-text: #e6edf7; --nav-muted: #a9bad3; --nav-hover: rgba(255, 255, 255, 0.08);
+        --nav-current: rgba(229, 184, 63, 0.18); }
+.app-sidebar { background: var(--nav-bg); border-right: none; }
+.app-sidebar nav a { color: var(--nav-text); font-size: 0.86rem; padding: 0.48rem 0.7rem; }
+.app-sidebar nav a:hover { background: var(--nav-hover); color: #fff; }
+body .app-sidebar nav a.is-current { background: var(--nav-current); color: #fff; font-weight: 600; }  /* beats animations.css */
+.nav-group > a .icon { color: var(--nav-muted); }
+.app-sidebar nav a.is-current .icon, .app-sidebar nav a:hover .icon { color: var(--gold-500); }
+.nav-group > summary { color: var(--nav-muted); font-size: 0.7rem; }
+.nav-group > summary:hover { background: var(--nav-hover); color: #fff; }
+.app-sidebar nav .nav-section-label { color: var(--nav-muted); }
+.app-sidebar { scrollbar-color: rgba(255, 255, 255, 0.25) transparent; }
+@media print { .app-sidebar { display: none !important; } }
