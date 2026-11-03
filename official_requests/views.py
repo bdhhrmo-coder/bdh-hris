@@ -169,3 +169,45 @@ def print_travel_order(request, pk):
     return _travel_order_response(request, data_for_request(official_request),
                                   f"Travel-Order_{official_request.employee.surname}_{official_request.pk}.pdf",
                                   "official_requests:my_requests")
+
+
+def _f59_response(request, data, filename, back):
+    from django.http import HttpResponse
+
+    from .f59 import render_pdf
+
+    try:
+        pdf = render_pdf(data)
+    except RuntimeError as exc:
+        import logging
+
+        logging.getLogger(__name__).error("F59 PDF conversion failed: %s", exc)
+        messages.error(request, "The F59 could not be generated right now. Please contact your System "
+                                "Administrator (the server's PDF converter may not be working).")
+        return redirect(back)
+    response = HttpResponse(pdf, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="{filename}"'
+    return response
+
+
+@login_required
+def print_f59(request, pk):
+    """Local Official Errand: Travel Authorization and Transportation Request
+    (BDH-ADM-AO-01F59) filled in from the approved request (2026-11-03)."""
+    from .f59 import data_for_request, printable
+    from .permissions import can_view_request
+
+    acting_employee = get_acting_employee(request.user)
+    official_request = get_object_or_404(OfficialRequest, pk=pk)
+    if not can_view_request(acting_employee, official_request):
+        raise PermissionDenied("You are not authorized to view this request.")
+    if official_request.request_type != OfficialRequest.TRAVEL:
+        raise PermissionDenied("Only a Local Official Errand prints on F59.")
+    if official_request.batch_id:
+        return redirect("official_requests:print_batch_f59", pk=official_request.batch_id)
+    if not printable(official_request.status):
+        messages.error(request, "The F59 prints once the AO has approved the errand.")
+        return redirect("official_requests:my_requests")
+    return _f59_response(request, data_for_request(official_request),
+                         f"F59_{official_request.employee.surname}_{official_request.pk}.pdf",
+                         "official_requests:my_requests")

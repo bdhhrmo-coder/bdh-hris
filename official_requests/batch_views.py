@@ -155,6 +155,8 @@ def batch_edit(request, pk):
                          initial={"kind": kind, "purpose": batch.purpose, "destination": batch.destination,
                                   "expenses_authorized": batch.expenses_authorized,
                                   "transportation_allowed": batch.transportation_allowed,
+                                  "vehicle": batch.transportation_allowed
+                                  if batch.request_type == OfficialRequest.TRAVEL else "",
                                   "past_date_reason": batch.past_date_reason, "apply_same": False})
         selected = sorted({line.employee_id for line in batch.active_lines()})
         ctx = _form_context(request, form, acting_employee, _rows_from_batch(batch), selected, batch=batch)
@@ -232,3 +234,23 @@ def print_batch_travel_order(request, pk):
         return redirect("official_requests:batch_detail", pk=pk)
     return _travel_order_response(request, data_for_batch(batch), f"Travel-Order_group-{batch.pk}.pdf",
                                   "official_requests:request_queue")
+
+
+@login_required
+def print_batch_f59(request, pk):
+    """F59 for an approved group Local Official Errand: one form listing every rider."""
+    from .f59 import data_for_batch, printable
+    from .models import OfficialRequest as R
+    from .views import _f59_response
+
+    acting_employee = get_acting_employee(request.user)
+    batch = get_object_or_404(OfficialRequestBatch, pk=pk)
+    if not can_view_batch(acting_employee, request.user, batch):
+        raise PermissionDenied("You are not authorized to view this group request.")
+    if batch.request_type != R.TRAVEL:
+        raise PermissionDenied("Only a Local Official Errand prints on F59.")
+    if not printable(batch.status):
+        messages.error(request, "The F59 prints once the AO has approved the errand.")
+        return redirect("official_requests:batch_detail", pk=pk)
+    return _f59_response(request, data_for_batch(batch), f"F59_group-{batch.pk}.pdf",
+                         "official_requests:request_queue")

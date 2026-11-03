@@ -106,6 +106,11 @@
         <input type="text" name="transportation_allowed" maxlength="100" value="{{ form.transportation_allowed.value|default:'Government Vehicle' }}">
         {% for e in form.transportation_allowed.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
       </label>
+      <label x-show="kind === 'TRAVEL'">Type of transport (F59)
+        <select name="vehicle">
+          {% for value, label in form.fields.vehicle.choices %}<option value="{{ value }}" {% if form.vehicle.value == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </label>
       <label class="span-all">Purpose / reason (shared by every line)
         <textarea name="purpose" rows="2">{{ form.purpose.value|default:'' }}</textarea>
         {% for e in form.purpose.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
