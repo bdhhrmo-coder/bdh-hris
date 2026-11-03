@@ -79,11 +79,13 @@ COLUMNS = [
     ("permanent_address", "Permanent Address", False),
     ("telephone_mobile", "Telephone/Mobile", False),
     ("email", "Email", False),
+    ("biometric_id", "Biometric ID", False),  # PALMIRA ID (2026-11-03); optional column, last
 ]
+OPTIONAL_COLUMNS = ("biometric_id",)  # older templates without it still upload
 TEXT_FIELDS = [
     "surname", "first_name", "middle_name", "name_extension", "position", "salary_grade", "item_plantilla_no",
     "appointment_type", "sss_number", "pagibig_number", "philhealth_number", "tin_number", "gsis_number",
-    "residential_address", "permanent_address", "telephone_mobile", "email",
+    "residential_address", "permanent_address", "telephone_mobile", "email", "biometric_id",
 ]
 DATE_FIELDS = ["date_hired", "date_of_appointment", "original_appointment_date", "date_of_birth"]
 CHOICE_FIELDS = {
@@ -143,12 +145,12 @@ class RowPlan:
 def build_plan(uploaded_file, actor_employee):
     """Read and check every row. Returns a list of RowPlan (errors inside
     each). Raises common.SheetError when the file itself is unusable."""
-    rows = read_sheet(uploaded_file, SHEET, [(k, h) for k, h, _ in COLUMNS])
+    rows = read_sheet(uploaded_file, SHEET, [(k, h) for k, h, _ in COLUMNS], optional=OPTIONAL_COLUMNS)
     can_assign_roles = actor_employee is not None and actor_employee.has_role(RoleAssignment.HR_ADMINISTRATOR)
     sections_by_name = {s.name.lower(): s for s in Section.objects.filter(is_active=True)}
     units = list(Unit.objects.filter(is_active=True).select_related("section"))
 
-    plans, seen_ids, seen_usernames = [], {}, {}
+    plans, seen_ids, seen_usernames, seen_bio = [], {}, {}, {}
     for row_no, raw in rows:
         eid = text(raw["employee_id"])
         name = f'{text(raw["surname"])}, {text(raw["first_name"])}'.strip(", ")
@@ -170,6 +172,14 @@ def build_plan(uploaded_file, actor_employee):
             value = text(raw[key])
             if value:
                 p.values[key] = value
+        bio = p.values.get("biometric_id")
+        if bio:
+            if bio.lower() in seen_bio:
+                p.errors.append(f"Biometric ID {bio} is also on row {seen_bio[bio.lower()]}.")
+            seen_bio[bio.lower()] = row_no
+            other = Employee.objects.filter(biometric_id__iexact=bio).exclude(employee_id__iexact=eid).first()
+            if other is not None:
+                p.errors.append(f"Biometric ID {bio} already belongs to {other.full_name} ({other.employee_id}).")
         if "email" in p.values:
             try:
                 validate_email(p.values["email"])

@@ -13,7 +13,7 @@ class SheetError(Exception):
     """The file itself can't be used (wrong file, missing sheet/columns)."""
 
 
-def read_sheet(uploaded_file, sheet_name, columns):
+def read_sheet(uploaded_file, sheet_name, columns, optional=()):
     """Return a list of (excel_row_number, {key: raw_value}) for every non-
     blank row. `columns` is a list of (key, header_text). Headers are
     matched ignoring case, spaces and the '*' that marks required ones."""
@@ -34,6 +34,8 @@ def read_sheet(uploaded_file, sheet_name, columns):
     header = [norm(h) for h in rows[0]]
     positions = {}
     for key, title in columns:
+        if norm(title) not in header and key in optional:
+            continue  # a column added later (older templates still upload); read as blank
         if norm(title) not in header:
             raise SheetError(f'Column "{title}" is missing. Please use the downloaded template.')
         positions[key] = header.index(norm(title))
@@ -41,6 +43,8 @@ def read_sheet(uploaded_file, sheet_name, columns):
     out = []
     for offset, values in enumerate(rows[1:], start=2):
         record = {key: (values[i] if i < len(values) else None) for key, i in positions.items()}
+        for key in optional:
+            record.setdefault(key, None)
         if all(v is None or str(v).strip() == "" for v in record.values()):
             continue
         out.append((offset, record))

@@ -13,7 +13,7 @@ class EducationHistoryInline(admin.TabularInline):
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
     list_display = ("employee_id", "surname", "first_name", "position", "employment_status", "is_active")
-    search_fields = ("employee_id", "surname", "first_name")
+    search_fields = ("employee_id", "biometric_id", "surname", "first_name")
     list_filter = ("employment_status", "is_active", "sections")
     inlines = [RoleAssignmentInline, EducationHistoryInline]
     filter_horizontal = ("sections", "units")

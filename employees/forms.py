@@ -71,6 +71,7 @@ class EmployeeForm(forms.ModelForm):
             "telephone_mobile",
             "email",
             "position",
+            "biometric_id",
             "item_plantilla_no",
             "salary_grade",
             "appointment_type",

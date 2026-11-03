@@ -89,7 +89,7 @@ def build_template():
     for key in employee_import.DATE_FIELDS:
         for r in range(2, 1001):
             ws[f"{letters[key]}{r}"].number_format = "yyyy-mm-dd"
-    for key in ("employee_id", "sss_number", "pagibig_number", "philhealth_number", "tin_number", "gsis_number",
+    for key in ("employee_id", "biometric_id", "sss_number", "pagibig_number", "philhealth_number", "tin_number", "gsis_number",
                 "salary_grade", "item_plantilla_no", "telephone_mobile"):
         for r in range(2, 1001):
             ws[f"{letters[key]}{r}"].number_format = "@"  # keep leading zeros

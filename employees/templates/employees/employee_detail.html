@@ -32,6 +32,7 @@
 <table>
   <tr><th>Position</th><td>{{ employee.position }}</td></tr>
   <tr><th>Employment status</th><td>{{ employee.get_employment_status_display }}</td></tr>
+  <tr><th>Biometric ID</th><td>{{ employee.biometric_id|default:"—" }}</td></tr>
   <tr><th>Sections</th><td>{% for s in employee.sections.all %}{{ s }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td></tr>
   <tr><th>Email</th><td>{{ employee.email|default:"—" }}</td></tr>
   <tr><th>Mobile</th><td>{{ employee.telephone_mobile|default:"—" }}</td></tr>
