@@ -9,6 +9,7 @@ urlpatterns = [
     path("mine/", views.my_schedule, name="mine"),
     path("new/", views.schedule_new, name="new"),
     path("shift-codes/", views.shift_codes, name="shift_codes"),
+    path("cutoff-dates/", views.cutoff_dates, name="cutoff_dates"),
     path("shift-codes/new/", views.shift_code_edit, name="shift_code_new"),
     path("shift-codes/<int:pk>/", views.shift_code_edit, name="shift_code_edit"),
     path("<int:pk>/", views.schedule_detail, name="detail"),

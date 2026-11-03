@@ -357,3 +357,50 @@ def shift_code_edit(request, pk=None):
         messages.success(request, "Shift code saved.")
         return redirect("schedules:shift_codes")
     return render(request, "schedules/shift_code_form.html", {"form": form, "code": code})
+
+
+# -- hospital-wide cut-off dates (owner decision 2026-11-03) ----------------------------
+
+@login_required
+def cutoff_dates(request):
+    """HR sets one Exchange of Duty cut-off date per month, hospital-wide,
+    before drafts are started. Regular exchanges close 7 days before it. A
+    change also moves drafts not yet submitted; submitted schedules keep
+    their own date (changed on the schedule page before COH approval)."""
+    from .models import ScheduleCutoff
+
+    acting = _acting(request)
+    if not is_hr(acting):
+        raise PermissionDenied("Only HR sets the schedule cut-off dates.")
+    today = timezone.localdate()
+    months = []
+    y, m = today.year, today.month
+    for _ in range(6):
+        m += 1
+        if m == 13:
+            y, m = y + 1, 1
+        months.append((y, m))
+    if request.method == "POST":
+        try:
+            y, m = int(request.POST["year"]), int(request.POST["month"])
+            new = date.fromisoformat(request.POST.get("cutoff_date", ""))
+        except (KeyError, ValueError):
+            messages.error(request, "The date was not understood; nothing was changed.")
+            return redirect("schedules:cutoff_dates")
+        if (y, m) not in months or new >= date(y, m, 1):
+            messages.error(request, "Pick a date before the month starts; nothing was changed.")
+            return redirect("schedules:cutoff_dates")
+        ScheduleCutoff.objects.update_or_create(year=y, month=m,
+                                                defaults={"cutoff_date": new, "set_by": request.user})
+        moved = DutySchedule.objects.filter(year=y, month=m, status=DutySchedule.DRAFT).update(cutoff_date=new)
+        messages.success(request, f"Cut-off for {date(y, m, 1):%B %Y} set to {new:%b %d, %Y}"
+                                  + (f"; {moved} draft(s) updated." if moved else "."))
+        return redirect("schedules:cutoff_dates")
+    saved = {(c.year, c.month): c for c in ScheduleCutoff.objects.filter(
+        year__in={y for y, _ in months}).select_related("set_by__employee")}
+    rows = []
+    for y, m in months:
+        cutoff = DutySchedule.default_cutoff(y, m)
+        rows.append({"year": y, "month": m, "label": date(y, m, 1), "cutoff": cutoff,
+                     "last_filing": cutoff - timedelta(days=7), "saved": saved.get((y, m))})
+    return render(request, "schedules/cutoff_dates.html", {"rows": rows})

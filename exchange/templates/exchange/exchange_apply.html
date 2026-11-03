@@ -11,6 +11,8 @@
     <li><strong>Emergency</strong> &mdash; tick "Documented emergency"; same day allowed, written follow-up within 24 hours.</li>
   </ul>
   While the schedule is under review (submitted, not yet approved), only an emergency exchange can be filed.
+  {% if deadlines %}<p class="mb-0"><strong>Last day to file a regular exchange:</strong>
+  {% for month, last in deadlines %}{{ month|date:"F Y" }} &mdash; {{ last|date:"M j, Y" }}{% if not forloop.last %}; {% endif %}{% endfor %}.</p>{% endif %}
 </div>
 
 <div class="card form-card">

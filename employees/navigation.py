@@ -74,6 +74,7 @@ MENU = [
         ("CTO Separation Status", "cto:separation", "user-round", "can_set_separation"),
         ("Manage Announcements", "announcements:manage", "megaphone", "can_manage_announcements"),
         ("Shift Codes", "schedules:shift_codes", "list", "can_manage_announcements"),
+        ("Schedule Cut-off Dates", "schedules:cutoff_dates", "calendar-clock", "is_hr"),
         ("User Accounts and Roles", "admin:index", "user-cog", "is_system_admin"),
     ]),
 ]

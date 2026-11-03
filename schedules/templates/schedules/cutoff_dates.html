@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Schedule cut-off dates — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Schedule cut-off dates</h1>
+<p class="muted">One date per month for the whole hospital. Regular Exchanges of Duty for that month must be filed at least 7 days before it, and approved before the supervisor submits the schedule. New drafts copy this date; drafts not yet submitted follow a change. If no date is set, the 20th of the month before is used.</p>
+<div class="card"><div class="table-scroll">
+<table>
+  <tr><th>Schedule month</th><th>Cut-off</th><th>Last day to file a regular exchange</th><th>Set by</th><th>Change</th></tr>
+  {% for r in rows %}
+  <tr>
+    <td><strong>{{ r.label|date:"F Y" }}</strong></td>
+    <td>{{ r.cutoff|date:"M j, Y" }}{% if not r.saved %} <small>(default)</small>{% endif %}</td>
+    <td>{{ r.last_filing|date:"M j, Y" }}</td>
+    <td>{% if r.saved %}{{ r.saved.set_by.employee.full_name|default:r.saved.set_by.username }}<br><small>{{ r.saved.updated_at|date:"M j, Y g:i A" }}</small>{% else %}—{% endif %}</td>
+    <td>
+      <form method="post" class="row-actions">
+        {% csrf_token %}
+        <input type="hidden" name="year" value="{{ r.year }}"><input type="hidden" name="month" value="{{ r.month }}">
+        <input type="date" name="cutoff_date" value="{{ r.cutoff|date:'Y-m-d' }}" aria-label="Cut-off for {{ r.label|date:'F Y' }}" required>
+        <button type="submit" class="btn-secondary">Save</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+</div></div>
+{% endblock %}

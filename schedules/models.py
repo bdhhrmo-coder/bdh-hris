@@ -138,8 +138,12 @@ class DutySchedule(models.Model):
 
     @staticmethod
     def default_cutoff(year, month):
-        prev = date(year, month, 1) - timedelta(days=1)
-        return date(prev.year, prev.month, min(getattr(settings, "SCHEDULE_CUTOFF_DAY", 20), prev.day))
+        """The month's cut-off: the date HR set on "Schedule Cut-off Dates"
+        (owner 2026-11-03), else the 20th of the month before."""
+        set_by_hr = ScheduleCutoff.objects.filter(year=year, month=month).first()
+        if set_by_hr:
+            return set_by_hr.cutoff_date
+        return ScheduleCutoff.fallback(year, month)
 
     def area_employees(self):
         """Active employees attached to this section/unit."""
@@ -201,3 +205,25 @@ class ScheduleChange(models.Model):
 
     class Meta:
         ordering = ["changed_at", "pk"]
+
+
+class ScheduleCutoff(models.Model):
+    """One hospital-wide Exchange of Duty cut-off date per month, set by HR
+    before anyone starts a draft (owner decision 2026-11-03). New drafts copy
+    it, and drafts not yet submitted follow a change. Regular exchanges for
+    the month close 7 days before it."""
+
+    year = models.PositiveIntegerField()
+    month = models.PositiveSmallIntegerField()
+    cutoff_date = models.DateField()
+    set_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["year", "month"], name="one_cutoff_per_month")]
+        ordering = ["year", "month"]
+
+    @staticmethod
+    def fallback(year, month):
+        prev = date(year, month, 1) - timedelta(days=1)
+        return date(prev.year, prev.month, min(getattr(settings, "SCHEDULE_CUTOFF_DAY", 20), prev.day))

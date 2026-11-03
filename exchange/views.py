@@ -50,7 +50,19 @@ def exchange_apply(request):
     else:
         form = DutyExchangeRequestForm(employee_a=acting_employee)
 
-    return render(request, "exchange/exchange_apply.html", {"form": form})
+    # The next two months' last filing days for a regular exchange (2026-11-03).
+    from datetime import date, timedelta
+
+    from schedules.models import DutySchedule
+
+    today = date.today()
+    deadlines = []
+    y, m = today.year, today.month
+    for _ in range(2):
+        y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+        cutoff = DutySchedule.default_cutoff(y, m)
+        deadlines.append((date(y, m, 1), cutoff - timedelta(days=7)))
+    return render(request, "exchange/exchange_apply.html", {"form": form, "deadlines": deadlines})
 
 
 @login_required
