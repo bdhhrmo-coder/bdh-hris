@@ -1,5 +1,5 @@
 """
-Normalizes the seven existing accountability records (see models.py's
+Normalizes the existing accountability records (see models.py's
 docstring) into one row shape for the audit log view, the same way
 dashboard/stats.py normalizes five apps' differing status vocabularies
 into one shared bucket scheme — no new storage, just a read-time merge.
@@ -16,13 +16,22 @@ Row shape (a plain dict, not a model — nothing here is ever saved):
     }
 """
 
-from cto.models import CTOUsageApplicationAction
+from cto.models import CTOClaimAction, CTOUsageApplicationAction
 from documents.models import UploadedDocumentEvent
 from employees.models import EmployeeEditHistory
 from exchange.models import DutyExchangeRequestAction
 from attendance.models import AttendanceCorrectionRequestAction
 from leave.models import LeaveApplicationAction
 from official_requests.models import OfficialRequestAction
+
+
+# Readable labels for action codes that aren't self-explanatory.
+ACTION_LABELS = {
+    "opening_line_added": "Opening CTO line added",
+    "opening_line_voided": "Opening CTO line voided",
+    "correct_day_type": "Day type corrected",
+    "skip": "Step skipped",
+}
 
 
 def _employees_for_object(obj):
@@ -66,7 +75,7 @@ def _rows_from_request_actions(qs, module_label, request_field):
             {
                 "timestamp": row.acted_at,
                 "module": module_label,
-                "action": row.action,
+                "action": ACTION_LABELS.get(row.action, row.action),
                 "detail": f"{request_obj} — {row.notes}" if row.notes else str(request_obj),
                 "actor": row.acted_by,
                 "employee_ids": {e.pk for e in employees},
@@ -160,7 +169,7 @@ def _rows_from_oic_designations():
 
 def audit_rows(employee_id=None, module=None, date_from=None, date_to=None):
     """
-    Merged, filtered, newest-first list of audit rows across all seven
+    Merged, filtered, newest-first list of audit rows across all
     sources. Filtering happens in Python after each source applies its own
     date filter at the DB level, since the sources have no common table to
     join on.
@@ -169,6 +178,7 @@ def audit_rows(employee_id=None, module=None, date_from=None, date_to=None):
     rows += _rows_from_employee_edit_history(EmployeeEditHistory.objects.all())
     rows += _rows_from_request_actions(LeaveApplicationAction.objects.all(), "Leave", "application")
     rows += _rows_from_request_actions(CTOUsageApplicationAction.objects.all(), "CTO", "application")
+    rows += _rows_from_request_actions(CTOClaimAction.objects.all(), "CTO Claim", "claim")
     rows += _rows_from_request_actions(DutyExchangeRequestAction.objects.all(), "Exchange of Duty", "request")
     rows += _rows_from_request_actions(
         AttendanceCorrectionRequestAction.objects.all(), "Attendance Correction", "request"
@@ -196,6 +206,8 @@ MODULE_CHOICES = [
     "Employee Record",
     "Leave",
     "CTO",
+    "Overtime",
+    "CTO Claim",
     "Exchange of Duty",
     "Attendance Correction",
     "Official Request",

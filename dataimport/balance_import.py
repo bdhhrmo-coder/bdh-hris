@@ -1,5 +1,5 @@
 """
-Opening leave and CTO balance import (go-live, 2026-10-06).
+Opening leave balance import (go-live, 2026-10-06).
 
 Why it is needed: the system works out VL/SL as 1.25 days for every month
 since Date Hired, plus whatever is in the ledger. It knows nothing about
@@ -16,6 +16,11 @@ Importing the same file again is harmless: the difference is then zero
 and nothing is added.
 
 Blank cell = leave that balance alone.
+
+CTO is NOT imported here (owner decision 2026-11-02, CLAUDE.md §7.1 Option A):
+existing CTO credit is entered as dated lines on the CTO Opening Balances
+page, never as one balance at a cut-over date. A filled "CTO (days)" cell
+from an older template is refused, not silently ignored.
 """
 
 from dataclasses import dataclass, field
@@ -24,14 +29,11 @@ from decimal import Decimal
 
 from django.db import transaction
 
-from cto.balances import compute_available_cto_balance
-from cto.models import CTOCreditTransaction
-from cto.permissions import is_cto_eligible
 from employees.models import Employee
 from leave.balances import compute_available_balance
 from leave.models import LeaveCreditTransaction, LeaveType
 
-from .common import parse_date, parse_decimal, read_sheet, text
+from .common import SheetError, parse_date, parse_decimal, read_sheet, text
 
 SHEET = "Opening Balances"
 COLUMNS = [
@@ -42,10 +44,12 @@ COLUMNS = [
     ("SL", "Sick Leave (SL)"),
     ("COSP_LEAVE", "COSP Leave"),
     ("WELLNESS", "Wellness Leave (remaining this year)"),
-    ("CTO", "CTO (days)"),
 ]
 LEAVE_CODES = ["VL", "SL", "COSP_LEAVE", "WELLNESS"]
-LABELS = {"VL": "VL", "SL": "SL", "COSP_LEAVE": "COSP Leave", "WELLNESS": "Wellness", "CTO": "CTO"}
+LABELS = {"VL": "VL", "SL": "SL", "COSP_LEAVE": "COSP Leave", "WELLNESS": "Wellness"}
+OLD_CTO_COLUMN = "CTO (days)"
+OLD_CTO_ERROR = ("CTO (days) is no longer imported here. Enter CTO opening balances on the CTO Opening Balances "
+                 "page (one line per date earned), then clear this column and upload again.")
 MAX_DAYS = Decimal("999")
 
 
@@ -78,8 +82,21 @@ class BalancePlan:
         return [f"{LABELS[l.code]}: {l.current} → {l.target}" for l in self.lines if l.adjustment]
 
 
+def _rows_with_old_cto_values(uploaded_file):
+    """Excel rows of an older template that still carry a CTO value."""
+    try:
+        rows = read_sheet(uploaded_file, SHEET, [("cto", OLD_CTO_COLUMN)])
+    except SheetError:
+        return set()  # no CTO column: the current template
+    finally:
+        if hasattr(uploaded_file, "seek"):
+            uploaded_file.seek(0)
+    return {row_no for row_no, raw in rows if text(raw["cto"])}
+
+
 def build_plan(uploaded_file, today=None):
     today = today or date.today()
+    old_cto_rows = _rows_with_old_cto_values(uploaded_file)
     rows = read_sheet(uploaded_file, SHEET, COLUMNS)
     leave_types = {lt.code: lt for lt in LeaveType.objects.filter(code__in=LEAVE_CODES)}
     plans, seen = [], {}
@@ -87,6 +104,8 @@ def build_plan(uploaded_file, today=None):
         eid = text(raw["employee_id"])
         p = BalancePlan(row=row_no, employee_id=eid, name=text(raw["name"]))
         plans.append(p)
+        if row_no in old_cto_rows:
+            p.errors.append(OLD_CTO_ERROR)
         if not eid:
             p.errors.append("Employee ID is required.")
             continue
@@ -108,7 +127,7 @@ def build_plan(uploaded_file, today=None):
             continue
         p.as_of = as_of
 
-        for code in LEAVE_CODES + ["CTO"]:
+        for code in LEAVE_CODES:
             value, err = parse_decimal(raw[code])
             if err:
                 p.errors.append(f"{LABELS[code]}: {err}.")
@@ -118,23 +137,17 @@ def build_plan(uploaded_file, today=None):
             if value < 0 or value > MAX_DAYS:
                 p.errors.append(f"{LABELS[code]}: must be between 0 and {MAX_DAYS}.")
                 continue
-            if code == "CTO":
-                if not is_cto_eligible(employee):
-                    p.errors.append("CTO does not apply to the Chief of Hospital (CLAUDE.md §7).")
-                    continue
-                current = compute_available_cto_balance(employee, as_of_date=as_of)
-            else:
-                lt = leave_types.get(code)
-                if lt is None:
-                    p.errors.append(f"Leave type {code} is not set up in the system.")
-                    continue
-                if lt.applicable_to not in (LeaveType.APPLICABLE_BOTH, employee.employment_status):
-                    p.errors.append(f"{LABELS[code]} does not apply to a {employee.get_employment_status_display()} employee.")
-                    continue
-                if not lt.is_cumulative and lt.annual_fixed_days is not None and value > lt.annual_fixed_days:
-                    p.errors.append(f"{LABELS[code]}: cannot be more than {lt.annual_fixed_days} days a year.")
-                    continue
-                current = compute_available_balance(employee, lt, as_of_date=as_of)
+            lt = leave_types.get(code)
+            if lt is None:
+                p.errors.append(f"Leave type {code} is not set up in the system.")
+                continue
+            if lt.applicable_to not in (LeaveType.APPLICABLE_BOTH, employee.employment_status):
+                p.errors.append(f"{LABELS[code]} does not apply to a {employee.get_employment_status_display()} employee.")
+                continue
+            if not lt.is_cumulative and lt.annual_fixed_days is not None and value > lt.annual_fixed_days:
+                p.errors.append(f"{LABELS[code]}: cannot be more than {lt.annual_fixed_days} days a year.")
+                continue
+            current = compute_available_balance(employee, lt, as_of_date=as_of)
             p.lines.append(BalanceLine(code=code, current=Decimal(current).quantize(Decimal("0.01")), target=value.quantize(Decimal("0.01"))))
     return plans
 
@@ -151,16 +164,10 @@ def apply_plan(plans, actor_user, source_name):
             if not line.adjustment:
                 continue
             note = f"Opening balance {line.target} as of {p.as_of:%Y-%m-%d} (import: {source_name})"[:255]
-            if line.code == "CTO":
-                CTOCreditTransaction.objects.create(
-                    employee=employee, transaction_type=CTOCreditTransaction.ADJUSTMENT, days=line.adjustment,
-                    transaction_date=p.as_of, notes=note, created_by=actor_user,
-                )
-            else:
-                LeaveCreditTransaction.objects.create(
-                    employee=employee, leave_type=leave_types[line.code],
-                    transaction_type=LeaveCreditTransaction.ADJUSTMENT, days=line.adjustment,
-                    transaction_date=p.as_of, notes=note, created_by=actor_user,
-                )
+            LeaveCreditTransaction.objects.create(
+                employee=employee, leave_type=leave_types[line.code],
+                transaction_type=LeaveCreditTransaction.ADJUSTMENT, days=line.adjustment,
+                transaction_date=p.as_of, notes=note, created_by=actor_user,
+            )
             added += 1
     return added

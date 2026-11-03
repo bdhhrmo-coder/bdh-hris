@@ -3,12 +3,34 @@ from django.contrib import admin
 from documents.admin import UploadedDocumentInline
 
 from .models import (
-    CTOCreditEntry,
-    CTOCreditTransaction,
+    CTOClaim,
+    CTOClaimAction,
+    CTOClaimLine,
     CTOMultiplierRate,
     CTOUsageApplication,
     CTOUsageApplicationAction,
 )
+
+
+class NoDeleteAdmin(admin.ModelAdmin):
+    """Claims are audit records: never deleted from admin
+    (cancel through the app instead). Lines are read-only inlines."""
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class ReadOnlyInline(admin.TabularInline):
+    extra = 0
+
+    def get_readonly_fields(self, request, obj=None):
+        return [f.name for f in self.model._meta.fields]
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(CTOMultiplierRate)
@@ -16,47 +38,25 @@ class CTOMultiplierRateAdmin(admin.ModelAdmin):
     list_display = ("effective_date", "weekday_multiplier", "restday_holiday_multiplier", "notes")
 
 
-@admin.register(CTOCreditEntry)
-class CTOCreditEntryAdmin(admin.ModelAdmin):
-    list_display = (
-        "employee", "work_date", "status", "ot_request", "duty_type", "hours_worked", "is_restday_or_holiday",
-        "multiplier_applied", "credited_hours", "credited_days", "recorded_by",
-    )
-    list_filter = ("status", "duty_type", "is_restday_or_holiday")
+class CTOClaimLineInline(ReadOnlyInline):
+    model = CTOClaimLine
+
+
+class CTOClaimActionInline(ReadOnlyInline):
+    model = CTOClaimAction
+
+
+@admin.register(CTOClaim)
+class CTOClaimAdmin(NoDeleteAdmin):
+    list_display = ("pk", "employee", "duty_type", "status", "current_step", "first_filed_on", "approved_on")
+    list_filter = ("status", "duty_type")
     search_fields = ("employee__surname", "employee__employee_id")
-    # status is read-only so a claim can't be marked CREDITED here without
-    # passing the §7 checks and creating its ledger row (cto/claims.py).
-    readonly_fields = (
-        "status", "multiplier_applied", "credited_hours", "credited_days", "shift_hours_used",
-        "recorded_by", "credited_by", "credited_at",
-    )
-    inlines = [UploadedDocumentInline]
+    readonly_fields = ("status", "route", "current_step", "approved_on", "first_filed_on")
+    inlines = [CTOClaimLineInline, CTOClaimActionInline, UploadedDocumentInline]
 
 
-@admin.register(CTOCreditTransaction)
-class CTOCreditTransactionAdmin(admin.ModelAdmin):
-    list_display = ("employee", "transaction_type", "days", "transaction_date", "created_by")
-    list_filter = ("transaction_type",)
-    search_fields = ("employee__surname", "employee__employee_id")
-    readonly_fields = [f.name for f in CTOCreditTransaction._meta.fields]
-
-    def has_change_permission(self, request, obj=None):
-        return False
-
-    def has_delete_permission(self, request, obj=None):
-        return False
-
-
-class CTOUsageApplicationActionInline(admin.TabularInline):
+class CTOUsageApplicationActionInline(ReadOnlyInline):
     model = CTOUsageApplicationAction
-    extra = 0
-    readonly_fields = [f.name for f in CTOUsageApplicationAction._meta.fields]
-
-    def has_add_permission(self, request, obj=None):
-        return False
-
-    def has_delete_permission(self, request, obj=None):
-        return False
 
 
 @admin.register(CTOUsageApplication)

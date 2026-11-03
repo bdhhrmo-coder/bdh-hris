@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}CTO carry-over {{ year }} — BDH HRIS{% endblock %}
+{% block content %}
+<h1>CTO year-end carry-over {{ year }}</h1>
+<p class="muted">CTO still unused after Dec 15 is forfeited on Dec 17 unless a written reason is submitted by {{ reason_deadline }} and the Chief of Hospital approves it. Credit from work after Nov 30, or that took effect after Dec 15, carries over without a reason and is not listed here.</p>
+
+{% if pending %}
+<div class="card">
+  <h2 class="mt-0">Reasons awaiting your decision</h2>
+  <table>
+    <tr><th>Employee</th><th>Year</th><th>Reason</th><th>Submitted by</th><th></th></tr>
+    {% for r in pending %}
+    <tr>
+      <td>{{ r.employee.full_name }}</td><td>{{ r.year }}</td><td>{{ r.reason }}</td><td>{{ r.submitted_by.full_name }}</td>
+      <td>
+        <form method="post">{% csrf_token %}
+          <input type="hidden" name="reason_id" value="{{ r.pk }}">
+          <input type="text" name="note" placeholder="Note (optional)">
+          <button type="submit" name="action" value="approve">Approve</button>
+          <button type="submit" name="action" value="reject">Reject (final)</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2 class="mt-0">Employees with CTO at risk</h2>
+  <table>
+    <tr><th>Employee</th><th>Unused days</th><th>Reason</th><th></th></tr>
+    {% for row in rows %}
+    <tr>
+      <td>{{ row.employee.full_name }}</td>
+      <td>{{ row.days }}</td>
+      <td>{% if row.reason %}{{ row.reason.get_status_display }} — {{ row.reason.reason }} <small>(by {{ row.reason.submitted_by.full_name }})</small>{% else %}None yet{% endif %}</td>
+      <td>
+        {% if row.can_submit and submission_open %}
+        <form method="post">{% csrf_token %}
+          <input type="hidden" name="employee" value="{{ row.employee.pk }}">
+          <textarea name="reason" rows="2" cols="40" placeholder="Written reason (required)"></textarea>
+          <button type="submit" name="action" value="submit">Submit reason</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="4" class="empty-note">No employees with CTO at risk.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+<p><a href="{% url 'cto:cto_queue' %}">&larr; CTO and overtime queue</a></p>
+{% endblock %}

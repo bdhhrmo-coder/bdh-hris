@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Opening CTO balances — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Opening CTO balances</h1>
+<p class="muted">Enter each piece of existing CTO credit as its own line, with the days, the date it was earned (in {{ lock_date.year }}), and a reason that can cite the paper record. Lines count in the balance from entry. Nothing is edited in place: void a wrong line with a reason and re-enter it.
+{% if entry_open %}Entry closes after {{ lock_date }}.{% else %}<strong>Entry closed on {{ lock_date }}.</strong> Use an exception claim (AO, then COH) for corrections.{% endif %}</p>
+
+<div class="card">
+  <form method="get">
+    <label>Employee
+      <select name="employee" onchange="this.form.submit()">
+        <option value="">— choose —</option>
+        {% for e in employees %}<option value="{{ e.pk }}" {% if target and e.pk == target.pk %}selected{% endif %}>{{ e }}</option>{% endfor %}
+      </select>
+    </label>
+    <noscript><button type="submit">Show</button></noscript>
+  </form>
+</div>
+
+{% if target %}
+<div class="card">
+  <h2 class="mt-0">{{ target.full_name }}</h2>
+  <table>
+    <tr><th>Date earned</th><th>Days</th><th>Reason</th><th>Entered</th><th>Status</th><th></th></tr>
+    {% for l in lines %}
+    <tr>
+      <td>{{ l.work_date }}</td><td>{{ l.credited_days }}</td><td>{{ l.reason }}</td><td>{{ l.effective_date }}</td>
+      <td>{{ l.get_state_display }}</td>
+      <td>
+        {% if l.state == "CREDITED" and entry_open and may_enter_for_target %}
+        <form method="post">{% csrf_token %}
+          <input type="hidden" name="employee" value="{{ target.pk }}"><input type="hidden" name="line" value="{{ l.pk }}">
+          <input type="text" name="void_reason" placeholder="Reason for voiding (required)">
+          <button type="submit" name="action" value="void">Void</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6" class="empty-note">No opening lines.</td></tr>
+    {% endfor %}
+  </table>
+  {% if entry_open and may_enter_for_target %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="employee" value="{{ target.pk }}">
+    {{ form.as_p }}
+    <button type="submit" name="action" value="add">Add opening line</button>
+  </form>
+  {% elif not may_enter_for_target %}
+  <p class="empty-note">You can't enter lines for this employee (your own record, or another HR Administrator is available).</p>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

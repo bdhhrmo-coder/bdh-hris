@@ -2,9 +2,29 @@
 {% load badges %}
 {% block title %}CTO queue — BDH HRIS{% endblock %}
 {% block content %}
-<h1>CTO applications awaiting my action</h1>
-{% if is_hr %}<p><a href="{% url 'cto:claims_home' %}">CTO claims from approved OT &rarr;</a></p>{% endif %}
+<h1>CTO queue</h1>
+<p>
+  {% if can_file_exception %}<a href="{% url 'cto:exception_claim_new' %}" class="btn">+ Exception CTO claim</a>{% endif %}
+  {% if can_enter_opening %}<a href="{% url 'cto:opening_balances' %}" class="btn">Opening CTO balances</a>{% endif %}
+  <a href="{% url 'cto:carry_over' %}" class="btn">Year-end carry-over</a>
+  {% if can_set_separation %}<a href="{% url 'cto:separation' %}" class="btn">Separation status</a>{% endif %}
+</p>
+
 <div class="card">
+<h2 class="mt-0">CTO claims awaiting my action</h2>
+<table>
+  <tr><th>#</th><th>Employee</th><th>Type</th><th>Step</th><th></th></tr>
+  {% for c in pending_claims %}
+  <tr><td>{{ c.pk }}</td><td>{{ c.employee.full_name }}</td><td>{{ c.get_duty_type_display }}{% if c.is_exception %} (exception){% endif %}{% if c.employee.separation_status %} <span class="badge badge-pending">Separating — last day {{ c.employee.last_day_of_service }}</span>{% endif %}</td>
+      <td>{{ c.get_current_step_display }}</td><td><a href="{% url 'cto:claim_detail' c.pk %}">Open</a></td></tr>
+  {% empty %}
+  <tr><td colspan="5" class="empty-note">Nothing awaiting your action.</td></tr>
+  {% endfor %}
+</table>
+</div>
+
+<div class="card">
+<h2 class="mt-0">CTO usage applications awaiting my action</h2>
 <table>
   <tr><th>Employee</th><th>Dates</th><th>Days</th><th>Reason</th><th>Status</th><th>Action</th></tr>
   {% for a in applications %}

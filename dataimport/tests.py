@@ -9,7 +9,6 @@ from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import RoleAssignment
-from cto.balances import compute_available_cto_balance
 from employees.models import Employee, EmployeeEditHistory
 from leave.balances import compute_available_balance
 from leave.models import LeaveType
@@ -151,11 +150,20 @@ class OpeningBalanceImportTests(TestCase):
         vl = LeaveType.objects.get(code="VL")
         as_of = date(2026, 9, 30)
         self.assertGreater(compute_available_balance(self.emp, vl, as_of), Decimal("100"))  # overstated
-        plans = self.plan([{"employee_id": "EMP-0300", "as_of": "2026-09-30", "VL": 12.375, "CTO": 2}])
+        plans = self.plan([{"employee_id": "EMP-0300", "as_of": "2026-09-30", "VL": 12.375}])
         self.assertEqual(plans[0].errors, [])
         balance_import.apply_plan(plans, self.hr.user, "b.xlsx")
         self.assertEqual(compute_available_balance(self.emp, vl, as_of), Decimal("12.38"))
-        self.assertEqual(compute_available_cto_balance(self.emp, as_of), Decimal("2"))
+
+    def test_old_template_with_cto_value_is_refused(self):
+        # CTO is no longer imported here (owner decision 2026-11-02, CLAUDE.md 7.1 Option A).
+        cols = BAL_COLS + [("CTO", "CTO (days)")]
+        rows = [{"employee_id": "EMP-0300", "as_of": "2026-09-30", "VL": 12, "CTO": 2},
+                {"employee_id": "EMP-0301", "as_of": "2026-09-30", "COSP_LEAVE": 5}]
+        plans = balance_import.build_plan(workbook_file(balance_import.SHEET, cols, rows), today=self.today)
+        self.assertIn("CTO Opening Balances", " ".join(plans[0].errors))
+        self.assertEqual(plans[1].errors, [])  # blank CTO cell on an old template is fine
+        self.assertNotIn("CTO", [k for k, _ in BAL_COLS])
 
     def test_importing_same_file_twice_adds_nothing(self):
         rows = [{"employee_id": "EMP-0300", "as_of": "2026-09-30", "SL": 30}]
