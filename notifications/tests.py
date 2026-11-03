@@ -206,14 +206,19 @@ class ExchangeNotificationIntegrationTests(TestCase):
         lab = Section.objects.get(name="Laboratory Section")
         a.sections.add(lab)
         b.sections.add(lab)
-        far_future_a = date.today() + timedelta(days=30)
-        far_future_b = date.today() + timedelta(days=31)
+        from schedules.models import ShiftCode
+
+        far_future_a = date.today() + timedelta(days=60)   # no schedule yet: a regular exchange (2026-11-03)
+        far_future_b = date.today() + timedelta(days=61)
+        shift = ShiftCode.objects.get(code="7A-7P").pk
         client = Client()
         client.login(username="exnotif_a", password="testpass123")
         client.post(reverse("exchange:exchange_apply"), {
             "employee_b": b.pk,
             "date_a": far_future_a,
             "date_b": far_future_b,
+            "shift_a": shift,
+            "shift_b": shift,
             "reason": "Swap",
             "is_emergency": False,
         })
