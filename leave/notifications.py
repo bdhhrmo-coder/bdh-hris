@@ -40,7 +40,7 @@ def notify_status_change(application):
         else:
             # Regular Leave etc. (§6.2 data-entry-only path) goes straight to HR.
             notify(
-                hr_step_actors(filers),
+                hr_step_actors(filers, application),
                 f"{application.employee} filed a {leave_type_name} application for recording.",
                 _QUEUE_URL,
             )
@@ -53,7 +53,7 @@ def notify_status_change(application):
         )
     elif status == LeaveApplication.ENDORSED_BY_SUPERVISOR:
         notify(
-            hr_step_actors(filers),
+            hr_step_actors(filers, application),
             f"A {leave_type_name} application for {application.employee} is ready for HR processing.",
             _QUEUE_URL,
         )

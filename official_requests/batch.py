@@ -233,7 +233,7 @@ def may_act(acting_employee, user, batch):
         return bool(lines) and acting_employee.pk in {
             s.pk for s in common_supervisors([line.employee for line in lines])}
     if target == R.PROCESSED_BY_HR:
-        return can_act_hr_step(acting_employee, people)
+        return can_act_hr_step(acting_employee, people, batch)
     if target == R.RECOMMENDED_BY_AO:
         return can_act_ao_step(acting_employee, people)
     if target == R.APPROVED:
@@ -417,7 +417,7 @@ def _next_actors(batch):
     if target == R.ENDORSED_BY_SUPERVISOR:
         people = common_supervisors([line.employee for line in batch.active_lines()])
     elif target == R.PROCESSED_BY_HR:
-        people = hr_step_actors(involved)
+        people = hr_step_actors(involved, batch)
     elif target == R.RECOMMENDED_BY_AO:
         people = ao_step_actors(involved)
     elif target == R.APPROVED:

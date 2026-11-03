@@ -28,13 +28,13 @@ def notify_status_change(official_request):
         )
     elif target_status == OfficialRequest.RECORDED:
         notify(
-            hr_step_actors(filers),
+            hr_step_actors(filers, official_request),
             f"{official_request.employee} filed a {type_name} request for recording (approval is outside BDH).",
             queue_url,
         )
     elif target_status == OfficialRequest.PROCESSED_BY_HR:
         notify(
-            hr_step_actors(filers),
+            hr_step_actors(filers, official_request),
             f"A {type_name} request for {official_request.employee} is ready for HR processing.",
             queue_url,
         )

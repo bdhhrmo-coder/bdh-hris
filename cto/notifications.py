@@ -36,7 +36,7 @@ def notify_status_change(application):
         )
     elif status == CTOUsageApplication.ENDORSED_BY_SUPERVISOR:
         notify(
-            hr_step_actors(filers),
+            hr_step_actors(filers, application),
             f"A CTO usage application for {application.employee} is ready for HR processing.",
             _QUEUE_URL,
         )

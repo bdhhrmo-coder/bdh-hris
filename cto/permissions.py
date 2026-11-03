@@ -9,6 +9,7 @@ from leave.permissions import (  # noqa: F401 (re-exported for cto callers)
     can_act_ao_step,
     can_act_coh_step,
     can_act_hr_step,
+    exclude_own_endorsements,
     UNIT_STEP,
     can_endorse,
     can_endorse_second,
@@ -78,5 +79,7 @@ def visible_cto_applications_for(acting_employee):
     ]
     qs = qs | CTOUsageApplication.objects.filter(pk__in=second_ids)
 
-    # Never one's own application, at any step (owner decision 2026-10-26).
+    # Never one's own application, at any step (owner decision 2026-10-26),
+    # and never at the HR step after endorsing it (2026-11-03).
+    qs = exclude_own_endorsements(qs, acting_employee)
     return qs.exclude(employee=acting_employee).distinct()

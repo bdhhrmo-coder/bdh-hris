@@ -40,7 +40,7 @@ def notify_status_change(exchange_request):
             _QUEUE_URL,
         )
     elif status == DutyExchangeRequest.ENDORSED_BY_SUPERVISOR:
-        notify(hr_step_actors([a, b]), f"A duty exchange request between {a} and {b} is ready for HR processing.", _QUEUE_URL)
+        notify(hr_step_actors([a, b], exchange_request), f"A duty exchange request between {a} and {b} is ready for HR processing.", _QUEUE_URL)
     elif status == DutyExchangeRequest.PROCESSED_BY_HR:
         notify(
             ao_step_actors([a, b]),

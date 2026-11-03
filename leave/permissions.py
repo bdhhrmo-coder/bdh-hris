@@ -258,8 +258,43 @@ def can_endorse_second(acting_employee, filers):
     return acting_employee is not None and acting_employee.pk in _ids(second_endorsers_for(filers))
 
 
-def can_act_hr_step(acting_employee, filers):
-    return is_hr(acting_employee) and acting_employee.pk not in _ids(filers)
+# -- Endorser may not also act at the HR step (owner decision 2026-11-03,
+# Option B). Whoever endorsed a request in its current cycle (unit head or
+# Supervisor step) cannot process it at the HR step; another HR Processor or
+# HR Administrator must. A return and resubmission starts a new cycle.
+_ENDORSED_STATUSES = ("ENDORSED_BY_UNIT_HEAD", "ENDORSED_BY_SUPERVISOR")
+
+
+def endorser_ids(obj):
+    """Employee ids of everyone who endorsed `obj` (any request with an
+    `actions` log) since it was last submitted."""
+    if obj is None or getattr(obj, "pk", None) is None:
+        return set()
+    actions = list(obj.actions.select_related("acted_by__employee").order_by("acted_at", "pk"))
+    start = 0
+    for i, a in enumerate(actions):
+        if a.resulting_status == "SUBMITTED":
+            start = i
+    ids = set()
+    for a in actions[start:]:
+        if a.resulting_status in _ENDORSED_STATUSES:
+            emp = getattr(a.acted_by, "employee", None)
+            if emp is not None:
+                ids.add(emp.pk)
+    return ids
+
+
+def exclude_own_endorsements(qs, acting_employee, hr_status="ENDORSED_BY_SUPERVISOR"):
+    """Drop from a queue the items waiting at the HR step that acting_employee endorsed."""
+    if acting_employee is None:
+        return qs
+    blocked = [o.pk for o in qs.filter(status=hr_status) if acting_employee.pk in endorser_ids(o)]
+    return qs.exclude(pk__in=blocked) if blocked else qs
+
+
+def can_act_hr_step(acting_employee, filers, obj=None):
+    return (is_hr(acting_employee) and acting_employee.pk not in _ids(filers)
+            and acting_employee.pk not in endorser_ids(obj))
 
 
 def can_act_ao_step(acting_employee, filers):
@@ -270,8 +305,8 @@ def can_act_coh_step(acting_employee, filers):
     return acting_employee is not None and acting_employee.pk in _ids(coh_step_actors(filers))
 
 
-def hr_step_actors(filers):
-    excluded = _ids(filers)
+def hr_step_actors(filers, obj=None):
+    excluded = _ids(filers) | endorser_ids(obj)
     return [e for e in hr_employees() if e.pk not in excluded]
 
 
@@ -353,5 +388,7 @@ def visible_applications_for(acting_employee):
     ]
     qs = qs | LeaveApplication.objects.filter(pk__in=second_ids)
 
-    # Never one's own application, at any step (owner decision 2026-10-26).
+    # Never one's own application, at any step (owner decision 2026-10-26),
+    # and never at the HR step after endorsing it (2026-11-03).
+    qs = exclude_own_endorsements(qs, acting_employee)
     return qs.exclude(employee=acting_employee).distinct()

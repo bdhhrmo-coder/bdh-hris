@@ -168,7 +168,7 @@ def exchange_action(request, pk):
             apply_transition(
                 DutyExchangeRequest.REJECTED if action == "reject" else DutyExchangeRequest.RETURNED, action
             )
-    elif status == DutyExchangeRequest.ENDORSED_BY_SUPERVISOR and can_act_hr_step(acting_employee, filers):
+    elif status == DutyExchangeRequest.ENDORSED_BY_SUPERVISOR and can_act_hr_step(acting_employee, filers, exchange_request):
         if action == "process":
             allowed = True
             apply_transition(DutyExchangeRequest.PROCESSED_BY_HR, "process")

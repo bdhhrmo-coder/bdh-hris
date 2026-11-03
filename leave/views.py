@@ -199,7 +199,7 @@ def leave_action(request, pk):
     error = None
 
     if not full_routing:
-        if status == LeaveApplication.SUBMITTED and can_act_hr_step(acting_employee, filers):
+        if status == LeaveApplication.SUBMITTED and can_act_hr_step(acting_employee, filers, application):
             if action == "record":
                 error = _finalize_success(application, request.user)
                 if error is None:
@@ -231,7 +231,7 @@ def leave_action(request, pk):
                 apply_transition(
                     LeaveApplication.REJECTED if action == "reject" else LeaveApplication.RETURNED, action
                 )
-        elif status == LeaveApplication.ENDORSED_BY_SUPERVISOR and can_act_hr_step(acting_employee, filers):
+        elif status == LeaveApplication.ENDORSED_BY_SUPERVISOR and can_act_hr_step(acting_employee, filers, application):
             if action == "process":
                 allowed = True
                 apply_transition(LeaveApplication.PROCESSED_BY_HR, "process")

@@ -331,7 +331,7 @@ def cto_action(request, pk):
             apply_transition(
                 CTOUsageApplication.REJECTED if action == "reject" else CTOUsageApplication.RETURNED, action
             )
-    elif status == CTOUsageApplication.ENDORSED_BY_SUPERVISOR and can_act_hr_step(acting_employee, filers):
+    elif status == CTOUsageApplication.ENDORSED_BY_SUPERVISOR and can_act_hr_step(acting_employee, filers, application):
         if action == "process":
             allowed = True
             apply_transition(CTOUsageApplication.PROCESSED_BY_HR, "process")
