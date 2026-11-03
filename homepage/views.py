@@ -44,6 +44,9 @@ def home(request):
         "watermark_url": watermark_url(),
     }
     ctx["waiting_total"] = sum(n for _, n, _ in ctx["waiting"])
+    if scope != "self":  # names only for HR, AO, COH and Supervisors (CLAUDE.md 8B)
+        ctx["month_leave"] = kpis.on_leave_this_month(ids=ids, with_type=with_type)
+        ctx["month_cto"] = kpis.on_cto_this_month(ids=ids)
     ctx.update(_role_cards(acting, scope))
     try:
         from announcements.views import homepage_panel

@@ -186,3 +186,35 @@ class TestSystemBarTests(TestCase):
             page = self.client.get("/hris/login/").content.decode()
         self.assertIn("TEST SYSTEM", page)
         self.assertIn("<title>[TEST]", page)
+
+
+class ThisMonthListsTests(TestCase):
+    """Dry-run item 7 (2026-11-03): Home lists who is on leave and on CTO this month."""
+
+    def test_cto_this_month_is_listed_for_hr_but_not_for_employees(self):
+        from datetime import date
+
+        from django.contrib.auth.models import User
+
+        from accounts.models import RoleAssignment
+        from cto.models import CTOUsageApplication
+        from employees.models import Employee
+
+        def emp(name, role=None):
+            u = User.objects.create_user(username=name, password="pw-12345678")
+            e = Employee.objects.create(user=u, employee_id=name.upper(), surname=name.title(), first_name="T",
+                                        employment_status="REGULAR", date_hired=date(2020, 1, 1))
+            if role:
+                RoleAssignment.objects.create(employee=e, role=role)
+            return e
+
+        hr, staff = emp("hrmonth", RoleAssignment.HR_PROCESSOR), emp("staffmonth")
+        today = date.today()
+        CTOUsageApplication.objects.create(employee=staff, start_date=today, end_date=today, number_of_days=1,
+                                           status=CTOUsageApplication.APPROVED)
+        self.client.force_login(hr.user)
+        r = self.client.get("/hris/home/")
+        self.assertContains(r, "On CTO this month")
+        self.assertContains(r, staff.full_name)
+        self.client.force_login(staff.user)
+        self.assertNotContains(self.client.get("/hris/home/"), "On CTO this month")

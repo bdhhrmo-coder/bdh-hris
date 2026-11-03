@@ -91,6 +91,28 @@ unchanged (CLAUDE.md 8B); homepage/views.py _role_cards() decides which cards sh
   {% endif %}
 </section>
 
+{% if scope != "self" %}
+{% comment %}Dry-run item 7 (2026-11-03): who is on leave and on CTO this month, side by side.{% endcomment %}
+<div class="home-columns home-month">
+  <div class="card">
+    <h2 class="mt-0">On leave this month <small class="muted">({{ month_leave|length }})</small></h2>
+    {% if month_leave %}
+    <ul class="kpi-list">
+      {% for r in month_leave %}<li><span>{{ r.employee.full_name }}<br><small class="muted">{{ r.what|join:", " }} &middot; {{ r.section }}</small></span><strong>{% for s, e in r.dates %}{{ s|date:"M j" }}{% if e != s %}–{{ e|date:"M j" }}{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}</strong></li>{% endfor %}
+    </ul>
+    {% else %}<p class="kpi-sub">No approved or recorded leave this month{% if scope == "sections" %} in your sections{% endif %}.</p>{% endif %}
+  </div>
+  <div class="card">
+    <h2 class="mt-0">On CTO this month <small class="muted">({{ month_cto|length }})</small></h2>
+    {% if month_cto %}
+    <ul class="kpi-list">
+      {% for r in month_cto %}<li><span>{{ r.employee.full_name }}<br><small class="muted">{{ r.section }}</small></span><strong>{% for s, e in r.dates %}{{ s|date:"M j" }}{% if e != s %}–{{ e|date:"M j" }}{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}</strong></li>{% endfor %}
+    </ul>
+    {% else %}<p class="kpi-sub">No approved CTO this month{% if scope == "sections" %} in your sections{% endif %}.</p>{% endif %}
+  </div>
+</div>
+{% endif %}
+
 <div class="home-columns">
   <div>
     {% block announcements_panel %}{% if announcements_panel_template %}{% include announcements_panel_template %}{% endif %}{% endblock %}

@@ -98,6 +98,42 @@ def _sorted_by_section(rows):
     return sorted(rows, key=lambda r: r["sort"])
 
 
+# -- this month: on leave / on CTO (dry-run item 7, 2026-11-03) ---------------------
+
+def _month_bounds(today=None):
+    import calendar
+
+    today = today or timezone.localdate()
+    first = today.replace(day=1)
+    return first, today.replace(day=calendar.monthrange(today.year, today.month)[1])
+
+
+def _month_rows(qs, label_of):
+    rows = OrderedDict()
+    for app in qs:
+        r = rows.setdefault(app.employee_id, {"employee": app.employee, "what": [], "dates": []})
+        r["what"].append(label_of(app))
+        r["dates"].append((app.start_date, app.end_date))
+    return _sorted_by_section(rows.values())
+
+
+def on_leave_this_month(today=None, ids=None, with_type=False):
+    """Approved or recorded leave with any day in the current month."""
+    first, last = _month_bounds(today)
+    qs = _limit(LeaveApplication.objects.filter(status__in=LEAVE_DONE, start_date__lte=last, end_date__gte=first),
+                ids).select_related("employee", "leave_type").order_by("start_date")
+    return _month_rows(qs, lambda a: a.leave_type.name if with_type else "Leave")
+
+
+def on_cto_this_month(today=None, ids=None):
+    """Approved CTO with any day in the current month."""
+    first, last = _month_bounds(today)
+    qs = _limit(CTOUsageApplication.objects.filter(status=CTOUsageApplication.APPROVED, start_date__lte=last,
+                                                   end_date__gte=first), ids).select_related("employee").order_by(
+        "start_date")
+    return _month_rows(qs, lambda a: "CTO")
+
+
 # -- pending leave / CTO (beside Absent Today) --------------------------------------
 
 def pending_leave_cto(ids=None, with_type=False):
