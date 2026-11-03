@@ -301,6 +301,8 @@ These are decided by the project owner. Do not re-ask or change them without exp
 - Biometric data is **advisory, not authoritative**: HR Processor can manually encode/adjust attendance regardless of what the biometric import shows
 - Undertime auto-deducts from leave credits
 - **Pilot decision (owner, 2026-11-03, Option C):** no biometric import during the pilot (Nov 16 - Dec 18). PALMIRA (BDH's biometric system) has **no Excel/CSV export**; it only prints its monthly report to PDF (one block per employee, 30 days side by side, 4 logs a day, names only, ~11 pages per 5 employees). PALMIRA does store a biometric ID per person. Undertime rules are unchanged (auto-deduct); during the pilot the only HRIS paths that write attendance and deduct undertime are an approved **minor attendance correction** (HR Processor -> HR Administrator) or a formal correction. A PDF reader for the PALMIRA report (Option B) comes after the pilot; matching must use the biometric ID (a one-time ID-to-employee list if the printout cannot show it), never names alone.
+- **Undertime during the pilot (owner, 2026-11-03, Option A):** HR enters only the days with undertime as **minor attendance corrections** (HR Processor encodes, HR Administrator approves); approval deducts from leave credits automatically and is logged.
+- **PALMIRA can print the biometric ID** on its report (confirmed 2026-11-03). The HRIS has **no biometric ID field yet**: add one to Employee (or confirm the biometric ID equals the HRIS Employee ID) before building the PDF reader after the pilot.
 
 ---
 
