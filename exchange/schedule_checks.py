@@ -4,7 +4,9 @@ decisions 2026-10-09). The rules already in rules.py (24-hour notice,
 3 per month, consent, routing) stay as they are.
 
 For employee A giving up date A and taking B's date B:
-  - A and B must hold the same position.
+  - A and B must be in the same unit, or in the same section where that
+    section has no units; their positions may differ (owner decision
+    2026-11-03, replaces the same-position rule).
   - A must be on duty on date A and B on date B, and A must be off on date B
     and B off on date A (no one ends up with two shifts in one day).
   - Timing:
@@ -37,16 +39,23 @@ def _on_duty(cell):
     return cell is not None and cell.shift_id is not None and cell.shift.is_duty
 
 
+def same_work_area(employee_a, employee_b):
+    """Same unit, or the same section where that section has no units
+    (owner decision 2026-11-03)."""
+    if set(employee_a.units.values_list("pk", flat=True)) & set(employee_b.units.values_list("pk", flat=True)):
+        return True
+    shared = employee_a.sections.filter(pk__in=employee_b.sections.values("pk"))
+    return shared.filter(units__isnull=True).exists()
+
+
 def check(employee_a, date_a, employee_b, date_b, filed_on, is_emergency, with_timing=True):
     """Returns (errors, notes)."""
     from schedules.services import cell_for
 
     errors, notes = [], []
-    if not _norm(employee_a.position) or not _norm(employee_b.position):
-        errors.append("Both employees' positions must be recorded (ask HR to update the employee record).")
-    elif _norm(employee_a.position) != _norm(employee_b.position):
-        errors.append(f"Exchange partners must hold the same position ({employee_a.position} vs "
-                      f"{employee_b.position}).")
+    if not same_work_area(employee_a, employee_b):
+        errors.append(f"Exchange partners must be in the same unit, or the same section where the section has no "
+                      f"units ({employee_a} and {employee_b} are not).")
 
     pairs = [(employee_a, date_a, employee_b, "your"), (employee_b, date_b, employee_a, "their")]
     for who, day, other, _ in pairs:

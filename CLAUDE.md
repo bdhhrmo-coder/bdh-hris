@@ -313,7 +313,7 @@ Decided by the project owner in a 2026-11-01 design session; these **replace** t
   - Documented emergency: same-day filing allowed, with written follow-up within 24 hours
 
 ### 8.1 Settled with duty schedules (2026-10-09, Batch 5)
-- Partners must hold the **same position**.
+- Partners must be in the **same unit**, or the **same section where that section has no units**; their positions may differ (owner decision 2026-11-03, dry-run item 8; replaces "same position"). `exchange/schedule_checks.py same_work_area`.
 - A must be on duty on date A and B on date B; A must be **off** on date B and B off on date A.
 - **Before the schedule is approved:** file at least **7 days before the schedule's cut-off date**, checked against the submitted schedule. The cut-off is set by HR per schedule (default: the 20th of the month before, `SCHEDULE_CUTOFF_DAY`). **After COH approval:** the 24-hour rule. Emergency: same day.
 - A date with no submitted schedule on file is not checked against a schedule (allowed as before, with a note).

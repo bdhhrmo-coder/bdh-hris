@@ -17,6 +17,10 @@ def make_employee(username, employee_id, role=None):
         user=user, employee_id=employee_id, surname=username.title(), first_name="Test",
         date_hired=date(2024, 1, 1), employment_status="REGULAR", position="Nurse II",
     )
+    # Partners must share a unit, or a section with no units (2026-11-03).
+    from orgstructure.models import Section
+
+    employee.sections.add(Section.objects.get(name="Laboratory Section"))
     if role:
         RoleAssignment.objects.create(employee=employee, role=role)
     return employee
