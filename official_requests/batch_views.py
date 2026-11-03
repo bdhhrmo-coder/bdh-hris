@@ -196,8 +196,8 @@ def batch_action(request, pk):
     notes = request.POST.get("notes", "").strip()[:255]
     if action not in {code for code, _ in rules.available_actions(acting_employee, request.user, batch)}:
         raise PermissionDenied("You are not authorized to take this action on this group request.")
-    if action == "return" and not notes:
-        messages.error(request, "Type the reason for returning it, so the filer knows what to fix.")
+    if action in ("return", "reject") and not notes:
+        messages.error(request, "Type the reason for returning or rejecting it, so the filer knows why.")
         return redirect("official_requests:batch_detail", pk=pk)
     rules.apply_action(batch, request.user, action, notes)
     messages.success(request, "Action recorded for the whole group request.")

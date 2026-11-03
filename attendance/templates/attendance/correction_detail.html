@@ -40,7 +40,7 @@
   <h2 class="mt-0">Your action (applies to all dates)</h2>
   <form method="post" action="{% url 'attendance:correction_action' correction.pk %}" x-data="{ remark: '' }">
     {% csrf_token %}
-    <label class="field-title" for="id_notes">Remark <span class="field-help">&mdash; required to return, optional otherwise</span></label>
+    <label class="field-title" for="id_notes">Remark <span class="field-help">&mdash; required to return or reject, optional otherwise</span></label>
     <textarea id="id_notes" name="notes" maxlength="255" rows="2" x-model="remark"></textarea>
     <div class="row-actions" style="margin-top:0.6rem;">
       {% for code, label in actions %}
@@ -48,7 +48,7 @@
         <button type="submit" name="action" value="return" class="btn-secondary" :disabled="!remark.trim()"
                 :title="remark.trim() ? '' : 'Type a remark first'">Return</button>
         {% elif code == "reject" %}
-        <button type="submit" name="action" value="reject" class="btn-secondary">Reject</button>
+        <button type="submit" name="action" value="reject" class="btn-secondary" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Reject</button>
         {% else %}
         <button type="submit" name="action" value="{{ code }}">{{ label }}</button>
         {% endif %}

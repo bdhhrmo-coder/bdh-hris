@@ -299,7 +299,7 @@ def remark_suffix(obj):
     return f' Remark: "{last.notes}"' if last and last.notes else ""
 
 
-RETURN_NEEDS_REMARK = "Please type a remark explaining why it is being returned. Nothing was changed."
+RETURN_NEEDS_REMARK = "Please type a remark explaining why it is being returned or rejected. Nothing was changed."
 
 
 def can_act_hr_step(acting_employee, filers, obj=None):

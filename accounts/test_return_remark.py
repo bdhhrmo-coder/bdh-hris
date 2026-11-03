@@ -57,13 +57,27 @@ class ReturnRemarkTests(TestCase):
         ob.refresh_from_db()
         self.assertEqual(ob.status, OfficialRequest.RETURNED)
 
+    def test_reject_needs_a_remark_too(self):
+        cto = CTOUsageApplication.objects.create(employee=self.staff, start_date=date(2026, 11, 20),
+                                                 end_date=date(2026, 11, 20), number_of_days=1)
+        self.c.post(reverse("cto:cto_action", args=[cto.pk]), {"action": "reject"})
+        cto.refresh_from_db()
+        self.assertEqual(cto.status, CTOUsageApplication.SUBMITTED)
+        self.c.post(reverse("cto:cto_action", args=[cto.pk]), {"action": "reject", "notes": "Exceeds the monthly cap"})
+        cto.refresh_from_db()
+        self.assertEqual(cto.status, CTOUsageApplication.REJECTED)
+        msg = Notification.objects.filter(recipient=self.staff).latest("pk").message
+        self.assertIn('Remark: "Exceeds the monthly cap"', msg)
+
     def test_queue_shows_the_remark_box(self):
         lt = LeaveType.objects.filter(requires_full_routing=True).first()
         LeaveApplication.objects.create(employee=self.staff, leave_type=lt, start_date=date(2026, 11, 20),
                                         end_date=date(2026, 11, 20), number_of_days=1)
         r = self.c.get(reverse("leave:leave_queue"))
-        self.assertContains(r, 'placeholder="Remark (required to return)"')
+        self.assertContains(r, 'placeholder="Remark (required to return or reject)"')
         self.assertContains(r, ':disabled="!remark.trim()"')
+        self.assertContains(r, 'x-data="{ remark: \'\' }"')
+        self.assertNotContains(r, "\\'")
 
 
 class PdfConvertProfileTests(TestCase):

@@ -483,6 +483,8 @@ def notify_step(batch, action, notes):
                _url(batch))
     elif batch.status in (R.APPROVED, R.REJECTED):
         word = batch.get_status_display().lower()
+        if batch.status == R.REJECTED and notes:
+            word = f'{word}. Remark: "{notes}"'  # owner request 2026-11-03
         for emp in {line.employee for line in lines}:
             mine = [line for line in lines if line.employee_id == emp.pk]
             notify(emp, f"The {batch.type_label} request filed for you ({_dates_text(mine)}) was {word}.",

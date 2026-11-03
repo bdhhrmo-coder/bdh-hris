@@ -79,8 +79,8 @@ def request_action(request, pk):
 
     if acting_employee is None:
         raise PermissionDenied("No employee record is linked to your account.")
-    # A return always carries a remark (owner request 2026-11-03).
-    if action == "return" and not notes:
+    # A return or rejection always carries a remark (owner requests 2026-11-03).
+    if action in ("return", "reject") and not notes:
         messages.error(request, RETURN_NEEDS_REMARK)
         return redirect("official_requests:request_queue")
 

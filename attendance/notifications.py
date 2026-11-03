@@ -5,7 +5,7 @@ MINOR path (HR Processor -> HR Administrator, no Supervisor/AO step) and
 the FORMAL path (BDH-ADM-AO-01F10, 2026-10-06: ICTU Staff or HR validates,
 depending on the reason, then the AO approves - no COH step)."""
 
-from leave.permissions import ao_step_actors, employees_with_role, hr_employees
+from leave.permissions import remark_suffix, ao_step_actors, employees_with_role, hr_employees
 from notifications.services import notify
 
 from .models import AttendanceCorrectionRequest
@@ -44,7 +44,7 @@ def notify_status_change(correction):
         elif status in (AttendanceCorrectionRequest.APPROVED, AttendanceCorrectionRequest.REJECTED):
             notify(
                 correction.employee,
-                f"Your attendance correction was {correction.get_status_display().lower()}.",
+                f"Your attendance correction was {correction.get_status_display().lower()}.{remark_suffix(correction)}",
                 _MINE_URL,
             )
         elif status == AttendanceCorrectionRequest.RETURNED:
@@ -88,7 +88,7 @@ def notify_status_change(correction):
         elif status in (AttendanceCorrectionRequest.APPROVED, AttendanceCorrectionRequest.REJECTED):
             notify(
                 correction.employee,
-                f"Your attendance correction request was {correction.get_status_display().lower()}.",
+                f"Your attendance correction request was {correction.get_status_display().lower()}.{remark_suffix(correction)}",
                 _detail_url(correction),
             )
         elif status == AttendanceCorrectionRequest.RETURNED:
