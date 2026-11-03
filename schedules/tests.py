@@ -227,12 +227,38 @@ class RoutingTests(Base):
 
     def test_visibility(self):
         s = self.new_schedule()
+        services.submit(s, self.sup.user)
         self.client.force_login(self.alice.user)
         self.assertEqual(self.client.get(reverse("schedules:detail", args=[s.pk])).status_code, 403)
         self.client.force_login(self.outsider.user)
         self.assertEqual(self.client.get(reverse("schedules:detail", args=[s.pk])).status_code, 403)
         self.client.force_login(self.ao.user)
         self.assertEqual(self.client.get(reverse("schedules:detail", args=[s.pk])).status_code, 200)
+
+    def test_draft_is_seen_only_by_its_preparer(self):
+        # Dry-run item 5 (owner 2026-11-03): Save as draft; nobody else sees it until it is submitted.
+        s = self.new_schedule()
+        for who in (self.hr, self.ao, self.coh):
+            self.client.force_login(who.user)
+            self.assertEqual(self.client.get(reverse("schedules:detail", args=[s.pk])).status_code, 403)
+            self.assertNotIn(s, self.client.get(reverse("schedules:list")).context["schedules"])
+        self.client.force_login(self.sup.user)
+        page = self.client.get(reverse("schedules:edit", args=[s.pk]))
+        self.assertContains(page, "Save as draft")
+        services.submit(s, self.sup.user)
+        self.client.force_login(self.hr.user)
+        self.assertEqual(self.client.get(reverse("schedules:detail", args=[s.pk])).status_code, 200)
+
+    def test_hr_sets_cutoff_on_a_submitted_schedule(self):
+        s = self.new_schedule()
+        services.submit(s, self.sup.user)
+        self.client.force_login(self.hr.user)
+        self.client.post(reverse("schedules:cutoff", args=[s.pk]), {"cutoff_date": "2027-02-15"})
+        s.refresh_from_db()
+        self.assertEqual(s.cutoff_date, date(2027, 2, 15))
+        self.client.force_login(self.sup.user)
+        self.assertEqual(self.client.post(reverse("schedules:cutoff", args=[s.pk]),
+                                          {"cutoff_date": "2027-02-10"}).status_code, 403)
 
     def test_audit_log_has_steps(self):
         s = self.new_schedule()
@@ -320,3 +346,33 @@ class PrintoutTests(Base):
         pdf = render_pdf(s)
         self.assertTrue(pdf.startswith(b"%PDF"))
         self.assertEqual(len(re.findall(rb"/Type\s*/Page(?![s\w])", pdf)), 1)
+
+
+class CutoffDatesTests(Base):
+    """Owner decision 2026-11-03 (Option A): HR sets one cut-off per month,
+    hospital-wide, before drafts start; new drafts copy it; drafts follow a change."""
+
+    def test_hr_sets_month_cutoff_and_drafts_copy_it(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from .models import ScheduleCutoff
+
+        today = timezone.localdate()
+        y, m = (today.year + 1, 1) if today.month == 12 else (today.year, today.month + 1)
+        before = date(y, m, 1) - timedelta(days=12)
+        self.client.force_login(self.sup.user)
+        self.assertEqual(self.client.get(reverse("schedules:cutoff_dates")).status_code, 403)
+        draft = self.new_schedule(year=y, month=m)
+        self.client.force_login(self.hr.user)
+        self.client.post(reverse("schedules:cutoff_dates"), {"year": y, "month": m, "cutoff_date": before})
+        self.assertEqual(ScheduleCutoff.objects.get(year=y, month=m).cutoff_date, before)
+        draft.refresh_from_db()
+        self.assertEqual(draft.cutoff_date, before)            # draft not yet submitted follows
+        self.assertEqual(S.default_cutoff(y, m), before)       # new drafts copy it
+        from exchange.regular import regular_deadline
+        self.assertEqual(regular_deadline(self.alice, date(y, m, 5))[0], before - timedelta(days=7))
+        # a date inside the month itself is refused
+        self.client.post(reverse("schedules:cutoff_dates"), {"year": y, "month": m, "cutoff_date": date(y, m, 2)})
+        self.assertEqual(ScheduleCutoff.objects.get(year=y, month=m).cutoff_date, before)

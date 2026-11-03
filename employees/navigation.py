@@ -59,6 +59,7 @@ MENU = [
     ("workforce", "Workforce", "users", [
         ("Employees", "employees:employee_list", "user-round", "can_list_employees"),
         ("Duty Schedules", "schedules:list", "calendar-range", "can_view_schedules"),
+        ("Approved Exchanges of Duty", "exchange:approved_exchanges", "repeat", "can_view_schedules"),
     ]),
     ("reports", "Reports", "chart-column", [
         ("Dashboard", "dashboard:dashboard_home", "chart-column", "can_view_dashboard"),
@@ -73,6 +74,7 @@ MENU = [
         ("CTO Separation Status", "cto:separation", "user-round", "can_set_separation"),
         ("Manage Announcements", "announcements:manage", "megaphone", "can_manage_announcements"),
         ("Shift Codes", "schedules:shift_codes", "list", "can_manage_announcements"),
+        ("Schedule Cut-off Dates", "schedules:cutoff_dates", "calendar-clock", "is_hr"),
         ("User Accounts and Roles", "admin:index", "user-cog", "is_system_admin"),
     ]),
 ]

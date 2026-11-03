@@ -633,6 +633,10 @@ button:active, .btn:active { transform: scale(0.98); }
 .line-grid { display: grid; grid-template-columns: 1.1fr 1fr 1fr 1.2fr; gap: 0.6rem 0.75rem; align-items: end; }
 .line-grid > label { font-size: 0.8rem; font-weight: 600; color: var(--gray-600); display: grid; gap: 0.2rem; }
 .line-grid .line-reason { grid-column: span 2; }
+/* AM / PM / OT in-out on a correction line (dry-run item 10, 2026-11-03). */
+.line-grid .time-pairs { grid-column: 2 / -1; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.5rem; }
+.line-grid .time-pairs > label { font-size: 0.8rem; font-weight: 600; color: var(--gray-600); display: grid; gap: 0.2rem; }
+@media (max-width: 900px) { .line-grid .time-pairs { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .line-grid .line-reason-wide { grid-column: 1 / -1; }
 .line-checks { display: grid; gap: 0.3rem; font-size: 0.85rem; }
 .inline-check { display: flex; align-items: center; gap: 0.45rem; cursor: pointer; }
@@ -762,7 +766,14 @@ a.kpi-card:hover, a.kpi-card:focus-visible { border-color: var(--navy-700); box-
 .pattern-tool input[type=number] { width: 4.2rem; }
 .sched-scroll { max-height: 70vh; overflow: auto; }
 .sched-grid { border-collapse: separate; border-spacing: 0; font-size: .8rem; }
-.sched-grid th, .sched-grid td { padding: 2px 3px; text-align: center; border-bottom: 1px solid var(--gray-200, #e5e7eb); white-space: nowrap; }
+/* Grid lines on every cell, on screen and in print (dry-run item 5, 2026-11-03). */
+.sched-grid { border-top: 1px solid #9aa5b4; border-left: 1px solid #9aa5b4; }
+.sched-grid th, .sched-grid td { padding: 2px 3px; text-align: center; border-right: 1px solid #9aa5b4; border-bottom: 1px solid #9aa5b4; white-space: nowrap; }
+@media print {
+  .sched-grid, .sched-grid th, .sched-grid td { border-color: #000 !important; }
+  .sched-grid thead th, .sched-grid .sticky-col { position: static; }
+  .sched-scroll { max-height: none; overflow: visible; }
+}
 .sched-grid thead th { position: sticky; top: 0; background: var(--navy-100, var(--navy-100)); z-index: 2; }
 .sched-grid .sticky-col { position: sticky; left: 0; background: #fff; text-align: left; z-index: 1; min-width: 9.5rem; max-width: 12rem; white-space: normal; }
 .sched-grid thead .sticky-col { z-index: 3; background: var(--navy-100, var(--navy-100)); }
@@ -772,6 +783,10 @@ a.kpi-card:hover, a.kpi-card:focus-visible { border-color: var(--navy-700); box-
 .sched-readonly td { min-width: 2.6rem; }
 .cell-duty { background: #e7f4ec; }
 .cell-off { background: #f3f4f6; color: var(--gray-600, #6b7280); }
+/* Day set by an approved regular Exchange of Duty: locked in the draft (2026-11-03). */
+.sched-grid td.cell-eod { box-shadow: inset 0 0 0 2px #E5B83F; }
+.sched-grid td.cell-eod select { cursor: not-allowed; }
+.cell-eod-key { box-shadow: inset 0 0 0 2px #E5B83F; padding: 0 .3rem; border-radius: 3px; }
 .my-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; margin-top: .75rem; }
 .my-day { display: flex; flex-direction: column; align-items: center; padding: 4px 2px; border: 1px solid var(--gray-200, #e5e7eb); border-radius: 6px; font-size: .8rem; }
 .my-day small { color: var(--gray-600, #6b7280); font-size: .7rem; }
@@ -949,3 +964,6 @@ body.is-test-system { padding-bottom: 40px; }
    one is typed. */
 .remark-input { width: 15rem; max-width: 100%; margin: 0 0 0.4rem 0; display: block; }
 .row-actions button[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+/* Approver lists show the whole reason, not a cut-off one (dry-run item 9, 2026-11-03). */
+.reason-cell { display: inline-block; min-width: 14rem; max-width: 32rem; white-space: normal; }

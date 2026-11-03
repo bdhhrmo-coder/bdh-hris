@@ -35,6 +35,11 @@ def create_schedule(user, role, year, month, section=None, unit=None):
     for i, emp in enumerate(schedule.area_employees().order_by("surname", "first_name")):
         add_row(schedule, emp, sort_order=i)
     log(schedule, "create", user)
+    # Approved regular Exchanges of Duty for this month are filled in and
+    # locked (owner decisions 2026-11-03, exchange/regular.py).
+    from exchange.regular import apply_all_to_new_draft
+
+    apply_all_to_new_draft(schedule, user)
     return schedule
 
 
@@ -54,12 +59,15 @@ def save_grid(schedule, values):
     """values: {(row_id, date): shift_id or None}. Only while editable."""
     if not schedule.is_editable:
         raise ValidationError("This schedule can no longer be edited.")
+    from exchange.regular import locked_cells
+
+    locked = locked_cells(schedule)  # days set by approved regular exchanges stay as they are
     codes = {c.pk: c for c in ShiftCode.objects.all()}
-    cells = {(c.row_id, c.date): c for c in ScheduleCell.objects.filter(row__schedule=schedule)}
+    cells = {(c.row_id, c.date): c for c in ScheduleCell.objects.filter(row__schedule=schedule).select_related("row")}
     changed = []
     for key, shift_id in values.items():
         cell = cells.get(key)
-        if cell is None:
+        if cell is None or (cell.row.employee_id, cell.date) in locked:
             continue
         new = codes.get(shift_id) if shift_id else None
         if (cell.shift_id or None) != (new.pk if new else None):
@@ -76,11 +84,43 @@ def save_grid(schedule, values):
 def submit(schedule, user):
     if not schedule.is_editable:
         raise ValidationError("Only a draft or returned schedule can be submitted.")
+    _check_exchanges_before_submit(schedule, user)
     resubmit = schedule.status == S.RETURNED
     schedule.status = S.SUBMITTED
     schedule.save(update_fields=["status", "updated_at"])
     log(schedule, "resubmit" if resubmit else "submit", user)
     _notify_next(schedule)
+
+
+def _check_exchanges_before_submit(schedule, user):
+    """Owner decisions 2026-11-03: a regular Exchange of Duty must be decided
+    before the schedule is submitted. One still waiting for the partner's
+    consent is cancelled; one already in the chain blocks the submission.
+    Every approved one must be in the grid (they are locked, so they are)."""
+    from exchange.models import DutyExchangeRequest as X, DutyExchangeRequestAction
+    from exchange.regular import apply_all_to_new_draft, locked_cells, pending_for_schedule
+
+    pending = list(pending_for_schedule(schedule))
+    waiting = [x for x in pending if x.status != X.PENDING_CONSENT]
+    if waiting:
+        names = "; ".join(f"#{x.pk} {x.employee_a} <-> {x.employee_b} ({x.get_status_display().lower()})"
+                          for x in waiting)
+        raise ValidationError(f"These regular Exchanges of Duty for {schedule.month_label} are still being "
+                              f"processed: {names}. The schedule can be submitted once they are approved, "
+                              "returned or rejected.")
+    for x in pending:  # still waiting for the partner's consent
+        x.status = X.CANCELLED
+        x.save(update_fields=["status", "updated_at"])
+        DutyExchangeRequestAction.objects.create(
+            request=x, action="cancel", resulting_status=X.CANCELLED, acted_by=user,
+            notes=f"Cancelled: the {schedule.area_name} schedule for {schedule.month_label} was submitted "
+                  "before the partner consented.")
+        notify([x.employee_a, x.employee_b], f"Your Exchange of Duty request #{x.pk} was cancelled: the "
+               f"{schedule.month_label} schedule was submitted before it was consented to.", "/exchange/mine/")
+    cells = {(c.row.employee_id, c.date): c.shift_id
+             for c in ScheduleCell.objects.filter(row__schedule=schedule).select_related("row")}
+    if any(cells.get(k) != v for k, v in locked_cells(schedule).items()):
+        apply_all_to_new_draft(schedule, user)  # put back anything missing (e.g. a re-added row)
 
 
 @transaction.atomic

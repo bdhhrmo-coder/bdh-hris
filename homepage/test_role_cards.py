@@ -46,7 +46,7 @@ class HomeCardsTests(TestCase):
     def test_supervisor(self):
         lab = Section.objects.get(name="Laboratory Section")
         self.assertEqual(self.labels(person("hcsup", R.SUPERVISOR, section=lab)),
-                         ["Waiting for my action", "Absent today", "Pending in my sections"])
+                         ["Waiting for my action", "Absent today", "Pending requests I handle"])
 
     def test_hr_ao_coh(self):
         for role in (R.HR_ADMINISTRATOR, R.ADMINISTRATIVE_OFFICER, R.CHIEF_OF_HOSPITAL):

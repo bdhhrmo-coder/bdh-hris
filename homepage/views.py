@@ -25,13 +25,35 @@ def _context(request):
     return acting, scope, kpis.scoped_employee_ids(acting, scope), kpis.shows_leave_type(acting)
 
 
+def _request_filter(request, acting, scope, ids):
+    """(ids, only) for the PENDING-REQUEST lists (owner decisions 2026-11-03,
+    dry-run item 4): everyone for the HR Administrator, AO and COH; for HR
+    Processors the requests they are involved in; for Supervisors those plus
+    every pending request of their own units/sections; their own for
+    everyone else."""
+    if scope == "self":
+        return ids, None
+    if kpis.sees_all_requests(acting):
+        return None, None
+    only = kpis.involved_requests(acting, request.user)
+    if acting.has_role("SUPERVISOR", viewing=True):
+        kpis.add_area_requests(only, kpis.scoped_employee_ids(acting, "sections"))
+    return None, only
+
+
+def _pending_lc_rows(request, acting, scope, ids, with_type):
+    req_ids, only = _request_filter(request, acting, scope, ids)
+    return kpis.pending_leave_cto(ids=req_ids, with_type=with_type, only=only)
+
+
 @login_required
 def home(request):
     acting, scope, ids, with_type = _context(request)
     absent_ids = None if scope == "self" else ids  # employees see the hospital-wide NUMBER only
     absent = kpis.absent_today(ids=absent_ids)
-    pending_lc = kpis.pending_leave_cto(ids=absent_ids)
-    pending_apps = kpis.pending_applications(ids=ids)
+    req_ids, only = _request_filter(request, acting, scope, ids)
+    pending_lc = kpis.pending_leave_cto(ids=None if scope == "self" else req_ids, only=only)
+    pending_apps = kpis.pending_applications(ids=req_ids, only=only)
     ctx = {
         "scope": scope,
         "as_of": timezone.localtime(),
@@ -40,10 +62,14 @@ def home(request):
         "pending_lc_count": len(pending_lc),
         "pending_apps": pending_apps,
         "pending_apps_total": sum(n for _, n in pending_apps),
+        "pending_involved_only": scope != "self" and not kpis.sees_all_requests(acting),
         "waiting": kpis.waiting_for_me(acting, request.user),
         "watermark_url": watermark_url(),
     }
     ctx["waiting_total"] = sum(n for _, n, _ in ctx["waiting"])
+    if scope != "self":  # names only for HR, AO, COH and Supervisors (CLAUDE.md 8B)
+        ctx["month_leave"] = kpis.on_leave_this_month(ids=ids, with_type=with_type)
+        ctx["month_cto"] = kpis.on_cto_this_month(ids=ids)
     ctx.update(_role_cards(acting, scope))
     try:
         from announcements.views import homepage_panel
@@ -58,7 +84,7 @@ def _role_cards(acting, scope):
     """Which Home cards this person gets (Batch 6, owner-approved arrangement,
     max 5, actions first). Only existing data; the KPI rules are unchanged.
       HR / AO / COH ("all"):  Waiting for my action, Absent today, Pending applications, Headcount
-      Supervisor ("sections"): Waiting for my action, Absent today, Pending in my sections
+      Supervisor ("sections"): Waiting for my action, Absent today, Pending requests I handle
       Everyone else ("self"):  [Waiting - ICTU] / [User accounts - System Administrator],
                                My pending requests, Absent today (number), My balances, My schedule this week
     """
@@ -114,7 +140,8 @@ def pending_leave_list(request):
     acting, scope, ids, with_type = _context(request)
     _names_allowed(scope)
     return render(request, "homepage/person_list.html", {
-        "title": "Pending leave and CTO", "rows": kpis.pending_leave_cto(ids=ids, with_type=with_type),
+        "title": "Pending leave and CTO",
+        "rows": _pending_lc_rows(request, acting, scope, ids, with_type),
         "scope": scope, "as_of": timezone.localtime(), "show_status": True,
         "note": "Filed but not yet approved or recorded. These are NOT counted as absent.",
     })
@@ -124,5 +151,6 @@ def pending_leave_list(request):
 def pending_applications_list(request):
     acting, scope, ids, with_type = _context(request)
     return render(request, "homepage/pending_list.html", {
-        "rows": kpis.pending_rows(ids=ids), "scope": scope, "as_of": timezone.localtime(),
+        "rows": kpis.pending_rows(*_request_filter(request, acting, scope, ids)), "scope": scope,
+        "as_of": timezone.localtime(), "involved_only": scope != "self" and not kpis.sees_all_requests(acting),
     })

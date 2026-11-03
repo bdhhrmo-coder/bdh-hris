@@ -110,8 +110,12 @@ def _finalize_correction(correction, actor_user):
         record, _ = AttendanceRecord.objects.get_or_create(
             employee=correction.employee, date=line.date, defaults={"recorded_by": actor_user},
         )
-        record.time_in = None if line.is_absent else line.time_in
-        record.time_out = None if line.is_absent else line.time_out
+        # Undertime is still worked out from the first in and last regular
+        # out; the break and OT logs are stored as given (2026-11-03).
+        record.time_in = None if line.is_absent else line.first_in
+        record.time_out = None if line.is_absent else line.last_out
+        for name in ("am_out", "pm_in", "ot_in", "ot_out"):
+            setattr(record, name, None if line.is_absent else getattr(line, name))
         record.is_absent = line.is_absent
         record.source = AttendanceRecord.SOURCE_MANUAL
         record.recorded_by = actor_user

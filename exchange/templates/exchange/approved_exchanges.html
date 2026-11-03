@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Approved Exchanges of Duty — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Approved Exchanges of Duty &mdash; {{ first|date:"F Y" }}</h1>
+<p class="muted">Regular exchanges approved before the month's schedule is submitted. They are filled into the draft schedule automatically and those days are locked. Emergency exchanges and changes to an approved schedule are not listed here; they appear in the schedule's change history.</p>
+<p class="row-actions">
+  <a class="btn btn-secondary" href="?y={{ prev.year }}&m={{ prev.month }}">&larr; {{ prev|date:"M Y" }}</a>
+  <a class="btn btn-secondary" href="?y={{ next.year }}&m={{ next.month }}">{{ next|date:"M Y" }} &rarr;</a>
+</p>
+<div class="card"><div class="table-scroll">
+<table>
+  <tr><th>#</th><th>Employee A</th><th>A's date &middot; shift (B works it)</th><th>Employee B</th><th>B's date &middot; shift (A works it)</th><th>Form</th></tr>
+  {% for x in exchanges %}
+  <tr><td>{{ x.pk }}</td>
+    <td>{{ x.employee_a.full_name }}</td><td>{{ x.date_a|date:"M j, Y" }} &middot; {{ x.shift_a.code|default:"—" }}</td>
+    <td>{{ x.employee_b.full_name }}</td><td>{{ x.date_b|date:"M j, Y" }} &middot; {{ x.shift_b.code|default:"—" }}</td>
+    <td><a href="{% url 'exchange:print_exchange_form' x.pk %}" target="_blank">Print</a></td></tr>
+  {% empty %}
+  <tr><td colspan="6" class="empty-note">No approved regular exchanges for this month.</td></tr>
+  {% endfor %}
+</table>
+</div></div>
+{% endblock %}

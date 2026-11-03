@@ -58,9 +58,11 @@ Implemented as a **custom `Role` model tied to Employee** (not Django's built-in
 
 **Role lines (owner decision 2026-11-03, Option B):** one role per line; a person with several roles has several lines, and the menu/queues combine them (HR wins over Supervisor for the home-page scope). Each employee's admin page lists all their role lines (`RoleAssignmentInline`) and can add one. Changing the role on an EXISTING line is refused unless "Confirm role change" is ticked ("This replaces X with Y..."). The System Administration (Django admin) pages use the HRIS look (`templates/admin/base_site.html`: Royal Blue/Gold, BDH logo, "Back to the HRIS", no dark theme, red TEST SYSTEM bar on the test PC).
 
+**COSP OIC (owner decision 2026-11-03, dry-run item 11):** a COSP employee may also be designated OIC, with limited reach: only for a **Supervisor area at unit level, or of a section that has no units**, and only if they belong to that unit/section (`accounts/oic.py cosp_may_cover`). Never for the Chief Nurse (the section head above unit heads, found by structure, not by name), the AO or the COH. Regular employees still need an active Supervisor role to be OIC.
+
 **OIC coverage:** Ad-hoc delegation triggered by the Supervisor themself (not pre-scheduled by HR Admin). One Supervisor can be designated OIC across multiple sections.
 
-**OIC rules (settled 2026-10-13, Batch 7):** the approver (Supervisor, AO or COH) designates the OIC on the **Officer-in-Charge (OIC)** screen (`/oic/`, `accounts/oic.py`), for one of their own role areas. Only an employee who already holds an active Supervisor role can be OIC. The OIC acts only between the start and end dates (every role assignment's dates are honoured, `RoleAssignment.in_force_q`). While the OIC is in force, the delegator's own assignment for that role and area is set aside (`Employee.active_role_assignments`), so the absent approver cannot act there and is not notified for it. The absent approver keeps **view-only** access to that area (records, printouts, documents, schedules, homepage figures, Dashboard, Audit Log) — view checks pass `viewing=True` (`has_role`, `is_hr`/`is_administrative_officer`/`is_chief_of_hospital`, `is_supervisor_of`); action checks and queues never do (owner, 2026-10-13). "End now" cancels an upcoming OIC or ends a running one yesterday; nothing is deleted. Designations and early endings appear in the Audit Log (module "OIC Designation").
+**OIC rules (settled 2026-10-13, Batch 7):** the approver (Supervisor, AO or COH) designates the OIC on the **Officer-in-Charge (OIC)** screen (`/oic/`, `accounts/oic.py`), for one of their own role areas. Only an employee who already holds an active Supervisor role can be OIC (or a COSP employee, within the limits above). The OIC acts only between the start and end dates (every role assignment's dates are honoured, `RoleAssignment.in_force_q`). While the OIC is in force, the delegator's own assignment for that role and area is set aside (`Employee.active_role_assignments`), so the absent approver cannot act there and is not notified for it. The absent approver keeps **view-only** access to that area (records, printouts, documents, schedules, homepage figures, Dashboard, Audit Log) — view checks pass `viewing=True` (`has_role`, `is_hr`/`is_administrative_officer`/`is_chief_of_hospital`, `is_supervisor_of`); action checks and queues never do (owner, 2026-10-13). "End now" cancels an upcoming OIC or ends a running one yesterday; nothing is deleted. Designations and early endings appear in the Audit Log (module "OIC Designation").
 
 ---
 
@@ -139,14 +141,14 @@ Implemented as a **custom `Role` model tied to Employee** (not Django's built-in
 
 **COSP employees:**
 - COSP Leave — fixed 20 days/year per contract, accrual in nature
-- Wellness Leave and Emergency Leave also available to COSP, **subject to their leave allowance/credit** (not automatically granted — check balance before allowing)
+- Wellness Leave and Emergency Leave also available to COSP, **subject to their leave allowance/credit** (not automatically granted — check balance before allowing). Since 2026-11-03 (owner, dry-run item 3) they follow the full COSP chain and print on 01F04-A, like COSP Leave.
 
 ### 6.2 Approval Routing by Request Type
 
 | Request Type | Routing |
 |---|---|
-| **COSP Leave** | Employee → Supervisor → HR (Processor/Admin) → AO → COH |
-| **Regular Leave** (VL/SL/etc.) | **Data entry and monitoring only** — approval authority is external, at the Provincial Capitol/PHRMO. Do NOT route through internal approval chain. |
+| **COSP employees' leave** (COSP Leave, Wellness, Emergency) | Employee → Supervisor (Nursing: Unit Head → Chief Nurse) → HR process → AO recommend → COH **approves**. Days taken at COH approval. Prints on 01F04-A with digital stamps. |
+| **Regular employees' leave** (all CSC types, incl. their Wellness/Emergency) | Employee → Supervisor (Nursing: Unit Head → Chief Nurse recommends) → HR **records and verifies** (days taken here) → AO **reviews and endorses** → COH **recommends for approval** → status **For Capitol approval**. The Capitol approves; the HRIS never marks it approved. HR records a Capitol return or rejection. (Owner decisions 2026-11-03, dry-run item 2; replaces "data entry and monitoring only".) |
 | **CTO Application** (regular & COSP) | Employee → Supervisor → HR → AO → COH |
 | **CTO Claim** (pending approved HR memo — see §7.1) | Employee → Supervisor → HR → AO → COH (Nursing: Employee → Unit Head → Chief Nurse → HR → AO → COH). Exception claims: HR Admin → AO → COH |
 | **Exchange of Duty** | Employee A/B → Supervisor → HR → AO → COH |
@@ -164,7 +166,7 @@ Implemented as a **custom `Role` model tied to Employee** (not Django's built-in
 - **Printout** (`official_requests/travel_order.py`): BDH's own Travel Order template (`printouts/assets/travel_order_base.docx`: letterhead, footer note), filled in, **wet-signature lines, no BDH code, no digital stamps**. "Recommending approval" (COH) except on the COH's own; "Certified as to Availability of Funds" (Budget Officer) **only with Per Diem**; "Approved by" the Governor always. A group request prints one Travel Order listing everyone. Printable once forwarded (or, for the COH's own, once filed). Names of officials: `TravelOrderSettings` (System Administration). Red "TEST SYSTEM" line on the test PC.
 - F59 (Travel Authorization and Transportation Request) printout for the errand: not built yet.
 
-**Attendance Correction, multiple dates (settled 2026-10-07):** one request holds 1–10 dates, each with its own times and reason. All dates in one formal request must belong to the same validator (ICTU-type and HR-type reasons are filed separately). Approvers act on the whole request only (validate/approve, return, reject); **a return needs a remark**. The filer edits and resubmits the same request, which **starts again from the first step**; the return history is kept and printed on F10.
+**Attendance Correction, multiple dates (settled 2026-10-07):** one request holds 1–10 dates, each with its own times and reason. **Times per date (owner 2026-11-03, dry-run item 10): AM in, AM out, PM in, PM out, OT in, OT out** (at least one, or Absent). `time_in` = AM in and `time_out` = PM out, so older lines read the same. On approval the attendance record keeps all six; undertime is still worked out from the first in (AM in, else PM in) and last regular out (PM out, else AM out), unchanged; OT logs never create CTO. F10 prints AM / PM / OT columns. All dates in one formal request must belong to the same validator (ICTU-type and HR-type reasons are filed separately). Approvers act on the whole request only (validate/approve, return, reject); **a return needs a remark**. The filer edits and resubmits the same request, which **starts again from the first step**; the return history is kept and printed on F10.
 
 **Group (batch) filing — Travel, Official Business, OT / rest-day / holiday work (settled 2026-10-07):**
 - Who files: **Supervisor** (own sections/units incl. OIC for Travel/OB; anyone for OT), **HR Processor** (any employee; all types — OT added 2026-11-02, D5), **HR Administrator** (any employee; all types), **AO** (any employee; OT only, D5). The filer cannot include themselves or the COH. OT details: §7.1.
@@ -173,7 +175,7 @@ Implemented as a **custom `Role` model tied to Employee** (not Django's built-in
 - The filer can never act on their own batch at a later step, even with other roles or OIC. Approved OT creates no CTO (§7.1 unchanged). A regular employee filing their own request keeps the normal route.
 
 **No self-approval; next level up (owner decision 2026-10-26, pilot import):**
-- Nobody acts on a request they filed — or, for an Exchange of Duty, one they are a party to — at **any** step (endorse, process/validate, recommend, approve, record). Applies to COSP leave, regular-leave recording, CTO, Exchange of Duty, attendance corrections (formal and minor), Official Business/Time, Travel, OT and group filings; HR never files or credits their own CTO claim. Queues and notifications leave the filer out.
+- Nobody acts on a request they filed — or, for an Exchange of Duty, one they are a party to — at **any** step (endorse, process/validate, recommend, approve, record). Applies to COSP and regular leave, CTO, Exchange of Duty, attendance corrections (formal and minor), Official Business/Time, Travel, OT and group filings; HR never files or credits their own CTO claim. Queues and notifications leave the filer out.
 - **Two-level endorsement (owner decision 2026-10-27, Option B; supersedes the single Supervisor step for these cases):** where an ordinary employee's unit has a unit head AND the section has a section-wide Supervisor (Nursing: unit head, then Chief Nurse), the Supervisor step is done twice — `SUBMITTED → ENDORSED_BY_UNIT_HEAD` (unit head, action `endorse_unit`) `→ ENDORSED_BY_SUPERVISOR` (section head) — for COSP leave, CTO, Exchange of Duty, Official Business, Travel and OT. A unit with no head, a section without units/unit heads, and a unit head's own request keep one step. Either level may return. Strict order (owner, 2026-10-27, Option A): the section head cannot act at the unit-head step; an absent unit head designates an OIC. Group (batch) requests keep ONE endorsement, by the unit head or the section head. Forms print a "Unit Head" stamp before "Section Head" when the unit step applies (`printouts/stamps.py with_unit_head_step`). Helpers: `endorsers_for` (first endorsement), `second_endorsers_for`, `needs_unit_step`, `supervisor_step_result`.
 - **Supervisor step = one level above the filer** (`leave/permissions.py endorsers_for`): an ordinary employee → any Supervisor of their section/unit; a **unit head** → the section-wide Supervisor (e.g. the Chief Nurse), never a fellow head of the same unit; a **section head** (no one above at Supervisor level) → the **AO**; the **AO's own request → the COH** (at the Supervisor and AO steps). The person who acts is stamped with their own name and position.
 - **Endorser is not the HR step (owner decision 2026-11-03, Option B):** whoever endorsed a request in its current cycle (unit head or Supervisor step) cannot act on it at the HR step, and is left out of that HR queue and notification; another HR Processor/Administrator must process it. A resubmission starts a new cycle. Helpers: `endorser_ids`, `exclude_own_endorsements`; `can_act_hr_step(..., obj)`, `hr_step_actors(..., obj)`.
@@ -184,11 +186,19 @@ Implemented as a **custom `Role` model tied to Employee** (not Django's built-in
 - **The COH's own Official Business / Official Time / Travel / OT (owner decision 2026-10-26, Option A):** recorded by HR only, like regular leave — `OfficialRequest.recorded_only`, SUBMITTED → RECORDED ("Recorded (approved outside BDH)"); the approval itself is at the PHO/Capitol. The COH cannot be included in a group (batch) filing.
 - **Import scope (same date):** a Supervisor with a unit on their import row supervises that unit only; with no unit, the whole section. The COH and AO may be imported with no section (hospital-wide). A unit must belong to a section on the same row.
 
-**⚠️ Critical:** Regular Leave must NOT be routed through the internal approval workflow engine — it's data-entry/monitoring only. Building this into the same generic workflow as other request types risks incorrectly implying internal approval authority that doesn't exist.
+**Leave routes (owner decisions 2026-11-03, dry-run items 2-3; replace the old "regular leave is data entry only" rule):**
+- `LeaveApplication.route` is fixed when the application is (re)submitted: a COSP employee → `COSP`; a regular employee → `REGULAR` (`route_for`). Existing records were set by migration `leave 0006`.
+- Regular route: approval authority stays at the Capitol/PHRMO. Inside BDH the COH only **recommends**; the final status is `FOR_CAPITOL_APPROVAL` ("For Capitol approval"). Statuses reuse the COSP codes with their own labels (`status_label`: "Recorded and verified by HR", "Reviewed and endorsed by AO", "Recommended by Section Head" after a unit-head step). Actions: `record` (HR), `review` (AO), `recommend_capitol` (COH), `capitol_return` / `capitol_reject` (HR, remark required, on the application page; "Regular leave for Capitol approval" list on the leave queue, not counted as waiting).
+- **HR cannot reject a regular leave** (may return it). The Supervisor/Chief Nurse, AO and COH may return or reject. Every return/rejection needs a remark.
+- **Credits:** taken when HR records and verifies (regular) or when the COH approves (COSP). **Given back automatically** (a ledger adjustment, nothing deleted) on any return or rejection after they were taken, inside BDH or by the Capitol (`_restore_credits`). A resubmission takes them again at the HR step.
+- Absences, balances and Dashboard "used" figures count leave whose days are taken: `LeaveApplication.counted_q()` (approved, older recorded, for Capitol approval, or regular leave from the HR step on).
+- **COH's own regular leave** (no level above): HR records and verifies it and it goes straight to For Capitol approval (assumption, matching the COH's other requests; confirm with the owner if needed).
+- Printing: regular leave prints CSC Form No. 6 at any time from submission (no BDH code, no digital stamps); COSP route prints 01F04-A (title and credits follow the leave type).
+- `RECORDED` (HR only) is the old regular path, kept for records filed before 2026-11-03.
 
 ### 6.3 Output Forms
-- COSP Leave: custom BDH-branded form, **Form No. BDH-ADM-HR-01F04-A**
-- Other leave types: CSC Form No. 6 layout — official CSC form, left as is (no BDH code, no digital stamp, because regular leave is approved outside BDH)
+- COSP employees' leave (COSP Leave, Wellness, Emergency): custom BDH-branded form, **Form No. BDH-ADM-HR-01F04-A**
+- Regular employees' leave: CSC Form No. 6 layout — official CSC form, left as is (no BDH code, no digital stamp, because regular leave is approved at the Capitol); printable from submission
 - CTO application: **BDH-ADM-HR-01F04-B**
 - Exchange of Duty application: **BDH-ADM-HR-01F04-C**
 - Attendance Correction (formal): Missed Log Justification Form **BDH-ADM-AO-01F10, Revision 2**
@@ -308,16 +318,23 @@ Decided by the project owner in a 2026-11-01 design session; these **replace** t
 - Requires mutual written consent between the two employees, plus Supervisor endorsement as part of the full Employee→Supervisor→HR→AO→COH chain (Supervisor endorsement is a step within that chain, not a substitute for it)
 - Must never generate extra OT, extra CTO, or extra pay
 - **Timing:**
-  - Normal requests: filed at least 1 week before the next month's schedule is approved
+  - Normal (regular) requests: filed and approved before the next month's schedule is submitted (owner clarification 2026-11-03, §8.1)
   - Modifications to an already-approved schedule: 24–72 hours notice
   - Documented emergency: same-day filing allowed, with written follow-up within 24 hours
 
-### 8.1 Settled with duty schedules (2026-10-09, Batch 5)
-- Partners must hold the **same position**.
-- A must be on duty on date A and B on date B; A must be **off** on date B and B off on date A.
-- **Before the schedule is approved:** file at least **7 days before the schedule's cut-off date**, checked against the submitted schedule. The cut-off is set by HR per schedule (default: the 20th of the month before, `SCHEDULE_CUTOFF_DAY`). **After COH approval:** the 24-hour rule. Emergency: same day.
-- A date with no submitted schedule on file is not checked against a schedule (allowed as before, with a note).
-- At COH approval the swap is written into the schedule (giver → OFF, taker → the shift); every change is kept in the schedule's change history. If the schedule changed since filing, approval stops and the approver is told to return the request.
+### 8.1 Exchange of Duty and the duty schedule (Batch 5, 2026-10-09; reworked by the owner 2026-11-03)
+- Partners must be in the **same unit**, or the **same section where that section has no units**; their positions may differ (owner decision 2026-11-03, dry-run item 8; replaces "same position"). `exchange/schedule_checks.py same_work_area`.
+- **Three kinds, decided by the system at filing from the month's schedule** (`DutyExchangeRequest.kind`, `exchange/regular.py kind_for`; owner decisions 2026-11-03):
+  - **Regular** — that month's schedule is not submitted yet (none, or only a draft). Policy: requested **and approved before the supervisor submits** the schedule. Both shifts are picked on the request (`shift_a` = A's shift on date A, which B works; `shift_b` = B's shift on date B, which A works; duty shifts only). Filing closes **7 days before the month's cut-off**. **Cut-off dates (owner decision 2026-11-03, Option A):** HR sets one date per month, hospital-wide, on **HR Administration → Schedule Cut-off Dates** (`/schedules/cutoff-dates/`, `ScheduleCutoff`, next 6 months, date must be before the month starts) before drafts are started; new drafts copy it and drafts not yet submitted follow a change; with none set, the 20th of the month before (`SCHEDULE_CUTOFF_DAY`). The Exchange of Duty form shows the last filing day for the next two months. Not checked against a schedule (there is none yet).
+  - **Change to an approved schedule** (`MODIFICATION`) — the schedule is approved/recorded: **24 hours' notice**; checked against the schedule (A on duty on date A, B on date B, each off on the other's date); shifts copied from it.
+  - **Emergency** — "Documented emergency" ticked: same day allowed; written follow-up within 24 hours (checked by HR, not tracked by the system).
+  - While the schedule is **submitted but not yet approved**, only an emergency can be filed. One date in an approved month and one in an unprepared month must be filed separately.
+- **At COH approval:**
+  - Regular → written into that month's **draft** (giver OFF, taker the shift), or into the draft when it is created later (`apply_to_drafts`, `apply_all_to_new_draft`). Those days are **locked** in the draft (`locked_cells`; `schedules.services.save_grid` ignores changes to them, the grid shows them disabled with a gold outline, the pattern tool and Excel upload skip them, and an employee with a locked day can't be removed from the schedule).
+  - Change / Emergency → written into the submitted/approved schedule (`schedule_checks.apply_to_schedules`) with change history; **never into a draft**. If the schedule changed since filing, approval stops and the approver returns it.
+- **Submitting a schedule** (`services._check_exchanges_before_submit`): refused while a regular exchange for that month is still in the chain after consent; one still waiting for the partner's consent is **cancelled** (both employees notified).
+- **Supervisor visibility:** "Approved Exchanges of Duty" (Workforce menu, `/exchange/approved/`, by month; Supervisors see their own units/sections, HR/AO/COH all) and a card on the schedule edit and detail pages.
+- No one may be on two live or approved exchanges for the same date. Max 3 per month and partner consent are unchanged. Older requests became "Emergency" or "Change" by migration `exchange 0003`.
 
 ---
 
@@ -328,8 +345,9 @@ Decided by the project owner in a 2026-11-01 design session; these **replace** t
 - Prepared by the section/unit **Supervisor** (incl. OIC) **or HR**. Entry: monthly grid with dropdowns + "repeat pattern" tool, or the Excel template (F50 layout).
 - Routing (whole schedule): **Prepared → Reviewed (HR) → Recommending approval (AO) → Approved (COH) → Recorded (HR)**. A return needs a remark; the resubmitted schedule restarts at HR review. The preparer never acts on it later (so an HR-prepared schedule is reviewed and recorded by a different HR person).
 - **Locks at COH approval** (the approval date is stored per schedule). Shown in "My Schedule" and staff notified only after HR records it.
-- After approval, changes come only from an approved Exchange of Duty or an HR correction with a reason; both are logged (ScheduleChange, Audit Log).
+- After approval, changes come only from an approved Exchange of Duty (change or emergency) or an HR correction with a reason; both are logged (ScheduleChange, Audit Log). Approved regular exchanges are already in the draft and locked there (§8.1).
 - Double-booking (same person on duty in two schedules on one day) is **flagged, not blocked**.
+- **Save as draft (owner 2026-11-03, dry-run item 5):** a schedule stays a Draft until "Save and submit"; a Draft is seen and edited **only by its preparer** (not HR, AO or COH; nothing is routed or notified). If someone else's draft exists for the same area and month, a new one is refused with the preparer's name. The month's cut-off comes from Schedule Cut-off Dates (§8.1); after submission HR can still change one schedule's own cut-off on its page, before COH approval. The grid has cell lines on screen and in print.
 - Printout: long bond landscape, **whole month on one page**, digital stamps for Prepared / Reviewed / Recommending Approval / Approved plus "Recorded by HR", from the action log (current cycle only).
 - Schedules are planned shifts, not attendance.
 
@@ -351,6 +369,9 @@ Decided by the project owner in a 2026-11-01 design session; these **replace** t
 - `/hris/home/` is everyone's landing page. **Backgrounds (Batch 10, owner request 2026-10-16, replaces "watermark on the homepage only"):** the homepage shows a photo (`HOME_WATERMARK_IMAGE`, default `images/homepage-bg.jpg`, none if unset) under an ~85% light overlay; every other logged-in page shows a faint (~6%) BDH logo + "RIGHT CARE, RIGHT HERE" behind the content (`PAGE_WATERMARK` on/off, `PAGE_WATERMARK_FIXED` to keep it still while scrolling; default scrolls). Neither appears on the login page or in print; both are display only (`{% block page_background %}` in base.html).
 - KPI cards: Headcount (active, not archived); Absent Today (approved or recorded leave, or approved CTO, covering today — one per person; OB/OT/Travel excluded); Pending leave/CTO; Pending Applications plus "waiting for my action". **Biometric data never drives a homepage count.**
 - Visibility (server-enforced): HR sees everyone with the leave type; AO and COH see everyone as "Leave"/"CTO" only; Supervisors see own sections; employees see only the number / their own requests.
+- **Pending-request lists (owner 2026-11-03, dry-run item 4):** the HR Administrator, AO and COH see every pending request; **HR Processors see only the requests they are involved in** (waiting for their action, or acted on by them; `kpis.involved_requests`, matched per request, not per employee); **Supervisors see those plus every pending request of their own units/sections** (owner update 2026-11-03, `kpis.add_area_requests`) — the card reads "Pending requests I handle". Absent today and the month lists keep the scope above.
+- **This month (dry-run item 7):** HR, AO, COH and Supervisors see "On leave this month" and "On CTO this month" beside each other on the home page (same scope and leave-type rules).
+- **Notifications (dry-run item 4):** only the next person to act is notified. The OT "for your information" notice goes to the employee's own next-level endorser (unit head, else section head), not every covering Supervisor; a group request at the Supervisor step notifies the common unit head(s) when there are any, else the section head (either may still act). Regular leave at the Capitol notifies the employee and the HR person who recorded it.
 - Announcements (Office Order, Policy, Activity): managed by the **HR Administrator only**; Draft → Published → Archived (auto-archive on expiry); editable only as a draft; optional signed PDF (up to `ANNOUNCEMENT_PDF_MAX_MB`, default 50 MB — higher than the 10 MB limit elsewhere); all staff or selected sections/units; staff notified on publish; every change in the Audit Log.
 - Archived items stay viewable by the same audience on the Announcements page's **Archive** tab, marked "No longer in effect"; the homepage shows current items only (settled 2026-10-09).
 
@@ -361,6 +382,8 @@ Decided by the project owner in a 2026-11-01 design session; these **replace** t
 - **Palette** (static/css/app.css `:root`): Royal Blue `#173D72` primary (top bar, headings, primary buttons); Gold `#E5B83F` accent (current-menu marker, highlights — never as text on white); Red `#C9363E` only for errors, returned/rejected status and urgent counts. Status colours: pending amber, approved green, returned/rejected red.
 - **Icons:** Lucide line icons (ISC licence) kept locally in `templates/components/icon_sprite.html`; `{% load ui %}{% icon "name" %}`. Always beside a text label.
 - **Menu additions (Batch 7, 2026-10-13):** My Profile (all), Profile Changes (HR Administrator) and Officer-in-Charge (approvers) under Approvals/My Requests; Import Biometric Attendance and Minor Attendance Correction (HR) under HR Administration.
+- **Menu groups (dry-run item 1, 2026-11-03):** a menu group stays open until the user opens another group or clicks outside the menu; only the group holding the current page is open when a page loads (no remembered state).
+- **Approver lists (dry-run item 9):** the leave queue shows the leave type with its 6.B details (illness left out: it is medical); the Official Business / Errand / OT queue shows the full reason/purpose.
 - **Menu:** defined in ONE place, `employees/navigation.py` (groups: Home, My Requests, Approvals, Workforce, Reports, HR Administration). Each item names the permission flag that decides visibility; pages keep their own server-side checks. Approvals show waiting counts. Notifications only via the header bell. "File for a Group" stays under My Requests. System Administrator gets "User Accounts and Roles" (Django admin).
 - **Below 1024 px** the menu opens from a "Menu" button in the header (there was previously no menu on phones).
 - Layout widths unchanged: content 1600 px, forms 880 px, tables full width.
@@ -446,7 +469,7 @@ Do not attempt to build this in one pass. Suggested phase order:
 1. Database schema + auth + custom Role model
 2. Employee master data (PDS-aligned fields + Education History table) + org structure (Sections/Units, M2M)
 3. Employee self-service profile edit (with Administrator approval queue)
-4. Leave application flow — CSC Form 6 output, COSP custom form output, Regular Leave data-entry-only path
+4. Leave application flow — CSC Form 6 output, COSP custom form output, Regular Leave path (internal review, Capitol approval — changed 2026-11-03)
 5. CTO engine — isolate and unit-test the multiplier/forfeiture/deadline math specifically; this is the highest compliance-risk module
 6. Exchange of Duty flow
 7. Attendance Correction (formal + minor-administrative paths) + biometric CSV/Excel import
@@ -460,7 +483,7 @@ Do not attempt to build this in one pass. Suggested phase order:
 ## 15. General Working Rules for Claude Code on This Project
 
 - Never guess at business rules in Sections 6–10 — they reflect actual signed BDH policy. If a rule seems ambiguous or conflicting, stop and ask rather than assuming.
-- Treat Regular Leave's "data-entry only" status as a hard constraint, not a simplification to "fix" later.
+- Regular leave is reviewed inside BDH but **approved only at the Capitol** (§6.2 "Leave routes"): never add an internal "approved" status or digital stamps to it.
 - Keep CTO multipliers and other policy-derived constants in configuration (settings/DB), not hardcoded in business logic.
 - Prefer Django's standard idioms (class-based views, forms, migrations) over custom architecture, since this needs to be maintainable by a small, non-specialist IT team long-term.
 - Write unit tests for CTO and leave-accrual math specifically — this is where compliance bugs are costly.

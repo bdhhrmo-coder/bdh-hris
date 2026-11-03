@@ -1,29 +1,15 @@
 """
-Renders the custom BDH-branded COSP Leave application form (CLAUDE.md
-§6.3). Unlike CSC Form 6, there is no pre-existing official file to reuse
-here — the user confirmed no such form was ever actually saved anywhere,
-so this is designed from scratch.
-
-Only LeaveType.code == "COSP_LEAVE" prints on this form. Wellness and
-Emergency Leave availed by a COSP employee still print on CSC Form 6 (see
-csc_form6.py) — CLAUDE.md §6.3 reserves the custom form for COSP Leave
-specifically; "Other leave types" (§6.3) covers every CSC-listed type
-regardless of who is applying.
-
-Design notes:
-  - Form code BDH-ADM-HR-01F04-A was assigned by BDH (2026-10-06). It is a
-    BDH form, not an official CSC/DBM form - COSP Leave is a contract-of-
-    service benefit, not a Civil Service leave type.
-  - Paperless by default (2026-10-06): printing is incidental. The routing
-    section prints a "digitally processed/approved" stamp for each step
-    already taken - name, position, date and time from
-    LeaveApplicationAction - instead of signature lines to be signed by
-    hand. Steps not reached yet print as PENDING. See printouts/.
+Renders the custom BDH-branded COSP leave application form (CLAUDE.md
+§6.3, Form No. BDH-ADM-HR-01F04-A) for every leave of a COSP employee:
+COSP Leave, and since 2026-11-03 (owner, dry-run item 3) Wellness and
+Emergency Leave too, which now go through the full COSP chain. Regular
+employees' leave (incl. their Wellness/Emergency) prints on CSC Form 6.
 """
 
 from printouts.sheet import FormBuilder
 from printouts.stamps import StepDef, compute_stamps, with_unit_head_step
 
+from .models import LeaveType
 from .balances import compute_available_balance, contract_years_started
 from .pdf_convert import workbook_to_pdf
 
@@ -48,7 +34,7 @@ def fill_cosp_leave_form(application, printed_by=None):
     leave_type = application.leave_type
 
     f = FormBuilder(
-        "APPLICATION FOR COSP LEAVE", FORM_CODE,
+        f"APPLICATION FOR {leave_type.name.upper()}", FORM_CODE,
         subtitle="(Contract of Service Personnel — internal BDH leave benefit)",
     )
 
@@ -61,16 +47,24 @@ def fill_cosp_leave_form(application, printed_by=None):
     f.gap()
 
     f.section("2.  LEAVE DETAILS")
+    f.field("Type of Leave:", leave_type.name + (f" - {application.get_wellness_reason_display()}"
+                                                 if application.wellness_reason else ""))
     f.field("Inclusive Dates:", f"{application.start_date:%B %d, %Y} to {application.end_date:%B %d, %Y}")
     f.field("No. of Days:", str(application.number_of_days))
-    f.field("Purpose (optional):", application.justification)
+    f.field("Justification:" if leave_type.requires_justification else "Purpose (optional):",
+            application.justification)
     f.gap()
 
-    f.section("3.  COSP LEAVE CREDITS (as of the first day of leave)")
+    f.section(f"3.  {leave_type.name.upper()} CREDITS (as of the first day of leave)")
     as_of = application.start_date
-    earned = (leave_type.annual_fixed_days or 0) * contract_years_started(employee.date_hired, as_of)
+    if leave_type.balance_tracking == LeaveType.TRACKING_UNTRACKED:
+        earned = None  # e.g. Emergency Leave: no fixed allotment in the system
+    elif leave_type.is_cumulative:
+        earned = (leave_type.annual_fixed_days or 0) * contract_years_started(employee.date_hired, as_of)
+    else:
+        earned = leave_type.annual_fixed_days or 0  # this year's allotment (Wellness)
     available_before = compute_available_balance(employee, leave_type, as_of_date=as_of)
-    used_to_date = (earned - available_before) if available_before is not None else None
+    used_to_date = (earned - available_before) if available_before is not None and earned is not None else None
     show = lambda v: "—" if v is None else str(v)  # noqa: E731
     f.table(
         ["Total Earned to Date", "Less: Used to Date", "Balance Before This Application"],

@@ -33,10 +33,25 @@ class ExchangeScheduleTests(Base):
         self.assertEqual(errors, [])
         self.assertTrue(notes)  # told it was not checked
 
-    def test_position_must_match(self):
+    def test_partners_must_share_a_unit_or_a_section_without_units(self):
+        # Owner decision 2026-11-03: same unit (or same section with no units), positions may differ.
+        from orgstructure.models import Section, Unit
+
         services.submit(self.s, self.sup.user)
         errors, _ = check(self.alice, self.d10, self.carl, self.d11, date(2027, 2, 1), False)
-        self.assertTrue(any("same position" in e for e in errors))
+        self.assertTrue(any("same unit" in e for e in errors))
+        self.bob.position = "Laboratory Aide"
+        self.bob.save()
+        errors, _ = check(self.alice, self.d10, self.bob, self.d11, date(2027, 2, 1), False)
+        self.assertFalse(any("same unit" in e for e in errors))   # Laboratory has no units
+        from .schedule_checks import same_work_area
+        nursing = Section.objects.get(name="Nursing Service Section")
+        er, opd = Unit.objects.get(section=nursing, name="ER"), Unit.objects.get(section=nursing, name="OPD")
+        self.alice.sections.set([nursing]); self.bob.sections.set([nursing])
+        self.alice.units.set([er]); self.bob.units.set([opd])
+        self.assertFalse(same_work_area(self.alice, self.bob))   # Nursing has units: different units refused
+        self.bob.units.set([er])
+        self.assertTrue(same_work_area(self.alice, self.bob))
 
     def test_both_dates_must_be_duty_days_and_partner_off(self):
         services.submit(self.s, self.sup.user)

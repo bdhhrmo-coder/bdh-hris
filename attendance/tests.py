@@ -466,6 +466,31 @@ class MultiDateCorrectionTests(TestCase):
         self.file(self.ok_line("2026-05-04", time_in="19:00", time_out="07:00", overnight=True))
         self.assertTrue(AttendanceCorrectionRequest.objects.get().lines.get().overnight)
 
+    def test_am_pm_ot_times_are_kept_and_written_to_attendance(self):
+        # Dry-run item 10 (owner 2026-11-03): AM in/out, PM in/out, OT in/out.
+        self.file(self.ok_line("2026-05-04", time_in="08:00", am_out="12:00", pm_in="13:00", time_out="17:00",
+                               ot_in="17:30", ot_out="19:30"))
+        correction = AttendanceCorrectionRequest.objects.get()
+        ln = correction.lines.get()
+        self.assertEqual(ln.times_display, "AM 08:00 AM – 12:00 PM; PM 01:00 PM – 05:00 PM; OT 05:30 PM – 07:30 PM")
+        self.act(self.ictu, correction, "validate")
+        self.act(self.ao, correction, "approve")
+        rec = AttendanceRecord.objects.get(employee=self.employee)
+        self.assertEqual((rec.time_in.hour, rec.time_out.hour, rec.am_out.hour, rec.pm_in.hour, rec.ot_out.hour),
+                         (8, 17, 12, 13, 19))
+
+    def test_pm_only_day_uses_pm_in_as_first_in(self):
+        self.file(self.ok_line("2026-05-04", time_in="", time_out="17:00", pm_in="13:00"))
+        correction = AttendanceCorrectionRequest.objects.get()
+        self.act(self.ictu, correction, "validate")
+        self.act(self.ao, correction, "approve")
+        rec = AttendanceRecord.objects.get(employee=self.employee)
+        self.assertEqual((rec.time_in.hour, rec.time_out.hour), (13, 17))
+
+    def test_am_out_must_follow_am_in(self):
+        r = self.file(self.ok_line("2026-05-04", time_in="09:00", am_out="08:00", time_out=""))
+        self.assertContains(r, "AM out must be later than AM in")
+
     def test_ictu_and_hr_reasons_cannot_be_mixed(self):
         r = self.file(self.ok_line("2026-05-04"), self.ok_line("2026-05-05", reason_category="OTHERS", reason="Seminar"))
         self.assertContains(r, "separate requests")

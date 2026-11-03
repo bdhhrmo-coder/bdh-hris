@@ -200,16 +200,25 @@ class ExchangeNotificationIntegrationTests(TestCase):
 
         a = make_employee("exnotif_a", "EMP-EN-1")
         b = make_employee("exnotif_b", "EMP-EN-2")
-        # Batch 5: exchange partners must hold the same position.
-        Employee.objects.filter(pk__in=[a.pk, b.pk]).update(position="Nurse II")
-        far_future_a = date.today() + timedelta(days=30)
-        far_future_b = date.today() + timedelta(days=31)
+        # Exchange partners must share a unit, or a section with no units (2026-11-03).
+        from orgstructure.models import Section
+
+        lab = Section.objects.get(name="Laboratory Section")
+        a.sections.add(lab)
+        b.sections.add(lab)
+        from schedules.models import ShiftCode
+
+        far_future_a = date.today() + timedelta(days=60)   # no schedule yet: a regular exchange (2026-11-03)
+        far_future_b = date.today() + timedelta(days=61)
+        shift = ShiftCode.objects.get(code="7A-7P").pk
         client = Client()
         client.login(username="exnotif_a", password="testpass123")
         client.post(reverse("exchange:exchange_apply"), {
             "employee_b": b.pk,
             "date_a": far_future_a,
             "date_b": far_future_b,
+            "shift_a": shift,
+            "shift_b": shift,
             "reason": "Swap",
             "is_emergency": False,
         })

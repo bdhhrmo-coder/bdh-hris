@@ -3,6 +3,17 @@
 {% block content %}
 <h1>Request duty exchange</h1>
 <p class="muted">One-for-one only: you take the other employee's date, they take yours. The other employee must consent before this is submitted for endorsement.</p>
+<div class="msg info">
+  <strong>Which kind of exchange is this?</strong> The system decides from that month's duty schedule:
+  <ul>
+    <li><strong>Regular</strong> &mdash; the schedule is not submitted yet. File at least 7 days before the schedule cut-off and pick both shifts. Once approved, it is filled into the supervisor's draft.</li>
+    <li><strong>Change to an approved schedule</strong> &mdash; at least 24 hours' notice. The shifts are read from the schedule.</li>
+    <li><strong>Emergency</strong> &mdash; tick "Documented emergency"; same day allowed, written follow-up within 24 hours.</li>
+  </ul>
+  While the schedule is under review (submitted, not yet approved), only an emergency exchange can be filed.
+  {% if deadlines %}<p class="mb-0"><strong>Last day to file a regular exchange:</strong>
+  {% for month, last in deadlines %}{{ month|date:"F Y" }} &mdash; {{ last|date:"M j, Y" }}{% if not forloop.last %}; {% endif %}{% endfor %}.</p>{% endif %}
+</div>
 
 <div class="card form-card">
   <form method="post" class="form-2col">

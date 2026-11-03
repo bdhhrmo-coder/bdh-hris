@@ -17,6 +17,10 @@ def make_employee(username, employee_id, role=None):
         user=user, employee_id=employee_id, surname=username.title(), first_name="Test",
         date_hired=date(2024, 1, 1), employment_status="REGULAR", position="Nurse II",
     )
+    # Partners must share a unit, or a section with no units (2026-11-03).
+    from orgstructure.models import Section
+
+    employee.sections.add(Section.objects.get(name="Laboratory Section"))
     if role:
         RoleAssignment.objects.create(employee=employee, role=role)
     return employee
@@ -231,14 +235,20 @@ class ApplyFormTests(TestCase):
 
     def test_filing_creates_pending_consent_request(self):
         self.client.force_login(self.alice.user)
-        far_future_a = date.today() + timedelta(days=30)
-        far_future_b = date.today() + timedelta(days=31)
-        response = self.client.post(reverse("exchange:exchange_apply"), {
-            "employee_b": self.bob.pk, "date_a": far_future_a, "date_b": far_future_b, "reason": "test",
-        })
+        # No schedule for that month yet: a regular exchange, with both shifts (owner 2026-11-03).
+        from schedules.models import ShiftCode
+
+        shift = ShiftCode.objects.get(code="7A-7P")
+        far_future_a = date.today() + timedelta(days=60)
+        far_future_b = date.today() + timedelta(days=61)
+        data = {"employee_b": self.bob.pk, "date_a": far_future_a, "date_b": far_future_b, "reason": "test"}
+        self.client.post(reverse("exchange:exchange_apply"), data)
+        self.assertEqual(DutyExchangeRequest.objects.count(), 0)  # shifts missing
+        self.client.post(reverse("exchange:exchange_apply"), {**data, "shift_a": shift.pk, "shift_b": shift.pk})
         self.assertEqual(DutyExchangeRequest.objects.count(), 1)
         req = DutyExchangeRequest.objects.first()
         self.assertEqual(req.status, DutyExchangeRequest.PENDING_CONSENT)
+        self.assertEqual(req.kind, DutyExchangeRequest.KIND_REGULAR)
 
     def test_same_day_filing_without_emergency_is_rejected(self):
         self.client.force_login(self.alice.user)

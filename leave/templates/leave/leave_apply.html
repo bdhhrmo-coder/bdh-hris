@@ -76,9 +76,11 @@
       {% include "leave/_field.html" with f=form.end_date %}
     </div>
     {% include "leave/_field.html" with f=form.number_of_days required=True %}
+    {% if not is_cosp %}{# COSP employees' leave is not on CSC Form 6: no commutation #}
     <div x-show="code && code !== 'COSP_LEAVE'" x-cloak>
       {% include "leave/_field.html" with f=form.commutation radios=True %}
     </div>
+    {% endif %}
     {% include "leave/_field.html" with f=form.justification %}
     <button type="submit">{% if application.status == "RETURNED" %}Resubmit{% elif application %}Save changes{% else %}Submit{% endif %}</button>
   </form>

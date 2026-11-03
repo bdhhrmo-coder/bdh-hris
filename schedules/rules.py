@@ -55,12 +55,18 @@ def can_prepare(acting, schedule):
 
 
 def can_edit(acting, user, schedule):
+    if schedule.status == DutySchedule.DRAFT:
+        return schedule.prepared_by_id == user.pk
     return schedule.is_editable and (schedule.prepared_by_id == user.pk or can_prepare(acting, schedule))
 
 
 def can_view(acting, user, schedule):
     if acting is None:
         return False
+    if schedule.status == DutySchedule.DRAFT:
+        # A draft is seen only by the person preparing it (owner, 2026-11-03,
+        # dry-run item 5); nothing is routed or shown until it is submitted.
+        return schedule.prepared_by_id == user.pk
     if schedule.prepared_by_id == user.pk or is_hr(acting, True) or is_administrative_officer(acting, True) \
             or is_chief_of_hospital(acting, True):
         return True

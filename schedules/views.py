@@ -66,7 +66,7 @@ def schedule_list(request):
     acting = _acting(request)
     see_all = is_hr(acting, True) or is_administrative_officer(acting, True) or is_chief_of_hospital(acting, True)
     qs = DutySchedule.objects.select_related("section", "unit")
-    schedules = [s for s in qs if see_all or rules.can_view(acting, request.user, s)]
+    schedules = [s for s in qs if (see_all and s.status != DutySchedule.DRAFT) or rules.can_view(acting, request.user, s)]
     sections, units = _areas_for(acting)
     return render(request, "schedules/list.html", {
         "schedules": schedules, "can_create": bool(sections or units),
@@ -111,6 +111,12 @@ def schedule_new(request):
         year, month = form.cleaned_data["year"], form.cleaned_data["month"]
         existing = DutySchedule.objects.filter(section=section if unit is None else None, unit=unit,
                                                year=year, month=month).first()
+        if existing and not rules.can_view(acting, request.user, existing):
+            emp = getattr(existing.prepared_by, "employee", None)
+            who = emp.full_name if emp else existing.prepared_by.username
+            messages.error(request, f"{who} is already preparing a draft schedule for that month. "
+                                    "Ask them to submit it, or to share it with you.")
+            return redirect("schedules:list")
         if existing:
             messages.info(request, "A schedule for that month already exists - opened it.")
             return redirect("schedules:detail", pk=existing.pk)
@@ -151,12 +157,20 @@ def schedule_edit(request, pk):
             except ValueError:
                 messages.error(request, "The cut-off date was not understood; it was not changed.")
         schedule.save(update_fields=fields)
+        from exchange.regular import apply_all_to_new_draft, locked_cells
+
         add_id = request.POST.get("add_employee")
         if add_id:
             services.add_row(schedule, get_object_or_404(Employee, pk=add_id, is_active=True))
+            apply_all_to_new_draft(schedule, request.user)
         remove_id = request.POST.get("remove_row")
         if remove_id:
-            schedule.rows.filter(pk=remove_id).delete()
+            row = schedule.rows.filter(pk=remove_id).first()
+            if row and any(emp_id == row.employee_id for emp_id, _ in locked_cells(schedule)):
+                messages.error(request, f"{row.employee} has an approved Exchange of Duty this month, so they "
+                                        "stay on the schedule.")
+            elif row:
+                row.delete()
         if request.POST.get("then") == "submit":
             try:
                 services.submit(schedule, request.user)
@@ -165,22 +179,30 @@ def schedule_edit(request, pk):
                 return redirect("schedules:edit", pk=pk)
             messages.success(request, "Schedule submitted for HR review.")
             return redirect("schedules:detail", pk=pk)
-        messages.success(request, "Schedule saved.")
+        messages.success(request, "Draft saved. Only you can see it until you submit it."
+                         if schedule.status == DutySchedule.DRAFT else "Schedule saved.")
         return redirect("schedules:edit", pk=pk)
+
+    from exchange.regular import approved_for_schedule, locked_cells
 
     codes = list(ShiftCode.objects.filter(is_active=True))
     grid = _grid(schedule)
+    locked = locked_cells(schedule)
     editor = {
         "codes": [{"id": c.pk, "code": c.code, "hours": float(c.paid_hours), "duty": c.is_duty} for c in codes],
         "days": [{"d": d.day, "wd": d.strftime("%a")[:2]} for d in schedule.days],
         "rows": [{"id": g["row"].pk, "name": g["row"].employee.full_name, "designation": g["row"].designation,
-                  "cells": [c.shift_id if c and c.shift_id else "" for c in g["cells"]]} for g in grid],
+                  "cells": [c.shift_id if c and c.shift_id else "" for c in g["cells"]],
+                  # days set by an approved regular Exchange of Duty: locked (2026-11-03)
+                  "locked": [i for i, d in enumerate(schedule.days) if (g["row"].employee_id, d) in locked]}
+                 for g in grid],
     }
     in_schedule = set(schedule.rows.values_list("employee_id", flat=True))
     return render(request, "schedules/edit.html", {
         "schedule": schedule, "editor": editor, "can_set_cutoff": is_hr(acting),
         "addable": Employee.objects.filter(is_active=True, archived_at__isnull=True).exclude(pk__in=in_schedule),
         "conflicts": services.double_bookings(schedule), "latest_return": schedule.actions.filter(action="return").last(),
+        "exchanges": approved_for_schedule(schedule),
     })
 
 
@@ -188,6 +210,8 @@ def schedule_edit(request, pk):
 
 @login_required
 def schedule_detail(request, pk):
+    from exchange.regular import approved_for_schedule
+
     acting, schedule = _get(request, pk)
     return render(request, "schedules/detail.html", {
         "schedule": schedule, "grid": _grid(schedule), "history": schedule.actions.select_related("acted_by__employee"),
@@ -195,8 +219,11 @@ def schedule_detail(request, pk):
         "actions": rules.available_actions(acting, request.user, schedule),
         "can_edit": rules.can_edit(acting, request.user, schedule),
         "can_correct": rules.can_correct(acting, schedule),
+        "can_set_cutoff": is_hr(acting) and schedule.status not in (
+            DutySchedule.DRAFT, DutySchedule.APPROVED, DutySchedule.RECORDED),
         "codes": ShiftCode.objects.filter(is_active=True),
         "conflicts": services.double_bookings(schedule),
+        "exchanges": approved_for_schedule(schedule),
     })
 
 
@@ -214,6 +241,25 @@ def schedule_action(request, pk):
         return redirect("schedules:detail", pk=pk)
     messages.success(request, "Action recorded.")
     return redirect("schedules:list")
+
+
+@login_required
+@require_POST
+def schedule_cutoff(request, pk):
+    """HR sets the Exchange of Duty cut-off on a submitted schedule before
+    COH approval (drafts are private to the preparer since 2026-11-03, so HR
+    no longer sets it in the grid of someone else's draft)."""
+    acting, schedule = _get(request, pk)
+    if not is_hr(acting) or schedule.status in (DutySchedule.DRAFT, DutySchedule.APPROVED, DutySchedule.RECORDED):
+        raise PermissionDenied("Only HR can change the cut-off, before the schedule is approved.")
+    try:
+        schedule.cutoff_date = date.fromisoformat(request.POST.get("cutoff_date", ""))
+    except ValueError:
+        messages.error(request, "The cut-off date was not understood; it was not changed.")
+        return redirect("schedules:detail", pk=pk)
+    schedule.save(update_fields=["cutoff_date", "updated_at"])
+    messages.success(request, "Exchange of Duty cut-off changed.")
+    return redirect("schedules:detail", pk=pk)
 
 
 @login_required
@@ -311,3 +357,50 @@ def shift_code_edit(request, pk=None):
         messages.success(request, "Shift code saved.")
         return redirect("schedules:shift_codes")
     return render(request, "schedules/shift_code_form.html", {"form": form, "code": code})
+
+
+# -- hospital-wide cut-off dates (owner decision 2026-11-03) ----------------------------
+
+@login_required
+def cutoff_dates(request):
+    """HR sets one Exchange of Duty cut-off date per month, hospital-wide,
+    before drafts are started. Regular exchanges close 7 days before it. A
+    change also moves drafts not yet submitted; submitted schedules keep
+    their own date (changed on the schedule page before COH approval)."""
+    from .models import ScheduleCutoff
+
+    acting = _acting(request)
+    if not is_hr(acting):
+        raise PermissionDenied("Only HR sets the schedule cut-off dates.")
+    today = timezone.localdate()
+    months = []
+    y, m = today.year, today.month
+    for _ in range(6):
+        m += 1
+        if m == 13:
+            y, m = y + 1, 1
+        months.append((y, m))
+    if request.method == "POST":
+        try:
+            y, m = int(request.POST["year"]), int(request.POST["month"])
+            new = date.fromisoformat(request.POST.get("cutoff_date", ""))
+        except (KeyError, ValueError):
+            messages.error(request, "The date was not understood; nothing was changed.")
+            return redirect("schedules:cutoff_dates")
+        if (y, m) not in months or new >= date(y, m, 1):
+            messages.error(request, "Pick a date before the month starts; nothing was changed.")
+            return redirect("schedules:cutoff_dates")
+        ScheduleCutoff.objects.update_or_create(year=y, month=m,
+                                                defaults={"cutoff_date": new, "set_by": request.user})
+        moved = DutySchedule.objects.filter(year=y, month=m, status=DutySchedule.DRAFT).update(cutoff_date=new)
+        messages.success(request, f"Cut-off for {date(y, m, 1):%B %Y} set to {new:%b %d, %Y}"
+                                  + (f"; {moved} draft(s) updated." if moved else "."))
+        return redirect("schedules:cutoff_dates")
+    saved = {(c.year, c.month): c for c in ScheduleCutoff.objects.filter(
+        year__in={y for y, _ in months}).select_related("set_by__employee")}
+    rows = []
+    for y, m in months:
+        cutoff = DutySchedule.default_cutoff(y, m)
+        rows.append({"year": y, "month": m, "label": date(y, m, 1), "cutoff": cutoff,
+                     "last_filing": cutoff - timedelta(days=7), "saved": saved.get((y, m))})
+    return render(request, "schedules/cutoff_dates.html", {"rows": rows})

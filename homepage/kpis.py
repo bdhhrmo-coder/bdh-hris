@@ -28,7 +28,7 @@ from leave.models import LeaveApplication
 from leave.permissions import is_administrative_officer, is_chief_of_hospital, is_hr
 from official_requests.models import OfficialRequest
 
-LEAVE_DONE = [LeaveApplication.APPROVED, LeaveApplication.RECORDED]
+# Leave counts once its days are taken: LeaveApplication.counted_q() (2026-11-03).
 
 
 def scope_for(acting_employee):
@@ -41,6 +41,59 @@ def scope_for(acting_employee):
     if acting_employee.has_role("SUPERVISOR", viewing=True):
         return "sections"
     return "self"
+
+
+def sees_all_requests(acting_employee):
+    """Owner decision 2026-11-03 (dry-run item 4): only the HR Administrator,
+    the AO and the COH see every pending request. HR Processors and
+    Supervisors see only the requests they are involved in."""
+    return acting_employee is not None and (
+        acting_employee.has_role("HR_ADMINISTRATOR", viewing=True)
+        or is_administrative_officer(acting_employee, True) or is_chief_of_hospital(acting_employee, True))
+
+
+def involved_requests(acting_employee, user):
+    """{list label: request ids} acting_employee is involved in: waiting for
+    their action now, or acted on by them, plus their own. Labels match
+    _pending_querysets()."""
+    from attendance.permissions import visible_correction_requests_for
+    from cto.permissions import visible_cto_applications_for
+    from exchange.permissions import visible_exchange_requests_for
+    from leave.permissions import visible_applications_for
+    from official_requests.batch import batches_awaiting
+    from official_requests.permissions import visible_requests_for
+
+    out = {"Leave": set(), "CTO": set(), "Exchange of Duty": set(), "Attendance correction": set(),
+           "Official Business/Errand/OT": set()}
+    if acting_employee is None:
+        return out
+    me = acting_employee
+
+    def ids(qs):
+        return set(qs.values_list("pk", flat=True))
+
+    out["Leave"] = ids(visible_applications_for(me)) | ids(LeaveApplication.objects.filter(
+        Q(actions__acted_by=user) | Q(employee=me)))
+    out["CTO"] = ids(visible_cto_applications_for(me)) | ids(CTOUsageApplication.objects.filter(
+        Q(actions__acted_by=user) | Q(employee=me)))
+    out["Exchange of Duty"] = ids(visible_exchange_requests_for(me)) | ids(DutyExchangeRequest.objects.filter(
+        Q(actions__acted_by=user) | Q(employee_a=me) | Q(employee_b=me)))
+    out["Attendance correction"] = ids(visible_correction_requests_for(me)) | ids(
+        AttendanceCorrectionRequest.objects.filter(Q(actions__acted_by=user) | Q(employee=me)))
+    official = ids(visible_requests_for(me)) | ids(OfficialRequest.objects.filter(
+        Q(actions__acted_by=user) | Q(batch__actions__acted_by=user) | Q(employee=me)))
+    for b in batches_awaiting(me, user):
+        official |= ids(b.lines.all())
+    out["Official Business/Errand/OT"] = official
+    return out
+
+
+def add_area_requests(only, employee_ids):
+    """Add to `only` every pending request of these employees (a
+    Supervisor's own units/sections, owner update 2026-11-03)."""
+    for label, qs, field in _pending_querysets():
+        only.setdefault(label, set()).update(_in_scope(qs, field, employee_ids).values_list("pk", flat=True))
+    return only
 
 
 def shows_leave_type(acting_employee):
@@ -73,7 +126,7 @@ def absent_today(today=None, ids=None, with_type=False):
     for HR), and the dates. Sorted by first section, then name."""
     today = today or timezone.localdate()
     rows = OrderedDict()
-    leave = _limit(LeaveApplication.objects.filter(status__in=LEAVE_DONE, start_date__lte=today, end_date__gte=today),
+    leave = _limit(LeaveApplication.objects.filter(LeaveApplication.counted_q(), start_date__lte=today, end_date__gte=today),
                    ids).select_related("employee", "leave_type")
     cto = _limit(CTOUsageApplication.objects.filter(status=CTOUsageApplication.APPROVED, start_date__lte=today,
                                                     end_date__gte=today), ids).select_related("employee")
@@ -98,17 +151,58 @@ def _sorted_by_section(rows):
     return sorted(rows, key=lambda r: r["sort"])
 
 
+# -- this month: on leave / on CTO (dry-run item 7, 2026-11-03) ---------------------
+
+def _month_bounds(today=None):
+    import calendar
+
+    today = today or timezone.localdate()
+    first = today.replace(day=1)
+    return first, today.replace(day=calendar.monthrange(today.year, today.month)[1])
+
+
+def _month_rows(qs, label_of):
+    rows = OrderedDict()
+    for app in qs:
+        r = rows.setdefault(app.employee_id, {"employee": app.employee, "what": [], "dates": []})
+        r["what"].append(label_of(app))
+        r["dates"].append((app.start_date, app.end_date))
+    return _sorted_by_section(rows.values())
+
+
+def on_leave_this_month(today=None, ids=None, with_type=False):
+    """Approved or recorded leave with any day in the current month."""
+    first, last = _month_bounds(today)
+    qs = _limit(LeaveApplication.objects.filter(LeaveApplication.counted_q(), start_date__lte=last, end_date__gte=first),
+                ids).select_related("employee", "leave_type").order_by("start_date")
+    return _month_rows(qs, lambda a: a.leave_type.name if with_type else "Leave")
+
+
+def on_cto_this_month(today=None, ids=None):
+    """Approved CTO with any day in the current month."""
+    first, last = _month_bounds(today)
+    qs = _limit(CTOUsageApplication.objects.filter(status=CTOUsageApplication.APPROVED, start_date__lte=last,
+                                                   end_date__gte=first), ids).select_related("employee").order_by(
+        "start_date")
+    return _month_rows(qs, lambda a: "CTO")
+
+
 # -- pending leave / CTO (beside Absent Today) --------------------------------------
 
-def pending_leave_cto(ids=None, with_type=False):
+def pending_leave_cto(ids=None, with_type=False, only=None):
+    """only: involved_requests() result, to list just those requests."""
     rows = []
     leave = _limit(LeaveApplication.objects.exclude(status__in=list(LeaveApplication.TERMINAL_STATUSES)
                                                     + [LeaveApplication.RETURNED]), ids)
+    if only is not None:
+        leave = leave.filter(pk__in=only["Leave"])
     for app in leave.select_related("employee", "leave_type"):
         rows.append({"employee": app.employee, "what": [app.leave_type.name if with_type else "Leave"],
                      "dates": [(app.start_date, app.end_date)], "status": app.get_status_display()})
     cto = _limit(CTOUsageApplication.objects.exclude(status__in=list(CTOUsageApplication.TERMINAL_STATUSES)
                                                      + [CTOUsageApplication.RETURNED]), ids)
+    if only is not None:
+        cto = cto.filter(pk__in=only["CTO"])
     for app in cto.select_related("employee"):
         rows.append({"employee": app.employee, "what": ["CTO"], "dates": [(app.start_date, app.end_date)],
                      "status": app.get_status_display()})
@@ -145,16 +239,21 @@ def _in_scope(qs, field, ids):
     return qs.filter(cond).distinct()
 
 
-def pending_applications(ids=None):
+def _only(qs, label, only):
+    return qs if only is None else qs.filter(pk__in=only.get(label, set()))
+
+
+def pending_applications(ids=None, only=None):
     """[(label, count)] of requests waiting at any approval step, within scope."""
-    return [(label, _in_scope(qs, field, ids).count()) for label, qs, field in _pending_querysets()]
+    return [(label, _only(_in_scope(qs, field, ids), label, only).count())
+            for label, qs, field in _pending_querysets()]
 
 
-def pending_rows(ids=None):
+def pending_rows(ids=None, only=None):
     """Detailed list for the 'Pending applications' page."""
     rows = []
     for label, qs, field in _pending_querysets():
-        for obj in _in_scope(qs, field, ids):
+        for obj in _only(_in_scope(qs, field, ids), label, only):
             emp = getattr(obj, "employee", None) or getattr(obj, "employee_a", None)
             filed = getattr(obj, "submitted_at", None) or getattr(obj, "filed_at", None)
             rows.append({"type": label, "employee": emp, "filed": filed, "status": obj.get_status_display()})

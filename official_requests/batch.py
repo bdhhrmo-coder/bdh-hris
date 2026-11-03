@@ -521,7 +521,14 @@ def _next_actors(batch):
     if role == "SUPERVISOR" and batch.filer_role == B.FILER_UNIT_HEAD:
         people = unit_head_step_actors(batch)
     elif role == "SUPERVISOR":
-        people = common_supervisors([line.employee for line in batch.active_lines()])
+        # Either the unit head or the section head may endorse a group, but
+        # only the unit head(s) are notified when there is one for everybody
+        # (owner 2026-11-03, dry-run item 4: not several Supervisors).
+        employees = [line.employee for line in batch.active_lines()]
+        people = common_supervisors(employees)
+        unit_ids = set.intersection(*[{s.pk for s in endorsers_for([e])} for e in employees]) if employees else set()
+        preferred = [p for p in people if p.pk in unit_ids]
+        people = preferred or people
     elif role == "HR":
         people = hr_step_actors(involved, batch)
     elif role == "AO":
@@ -556,12 +563,13 @@ def notify_filed(batch, new_employee_ids=(), resubmitted=False, edited=False):
 
 
 def _notify_covering_supervisors(batch, lines, new_employee_ids, by):
-    """D5: each Supervisor covering an employee put on someone else's OT
-    batch is told, for information only (never the filer)."""
+    """D5: the employee's own next-level endorser (unit head, else section
+    head) is told, for information only (never the filer). Narrowed from
+    every covering Supervisor by the owner, 2026-11-03 (dry-run item 4)."""
     filer_pk = getattr(getattr(batch.filed_by, "employee", None), "pk", None)
     for emp in {line.employee for line in lines if line.employee_id in new_employee_ids}:
         mine = [line for line in lines if line.employee_id == emp.pk]
-        others = [s for s in supervisors_of(emp) if s.pk != filer_pk]
+        others = [s for s in endorsers_for([emp]) if s.pk != filer_pk]
         notify(others, f"For your information: {by} put {emp.full_name} on a {batch.type_label} request "
                        f"({_dates_text(mine)}). No action needed from you.", _url(batch))
 

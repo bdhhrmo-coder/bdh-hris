@@ -12,6 +12,15 @@
   {% if schedule.recorded_at %} · Recorded by HR {{ schedule.recorded_at|date:"M j, Y g:i A" }}{% endif %}
   · Exchange cut-off: {{ schedule.cutoff_date|date:"M j, Y" }}
 </p>
+{% include "schedules/_exchanges.html" %}
+{% if can_set_cutoff %}
+<form method="post" action="{% url 'schedules:cutoff' schedule.pk %}" class="row-actions">
+  {% csrf_token %}
+  <label for="cutoff_date">Exchange of Duty cut-off (HR)</label>
+  <input type="date" name="cutoff_date" id="cutoff_date" value="{{ schedule.cutoff_date|date:'Y-m-d' }}">
+  <button type="submit" class="btn-secondary">Change cut-off</button>
+</form>
+{% endif %}
 <div class="row-actions" style="display:block; margin-bottom:1rem;">
   {% if can_edit %}<a class="btn" href="{% url 'schedules:edit' schedule.pk %}">Edit grid</a>{% endif %}
   <a class="btn btn-secondary" href="{% url 'schedules:print' schedule.pk %}" target="_blank" rel="noopener">Print (F50)</a>

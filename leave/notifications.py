@@ -12,7 +12,10 @@ LeaveApplicationAction.objects.create() from.
 from notifications.services import notify
 
 from .models import LeaveApplication
-from .permissions import remark_suffix, ao_step_actors, coh_step_actors, endorsers_for, hr_step_actors, second_endorsers_for
+from .permissions import (
+    ao_step_actors, coh_filed_regular, coh_step_actors, endorsers_for, hr_step_actors, remark_suffix,
+    second_endorsers_for,
+)
 
 _QUEUE_URL = "/leave/queue/"
 _MINE_URL = "/leave/mine/"
@@ -25,53 +28,53 @@ _OUTCOME_STATUSES = {
 }
 
 
+def _last_actor(application, action):
+    a = application.actions.filter(action=action).select_related("acted_by__employee").order_by("-pk").first()
+    return getattr(a.acted_by, "employee", None) if a else None
+
+
 def notify_status_change(application):
+    A = LeaveApplication
     status = application.status
     filers = [application.employee]
-    leave_type_name = application.leave_type.name
+    name = application.leave_type.name
+    who = application.employee
+    regular = application.route == A.ROUTE_REGULAR
 
-    if status == LeaveApplication.SUBMITTED:
-        if application.leave_type.requires_full_routing:
-            notify(
-                endorsers_for(filers),
-                f"{application.employee} filed a {leave_type_name} application — awaiting your endorsement.",
-                _QUEUE_URL,
-            )
+    if status == A.SUBMITTED:
+        if coh_filed_regular(application):
+            notify(hr_step_actors(filers, application),
+                   f"{who} filed a {name} application - ready for HR recording and verification.", _QUEUE_URL)
         else:
-            # Regular Leave etc. (§6.2 data-entry-only path) goes straight to HR.
-            notify(
-                hr_step_actors(filers, application),
-                f"{application.employee} filed a {leave_type_name} application for recording.",
-                _QUEUE_URL,
-            )
-    elif status == LeaveApplication.ENDORSED_BY_UNIT_HEAD:
-        notify(
-            second_endorsers_for(filers),
-            f"A {leave_type_name} application for {application.employee} was endorsed by the unit head — "
-            "awaiting your endorsement.",
-            _QUEUE_URL,
-        )
-    elif status == LeaveApplication.ENDORSED_BY_SUPERVISOR:
-        notify(
-            hr_step_actors(filers, application),
-            f"A {leave_type_name} application for {application.employee} is ready for HR processing.",
-            _QUEUE_URL,
-        )
-    elif status == LeaveApplication.PROCESSED_BY_HR:
-        notify(
-            ao_step_actors(filers),
-            f"A {leave_type_name} application for {application.employee} is ready for AO recommendation.",
-            _QUEUE_URL,
-        )
-    elif status == LeaveApplication.RECOMMENDED_BY_AO:
-        notify(
-            coh_step_actors(filers),
-            f"A {leave_type_name} application for {application.employee} is awaiting your approval.",
-            _QUEUE_URL,
-        )
+            notify(endorsers_for(filers), f"{who} filed a {name} application - awaiting your endorsement.",
+                   _QUEUE_URL)
+    elif status == A.ENDORSED_BY_UNIT_HEAD:
+        notify(second_endorsers_for(filers),
+               f"A {name} application for {who} was endorsed by the unit head - awaiting your endorsement.",
+               _QUEUE_URL)
+    elif status == A.ENDORSED_BY_SUPERVISOR:
+        step = "recording and verification" if regular else "processing"
+        notify(hr_step_actors(filers, application), f"A {name} application for {who} is ready for HR {step}.",
+               _QUEUE_URL)
+    elif status == A.PROCESSED_BY_HR:
+        step = "review" if regular else "recommendation"
+        notify(ao_step_actors(filers), f"A {name} application for {who} is ready for AO {step}.", _QUEUE_URL)
+    elif status == A.RECOMMENDED_BY_AO:
+        step = "recommendation for approval (Capitol)" if regular else "approval"
+        notify(coh_step_actors(filers), f"A {name} application for {who} is awaiting your {step}.", _QUEUE_URL)
+    elif status == A.FOR_CAPITOL_APPROVAL:
+        notify(who, f"Your {name} application was recommended for approval and is now for Capitol approval.",
+               _MINE_URL)
+        # Only the HR person who recorded it, to forward it to the Capitol.
+        recorder = _last_actor(application, "record")
+        if recorder is not None:
+            notify(recorder, f"The {name} application of {who} is for Capitol approval - please forward it.",
+                   f"/leave/{application.pk}/")
     elif status in _OUTCOME_STATUSES:
-        notify(
-            application.employee,
-            f"Your {leave_type_name} application was {application.get_status_display().lower()}.{remark_suffix(application)}",
-            _MINE_URL,
-        )
+        last = application.actions.order_by("-pk").first()
+        what = application.status_label.lower()
+        if last and last.action in ("capitol_return", "capitol_reject"):
+            what = ("returned" if last.action == "capitol_return" else "rejected") + " by the Capitol"
+        if status in (A.RETURNED, A.REJECTED) and regular and application.ledger_entries.exists():
+            what += " (the leave days were given back)"
+        notify(who, f"Your {name} application was {what}.{remark_suffix(application)}", _MINE_URL)

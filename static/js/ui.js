@@ -220,25 +220,22 @@
   document.addEventListener("DOMContentLoaded", markScrollable);
   window.addEventListener("resize", function () { clearTimeout(markScrollable.t); markScrollable.t = setTimeout(markScrollable, 200); });
 
-  // Menu groups (Batch 6): each group remembers open/closed in this browser;
-  // the group holding the current page is always open. Saved state is
-  // applied before the indicator is placed, so the bar lands on the link.
-  var GROUPS_KEY = "bdh-nav-groups";
-  function savedGroups() {
-    try { return JSON.parse(localStorage.getItem(GROUPS_KEY) || "{}") || {}; } catch (e) { return {}; }
-  }
-  function saveGroups(nav) {
-    var state = {};
-    nav.querySelectorAll("details.nav-group").forEach(function (d) { state[d.dataset.group] = d.open; });
-    try { localStorage.setItem(GROUPS_KEY, JSON.stringify(state)); } catch (e) { /* not available: fine */ }
-  }
-
+  // Menu groups (Batch 6; changed 2026-11-03 after the dry-run): one group
+  // open at a time, the one holding the current page on load.
   document.addEventListener("DOMContentLoaded", function () {
     var nav = document.querySelector(".app-sidebar nav");
     if (!nav) return;
-    var saved = savedGroups();
-    nav.querySelectorAll("details.nav-group").forEach(function (d) {
-      if (!d.hasAttribute("data-has-current") && saved[d.dataset.group] !== undefined) d.open = saved[d.dataset.group];
+    // Dry-run fix (owner, 2026-11-03): only the group holding the current page
+    // opens on load; opening a group closes the others; a click outside the
+    // menu closes every group except the current page's.
+    var groups = nav.querySelectorAll("details.nav-group");
+    groups.forEach(function (d) { if (!d.hasAttribute("data-has-current")) d.open = false; });
+    function closeOthers(keep) {
+      groups.forEach(function (d) { if (d !== keep && d.open && !d.contains(keep)) d.open = false; });
+    }
+    document.addEventListener("click", function (e) {
+      if (nav.contains(e.target)) return;
+      groups.forEach(function (d) { if (d.open && !d.hasAttribute("data-has-current")) d.open = false; });
     });
     var link = nav.querySelector("a.is-current") || currentNavLink(nav);
     var pos = null;
@@ -252,7 +249,7 @@
     }
     nav.querySelectorAll("details.nav-group").forEach(function (d) {
       d.addEventListener("toggle", function () {
-        saveGroups(nav);
+        if (d.open) closeOthers(d);
         if (link) {  // groups above may have opened/closed: keep the bar on the current link
           var ind = nav.querySelector(".nav-indicator");
           if (ind) ind.style.display = link.offsetParent ? "" : "none";

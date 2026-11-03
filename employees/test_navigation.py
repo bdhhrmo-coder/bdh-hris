@@ -54,7 +54,7 @@ class MenuTests(TestCase):
         lab = Section.objects.get(name="Laboratory Section")
         menu, _ = self.menu(person("navsup", R.SUPERVISOR, section=lab))
         self.assertIn("File for a Group", menu["My Requests"])
-        self.assertEqual(menu["Workforce"], ["Duty Schedules"])
+        self.assertEqual(menu["Workforce"], ["Duty Schedules", "Approved Exchanges of Duty"])
         self.assertNotIn("HR Administration", menu)
 
     def test_current_page_marked_and_its_group_open(self):

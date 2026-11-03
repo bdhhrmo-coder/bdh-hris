@@ -117,15 +117,17 @@ class HomepageTests(TestCase):
         leave(self.other, "VL", "SUBMITTED")
         OfficialRequest.objects.create(employee=self.other, request_type=OfficialRequest.OFFICIAL_TIME, purpose="x",
                                        start_date=TODAY, end_date=TODAY)
-        self.assertEqual(self.page(self.hr).context["pending_apps_total"], 3)
-        self.assertEqual(self.page(self.sup).context["pending_apps_total"], 1)   # own section
+        self.assertEqual(self.page(self.ao).context["pending_apps_total"], 3)    # AO sees all
+        # HR Processor and Supervisor: only requests they handle (owner 2026-11-03, dry-run item 4).
+        self.assertEqual(self.page(self.hr).context["pending_apps_total"], 1)   # only the request waiting for HR
+        self.assertEqual(self.page(self.sup).context["pending_apps_total"], 1)  # the one waiting for them
         self.assertEqual(self.page(self.staff).context["pending_apps_total"], 1)  # own request only
         self.assertEqual(self.page(self.cosp).context["pending_apps_total"], 0)
         mine = self.page(self.staff, "homepage:pending_applications_list").content.decode()
         self.assertNotIn("Pharmstaff", mine)
 
     def test_waiting_for_my_action_uses_the_queues(self):
-        leave(self.staff, "VL", "SUBMITTED")  # Regular leave: HR records it
+        leave(self.staff, "VL", "ENDORSED_BY_SUPERVISOR")  # Regular leave at the HR step (2026-11-03)
         waiting = dict((label, n) for label, n, _ in self.page(self.hr).context["waiting"])
         self.assertEqual(waiting.get("Leave"), 1)
         self.assertEqual(self.page(self.staff).context["waiting_total"], 0)
@@ -186,3 +188,66 @@ class TestSystemBarTests(TestCase):
             page = self.client.get("/hris/login/").content.decode()
         self.assertIn("TEST SYSTEM", page)
         self.assertIn("<title>[TEST]", page)
+
+
+class ThisMonthListsTests(TestCase):
+    """Dry-run item 7 (2026-11-03): Home lists who is on leave and on CTO this month."""
+
+    def test_cto_this_month_is_listed_for_hr_but_not_for_employees(self):
+        from datetime import date
+
+        from django.contrib.auth.models import User
+
+        from accounts.models import RoleAssignment
+        from cto.models import CTOUsageApplication
+        from employees.models import Employee
+
+        def emp(name, role=None):
+            u = User.objects.create_user(username=name, password="pw-12345678")
+            e = Employee.objects.create(user=u, employee_id=name.upper(), surname=name.title(), first_name="T",
+                                        employment_status="REGULAR", date_hired=date(2020, 1, 1))
+            if role:
+                RoleAssignment.objects.create(employee=e, role=role)
+            return e
+
+        hr, staff = emp("hrmonth", RoleAssignment.HR_PROCESSOR), emp("staffmonth")
+        today = date.today()
+        CTOUsageApplication.objects.create(employee=staff, start_date=today, end_date=today, number_of_days=1,
+                                           status=CTOUsageApplication.APPROVED)
+        self.client.force_login(hr.user)
+        r = self.client.get("/hris/home/")
+        self.assertContains(r, "On CTO this month")
+        self.assertContains(r, staff.full_name)
+        self.client.force_login(staff.user)
+        self.assertNotContains(self.client.get("/hris/home/"), "On CTO this month")
+
+
+class PendingInvolvementTests(TestCase):
+    """Owner decision 2026-11-03 (dry-run item 4): HR Administrator, AO and COH
+    see every pending request; an HR Processor sees only those waiting for
+    them or acted on by them."""
+
+    def setUp(self):
+        self.lab = Section.objects.get(name="Laboratory Section")
+        self.hrp = emp("pi_hrp", role=RoleAssignment.HR_PROCESSOR)
+        self.hra = emp("pi_hra", role=RoleAssignment.HR_ADMINISTRATOR)
+        self.staff = emp("pi_staff", self.lab)
+        self.staff2 = emp("pi_staff2", self.lab)
+
+    def total(self, who):
+        self.client.force_login(who.user)
+        return self.client.get(reverse("homepage:home")).context["pending_apps_total"]
+
+    def test_hr_processor_sees_only_what_waits_for_them(self):
+        leave(self.staff, "VL", "SUBMITTED")
+        leave(self.staff2, "VL", "ENDORSED_BY_SUPERVISOR")
+        self.assertEqual(self.total(self.hra), 2)
+        self.assertEqual(self.total(self.hrp), 1)
+
+    def test_supervisor_also_sees_pending_requests_of_own_section(self):
+        # Owner update 2026-11-03: Supervisors also see pending requests in their unit/section.
+        sup = emp("pi_sup", self.lab, RoleAssignment.SUPERVISOR)
+        leave(self.staff, "VL", "ENDORSED_BY_SUPERVISOR")   # in the lab, not waiting for the Supervisor
+        leave(emp("pi_pharm", Section.objects.get(name="Pharmacy Section")), "VL", "ENDORSED_BY_SUPERVISOR")
+        self.assertEqual(self.total(sup), 1)
+        self.assertEqual(self.total(self.hrp), 2)  # both wait for HR
