@@ -46,7 +46,7 @@ def actor_may_advance(acting_employee, official_request):
             return can_endorse_second(acting_employee, filers)
         return can_endorse(acting_employee, filers)
     if target_status in (OfficialRequest.PROCESSED_BY_HR, OfficialRequest.RECORDED):
-        return can_act_hr_step(acting_employee, filers)
+        return can_act_hr_step(acting_employee, filers, official_request)
     if target_status == OfficialRequest.RECOMMENDED_BY_AO:
         return can_act_ao_step(acting_employee, filers)
     if target_status == OfficialRequest.APPROVED:

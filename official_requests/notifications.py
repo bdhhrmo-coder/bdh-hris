@@ -5,7 +5,7 @@ permissions.actor_may_advance() does — because Official Time and Travel
 each skip one step (§6.2), so a saved status alone doesn't say who acts
 next; routing.py already encodes that."""
 
-from leave.permissions import ao_step_actors, coh_step_actors, endorsers_for, hr_step_actors, second_endorsers_for
+from leave.permissions import remark_suffix, ao_step_actors, coh_step_actors, endorsers_for, hr_step_actors, second_endorsers_for
 from notifications.services import notify
 
 from .models import OfficialRequest
@@ -28,13 +28,13 @@ def notify_status_change(official_request):
         )
     elif target_status == OfficialRequest.RECORDED:
         notify(
-            hr_step_actors(filers),
+            hr_step_actors(filers, official_request),
             f"{official_request.employee} filed a {type_name} request for recording (approval is outside BDH).",
             queue_url,
         )
     elif target_status == OfficialRequest.PROCESSED_BY_HR:
         notify(
-            hr_step_actors(filers),
+            hr_step_actors(filers, official_request),
             f"A {type_name} request for {official_request.employee} is ready for HR processing.",
             queue_url,
         )
@@ -56,6 +56,6 @@ def notify_status_change(official_request):
         # either way, the employee is the one who needs to know.
         notify(
             official_request.employee,
-            f"Your {type_name} request was {official_request.get_status_display().lower()}.",
+            f"Your {type_name} request was {official_request.get_status_display().lower()}.{remark_suffix(official_request)}",
             mine_url,
         )

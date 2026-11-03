@@ -21,27 +21,28 @@
       {% endif %}
     </td>
     <td class="row-actions">
-      <form method="post" action="{% url 'leave:leave_action' a.pk %}">
+      <form method="post" action="{% url 'leave:leave_action' a.pk %}" x-data="{ remark: '' }">
         {% csrf_token %}
+        <input type="text" name="notes" maxlength="255" x-model="remark" class="remark-input" placeholder="Remark (required to return or reject)" aria-label="Remark (required to return or reject)">
         {% if a.status == "SUBMITTED" and not a.leave_type.requires_full_routing %}
           <button type="submit" name="action" value="record">Record</button>
-          <button type="submit" name="action" value="reject">Reject</button>
+          <button type="submit" name="action" value="reject" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Reject</button>
         {% elif a.status == "SUBMITTED" or a.status == "ENDORSED_BY_UNIT_HEAD" %}
           <button type="submit" name="action" value="endorse">Endorse</button>
-          <button type="submit" name="action" value="reject">Reject</button>
-          <button type="submit" name="action" value="return">Return</button>
+          <button type="submit" name="action" value="reject" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Reject</button>
+          <button type="submit" name="action" value="return" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Return</button>
         {% elif a.status == "ENDORSED_BY_SUPERVISOR" %}
           <button type="submit" name="action" value="process">Process</button>
-          <button type="submit" name="action" value="reject">Reject</button>
-          <button type="submit" name="action" value="return">Return</button>
+          <button type="submit" name="action" value="reject" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Reject</button>
+          <button type="submit" name="action" value="return" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Return</button>
         {% elif a.status == "PROCESSED_BY_HR" %}
           <button type="submit" name="action" value="recommend">Recommend</button>
-          <button type="submit" name="action" value="reject">Reject</button>
-          <button type="submit" name="action" value="return">Return</button>
+          <button type="submit" name="action" value="reject" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Reject</button>
+          <button type="submit" name="action" value="return" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Return</button>
         {% elif a.status == "RECOMMENDED_BY_AO" %}
           <button type="submit" name="action" value="approve">Approve</button>
-          <button type="submit" name="action" value="reject">Reject</button>
-          <button type="submit" name="action" value="return">Return</button>
+          <button type="submit" name="action" value="reject" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Reject</button>
+          <button type="submit" name="action" value="return" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Return</button>
         {% endif %}
       </form>
     </td>

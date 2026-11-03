@@ -12,7 +12,7 @@ LeaveApplicationAction.objects.create() from.
 from notifications.services import notify
 
 from .models import LeaveApplication
-from .permissions import ao_step_actors, coh_step_actors, endorsers_for, hr_step_actors, second_endorsers_for
+from .permissions import remark_suffix, ao_step_actors, coh_step_actors, endorsers_for, hr_step_actors, second_endorsers_for
 
 _QUEUE_URL = "/leave/queue/"
 _MINE_URL = "/leave/mine/"
@@ -40,7 +40,7 @@ def notify_status_change(application):
         else:
             # Regular Leave etc. (§6.2 data-entry-only path) goes straight to HR.
             notify(
-                hr_step_actors(filers),
+                hr_step_actors(filers, application),
                 f"{application.employee} filed a {leave_type_name} application for recording.",
                 _QUEUE_URL,
             )
@@ -53,7 +53,7 @@ def notify_status_change(application):
         )
     elif status == LeaveApplication.ENDORSED_BY_SUPERVISOR:
         notify(
-            hr_step_actors(filers),
+            hr_step_actors(filers, application),
             f"A {leave_type_name} application for {application.employee} is ready for HR processing.",
             _QUEUE_URL,
         )
@@ -72,6 +72,6 @@ def notify_status_change(application):
     elif status in _OUTCOME_STATUSES:
         notify(
             application.employee,
-            f"Your {leave_type_name} application was {application.get_status_display().lower()}.",
+            f"Your {leave_type_name} application was {application.get_status_display().lower()}.{remark_suffix(application)}",
             _MINE_URL,
         )

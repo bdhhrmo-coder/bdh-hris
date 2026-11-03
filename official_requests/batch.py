@@ -233,7 +233,7 @@ def may_act(acting_employee, user, batch):
         return bool(lines) and acting_employee.pk in {
             s.pk for s in common_supervisors([line.employee for line in lines])}
     if target == R.PROCESSED_BY_HR:
-        return can_act_hr_step(acting_employee, people)
+        return can_act_hr_step(acting_employee, people, batch)
     if target == R.RECOMMENDED_BY_AO:
         return can_act_ao_step(acting_employee, people)
     if target == R.APPROVED:
@@ -356,11 +356,33 @@ def create_batch(user, filer_role, kind, purpose, destination, entries):
     return batch
 
 
+_FILING_ACTIONS = ("submit", "resubmit", "edit")
+
+
+def pending_untouched(batch):
+    """Still waiting at its first step, with no approver action since it was
+    filed or resubmitted (owner request 2026-11-03: the filer may edit it)."""
+    if batch.status in R.TERMINAL_STATUSES or batch.status == R.RETURNED:
+        return False
+    last = batch.actions.order_by("-acted_at", "-pk").first()
+    return last is not None and last.action in _FILING_ACTIONS
+
+
+def filer_may_edit(batch, user):
+    return batch.filed_by_id == user.pk and (batch.status == R.RETURNED or pending_untouched(batch))
+
+
 @transaction.atomic
 def resubmit_batch(batch, user, purpose, destination, entries, note=""):
-    """The filer's edit after a return: same batch, lines updated/added,
-    removed lines cancelled (kept for the audit trail). Starts again from
-    the first step of the route."""
+    """The filer's edit: after a return, or while still pending with nobody
+    having acted yet (2026-11-03). Same batch, lines updated/added, removed
+    lines cancelled (kept for the audit trail). A returned batch starts again
+    from the first step; a pending one simply stays at its first step."""
+    locked = B.objects.select_for_update().get(pk=batch.pk)
+    if not filer_may_edit(locked, user):
+        from django.core.exceptions import PermissionDenied
+        raise PermissionDenied("An approver acted on this group request while you were editing it.")
+    was_pending = batch.status != R.RETURNED
     batch.purpose = purpose
     batch.destination = destination if batch.request_type == R.TRAVEL else ""
     batch.status = R.SUBMITTED
@@ -383,10 +405,15 @@ def resubmit_batch(batch, user, purpose, destination, entries, note=""):
         line.status = R.CANCELLED
         line.save(update_fields=["status", "updated_at"])
         OfficialRequestAction.objects.create(request=line, action="cancel", resulting_status=R.CANCELLED,
-                                             notes=f"Batch #{batch.pk}: removed by the filer after a return.",
+                                             notes=f"Batch #{batch.pk}: removed by the filer"
+                                                   f"{' before any approver acted' if was_pending else ' after a return'}.",
                                              acted_by=user)
-    _log(batch, "resubmit", user, note or "Edited and resubmitted after a return.")
-    notify_filed(batch, new_employee_ids={k[0] for k in keep - before}, resubmitted=True)
+    if was_pending:
+        _log(batch, "edit", user, note or "Edited by the filer before any approver acted.")
+    else:
+        _log(batch, "resubmit", user, note or "Edited and resubmitted after a return.")
+    notify_filed(batch, new_employee_ids={k[0] for k in keep - before},
+                 resubmitted=not was_pending, edited=was_pending)
     return batch
 
 
@@ -417,7 +444,7 @@ def _next_actors(batch):
     if target == R.ENDORSED_BY_SUPERVISOR:
         people = common_supervisors([line.employee for line in batch.active_lines()])
     elif target == R.PROCESSED_BY_HR:
-        people = hr_step_actors(involved)
+        people = hr_step_actors(involved, batch)
     elif target == R.RECOMMENDED_BY_AO:
         people = ao_step_actors(involved)
     elif target == R.APPROVED:
@@ -435,14 +462,14 @@ def _dates_text(lines):
     return f"{dates[0]:%b %d} – {dates[-1]:%b %d, %Y}"
 
 
-def notify_filed(batch, new_employee_ids=(), resubmitted=False):
+def notify_filed(batch, new_employee_ids=(), resubmitted=False, edited=False):
     filer = getattr(batch.filed_by, "employee", None)
     by = filer.full_name if filer else batch.filed_by.username
     lines = list(batch.active_lines())
     for emp in {line.employee for line in lines if line.employee_id in new_employee_ids}:
         mine = [line for line in lines if line.employee_id == emp.pk]
         notify(emp, f"{by} filed a {batch.type_label} request for you ({_dates_text(mine)}).", "/official-requests/mine/")
-    verb = "resubmitted" if resubmitted else "filed"
+    verb = "edited" if edited else ("resubmitted" if resubmitted else "filed")
     notify(_next_actors(batch), f"{by} {verb} a group {batch.type_label} request ({len(lines)} line(s)) "
                                 f"— awaiting your action.", _url(batch))
 
@@ -456,6 +483,8 @@ def notify_step(batch, action, notes):
                _url(batch))
     elif batch.status in (R.APPROVED, R.REJECTED):
         word = batch.get_status_display().lower()
+        if batch.status == R.REJECTED and notes:
+            word = f'{word}. Remark: "{notes}"'  # owner request 2026-11-03
         for emp in {line.employee for line in lines}:
             mine = [line for line in lines if line.employee_id == emp.pk]
             notify(emp, f"The {batch.type_label} request filed for you ({_dates_text(mine)}) was {word}.",

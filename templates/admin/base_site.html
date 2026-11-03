@@ -1,0 +1,91 @@
+{% extends "admin/base.html" %}
+{% load static %}
+{% comment %}
+System Administration pages in the BDH HRIS look (owner request 2026-11-03):
+Royal Blue top bar with the BDH logo, Gold accent, the HRIS font, a link back
+to the HRIS, and the red TEST SYSTEM bar on the test PC. Django's own admin
+screens and behaviour are unchanged; only the colours and header are restyled.
+{% endcomment %}
+
+{% block title %}{% if test_system %}[TEST] {% endif %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title }}{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<link rel="icon" href="{% static 'images/favicon.ico' %}" sizes="any">
+{% endblock %}
+
+{% block dark-mode-vars %}{# the HRIS has one light look; no dark theme here #}{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  /* Django admin colour variables -> the HRIS palette (static/css/app.css). */
+  :root {
+    --primary: #173d72;
+    --secondary: #1f4e8c;
+    --accent: #e5b83f;
+    --primary-fg: #ffffff;
+    --header-color: #ffffff;
+    --header-branding-color: #ffffff;
+    --header-bg: #173d72;
+    --header-link-color: #ffffff;
+    --breadcrumbs-bg: #1f4e8c;
+    --breadcrumbs-fg: #e8eef8;
+    --breadcrumbs-link-fg: #ffffff;
+    --link-selected-fg: #173d72;
+    --button-bg: #173d72;
+    --button-hover-bg: #1e56a0;
+    --default-button-bg: #1e56a0;
+    --default-button-hover-bg: #173d72;
+    --selected-row: #fbf3dc;
+    --message-error-bg: #fbe9e8;
+    --error-fg: #c9363e;
+    --font-family-primary: "Segoe UI", -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  }
+  :root { --link-fg: #1e56a0; --link-hover-color: #173d72; }
+  #header { border-bottom: 4px solid #e5b83f; padding: 10px 40px; }
+  #header #branding { display: flex; align-items: center; gap: 12px; }
+  #branding img { height: 44px; width: auto; }
+  #site-name { margin: 0; line-height: 1.2; }
+  #site-name a { color: #fff; font-weight: 700; font-size: 1.15rem; }
+  #site-name small { display: block; font-weight: 400; font-size: 0.8rem; color: #e8eef8; }
+  .module h2, .module caption, .inline-group h2 { background: #173d72; color: #fff; }
+  #user-tools a.bdh-back { border-bottom: 2px solid #e5b83f; }
+  .bdh-test-bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 2000;
+    background: #c9363e; color: #fff; text-align: center; font-weight: 700;
+    letter-spacing: 0.04em; padding: 8px 16px;
+  }
+  body.bdh-is-test { padding-bottom: 40px; }
+</style>
+{% endblock %}
+
+{% block bodyclass %}{{ block.super }}{% if test_system %} bdh-is-test{% endif %}{% endblock %}
+
+{% block branding %}
+  <img src="{% static 'images/bdh-logo.png' %}" alt="Bataraza District Hospital logo" height="44">
+  <div id="site-name">
+    <a href="{% url 'admin:index' %}">BDH HRIS - System Administration
+      <small>User accounts, employee records and roles</small></a>
+  </div>
+{% endblock %}
+
+{% block userlinks %}
+<a class="bdh-back" href="/hris/home/">Back to the HRIS</a> /
+{% if user.has_usable_password %}
+<a href="{% url 'admin:password_change' %}">Change password</a> /
+{% endif %}
+<form id="logout-form" method="post" action="{% url 'admin:logout' %}">
+  {% csrf_token %}
+  <button type="submit">Log out</button>
+</form>
+{% endblock %}
+
+{% block nav-global %}{% endblock %}
+
+{% block footer %}
+{{ block.super }}
+{% if test_system %}
+<div class="bdh-test-bar" role="status">TEST SYSTEM &mdash; NOT FOR REAL REQUESTS. Records here are not valid.</div>
+{% endif %}
+{% endblock %}

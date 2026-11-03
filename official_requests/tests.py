@@ -238,7 +238,7 @@ class RejectReturnTests(TestCase):
 
     def test_supervisor_can_reject(self):
         self.client.force_login(self.supervisor.user)
-        self.client.post(reverse("official_requests:request_action", args=[self.req.pk]), {"action": "reject"})
+        self.client.post(reverse("official_requests:request_action", args=[self.req.pk]), {"action": "reject", "notes": "Not needed"})
         self.req.refresh_from_db()
         self.assertEqual(self.req.status, OfficialRequest.REJECTED)
 
@@ -246,6 +246,6 @@ class RejectReturnTests(TestCase):
         outsider = make_employee("rejout1", "EMP-REJOUT1")
         self.client.force_login(outsider.user)
         response = self.client.post(
-            reverse("official_requests:request_action", args=[self.req.pk]), {"action": "reject"}
+            reverse("official_requests:request_action", args=[self.req.pk]), {"action": "reject", "notes": "Not needed"}
         )
         self.assertEqual(response.status_code, 403)

@@ -26,7 +26,18 @@ SCOPE_HELP = (
 )
 
 
+ROLE_LABELS = dict(RoleAssignment.ROLE_CHOICES)
+
+
 class RoleAssignmentForm(forms.ModelForm):
+    # Safeguard (owner decision 2026-11-03, Option B): changing the role on an
+    # EXISTING line replaces that role; it does not add one. The person must
+    # tick this box to confirm; otherwise they are told to add a new line.
+    confirm_role_change = forms.BooleanField(
+        required=False, label="Confirm role change",
+        help_text="Tick only if you mean to REPLACE this line's role. "
+                  "To give an additional role, add a new line instead.")
+
     class Meta:
         model = RoleAssignment
         fields = "__all__"
@@ -34,6 +45,12 @@ class RoleAssignmentForm(forms.ModelForm):
     def clean(self):
         data = super().clean()
         role, section, unit = data.get("role"), data.get("section"), data.get("unit")
+        old_role = self.instance.role if self.instance.pk else None
+        if old_role and role and role != old_role and not data.get("confirm_role_change"):
+            raise forms.ValidationError(
+                f"This replaces {ROLE_LABELS.get(old_role, old_role)} with {ROLE_LABELS.get(role, role)}. "
+                "To give an additional role, add a new line instead. If you really mean to replace it, "
+                "tick \"Confirm role change\" and save again.")
         if role == RoleAssignment.SUPERVISOR:
             if not section and not unit:
                 raise forms.ValidationError(
@@ -59,9 +76,16 @@ class RoleAssignmentAdmin(admin.ModelAdmin):
         (None, {"fields": ("employee", "role")}),
         ("Scope (Supervisor only)", {"fields": ("section", "unit"), "description": SCOPE_HELP}),
         ("Dates", {"fields": ("start_date", "end_date", "is_active")}),
+        ("Change the role on this line", {"fields": ("confirm_role_change",)}),
         ("Officer-in-Charge (set by the OIC screen; do not edit here)",
          {"fields": ("is_oic", "delegated_by"), "classes": ("collapse",)}),
     )
+
+    def get_fieldsets(self, request, obj=None):
+        sets = super().get_fieldsets(request, obj)
+        if obj is None:  # a new line: nothing to replace
+            sets = [fs for fs in sets if "confirm_role_change" not in fs[1]["fields"]]
+        return sets
 
     @admin.display(description="Scope")
     def scope(self, obj):
@@ -70,6 +94,21 @@ class RoleAssignmentAdmin(admin.ModelAdmin):
         if obj.section_id:
             return f"Whole section: {obj.section.name}"
         return "Hospital-wide"
+
+
+class RoleAssignmentInline(admin.TabularInline):
+    """All of one person's role lines on their employee page (owner decision
+    2026-11-03, Option B). One role per line: add a line for each extra role."""
+
+    model = RoleAssignment
+    fk_name = "employee"
+    form = RoleAssignmentForm
+    extra = 0
+    verbose_name = "role line"
+    verbose_name_plural = ("Roles - one role per line. To give another role, click "
+                           "\"Add another role line\"; do not change an existing line.")
+    fields = ("role", "section", "unit", "start_date", "end_date", "is_active", "is_oic", "confirm_role_change")
+    readonly_fields = ("is_oic",)
 
 
 # Header of the System Administration pages (owner request, 2026-10-26: the

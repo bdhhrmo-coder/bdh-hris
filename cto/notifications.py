@@ -2,7 +2,7 @@
 for the CLAUDE.md §11/§2 in-app-only-for-now rationale. CTO usage has no
 data-entry-only shortcut (unlike leave), so there's one chain, not two."""
 
-from leave.permissions import ao_step_actors, coh_step_actors, endorsers_for, hr_step_actors, second_endorsers_for
+from leave.permissions import remark_suffix, ao_step_actors, coh_step_actors, endorsers_for, hr_step_actors, second_endorsers_for
 from notifications.services import notify
 
 from .models import CTOUsageApplication
@@ -36,7 +36,7 @@ def notify_status_change(application):
         )
     elif status == CTOUsageApplication.ENDORSED_BY_SUPERVISOR:
         notify(
-            hr_step_actors(filers),
+            hr_step_actors(filers, application),
             f"A CTO usage application for {application.employee} is ready for HR processing.",
             _QUEUE_URL,
         )
@@ -55,7 +55,7 @@ def notify_status_change(application):
     elif status in _OUTCOME_STATUSES:
         notify(
             application.employee,
-            f"Your CTO usage application was {application.get_status_display().lower()}.",
+            f"Your CTO usage application was {application.get_status_display().lower()}.{remark_suffix(application)}",
             _MINE_URL,
         )
 

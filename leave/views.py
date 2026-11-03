@@ -1,5 +1,6 @@
 from datetime import date
 
+from leave.permissions import RETURN_NEEDS_REMARK
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
@@ -181,6 +182,10 @@ def leave_action(request, pk):
 
     if acting_employee is None:
         raise PermissionDenied("No employee record is linked to your account.")
+    # A return or rejection always carries a remark (owner requests 2026-11-03).
+    if action in ("return", "reject") and not notes:
+        messages.error(request, RETURN_NEEDS_REMARK)
+        return redirect("leave:leave_queue")
 
     full_routing = application.leave_type.requires_full_routing
     status = application.status
@@ -199,7 +204,7 @@ def leave_action(request, pk):
     error = None
 
     if not full_routing:
-        if status == LeaveApplication.SUBMITTED and can_act_hr_step(acting_employee, filers):
+        if status == LeaveApplication.SUBMITTED and can_act_hr_step(acting_employee, filers, application):
             if action == "record":
                 error = _finalize_success(application, request.user)
                 if error is None:
@@ -231,7 +236,7 @@ def leave_action(request, pk):
                 apply_transition(
                     LeaveApplication.REJECTED if action == "reject" else LeaveApplication.RETURNED, action
                 )
-        elif status == LeaveApplication.ENDORSED_BY_SUPERVISOR and can_act_hr_step(acting_employee, filers):
+        elif status == LeaveApplication.ENDORSED_BY_SUPERVISOR and can_act_hr_step(acting_employee, filers, application):
             if action == "process":
                 allowed = True
                 apply_transition(LeaveApplication.PROCESSED_BY_HR, "process")

@@ -318,8 +318,11 @@ open items the project owner already flagged:
       confirmed it routes and prints correctly
 - [ ] Confirmed `BDH_HRIS_DEBUG` is `0` (or absent) in the real `.env` (a
       stray `DEBUG=1` in production would leak internal details in error pages)
-- [ ] Printed one CSC Form 6 and one COSP Leave form as PDF and confirmed
-      they open (this proves LibreOffice is installed and found)
+- [ ] Ran `.venv\Scripts\python.exe manage.py check_pdf` and it printed **OK**
+      (if not, it prints the exact reason: LibreOffice not installed, wrong
+      path in `BDH_HRIS_LIBREOFFICE_PATH`, or the conversion error)
+- [ ] Printed one CSC Form 6 and one COSP Leave form as PDF **from a browser
+      on another PC** while the service is running, and confirmed they open
 - [ ] Took a backup before the first `migrate` on the server, and before
       every update after that (see §9)
 - [ ] Ran the backup once **as the scheduled task** (`LastTaskResult` 0) and

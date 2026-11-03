@@ -296,7 +296,7 @@ class TwoLevelEndorsementTests(TestCase):
     def act(self, who, app, action="endorse"):
         c = Client()
         c.force_login(who.user)
-        r = c.post(reverse("cto:cto_action", args=[app.pk]), {"action": action})
+        r = c.post(reverse("cto:cto_action", args=[app.pk]), {"action": action, "notes": "Test remark"})
         app.refresh_from_db()
         return r.status_code
 

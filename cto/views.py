@@ -1,5 +1,6 @@
 from datetime import date
 
+from leave.permissions import RETURN_NEEDS_REMARK
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -293,6 +294,10 @@ def cto_action(request, pk):
 
     if acting_employee is None:
         raise PermissionDenied("No employee record is linked to your account.")
+    # A return or rejection always carries a remark (owner requests 2026-11-03).
+    if action in ("return", "reject") and not notes:
+        messages.error(request, RETURN_NEEDS_REMARK)
+        return redirect("cto:cto_queue")
 
     status = application.status
     filers = [application.employee]  # never acts on their own (owner decision 2026-10-26)
@@ -331,7 +336,7 @@ def cto_action(request, pk):
             apply_transition(
                 CTOUsageApplication.REJECTED if action == "reject" else CTOUsageApplication.RETURNED, action
             )
-    elif status == CTOUsageApplication.ENDORSED_BY_SUPERVISOR and can_act_hr_step(acting_employee, filers):
+    elif status == CTOUsageApplication.ENDORSED_BY_SUPERVISOR and can_act_hr_step(acting_employee, filers, application):
         if action == "process":
             allowed = True
             apply_transition(CTOUsageApplication.PROCESSED_BY_HR, "process")

@@ -191,6 +191,6 @@ class ActionForm(forms.Form):
 
     def clean(self):
         c = super().clean()
-        if c.get("action") == "return" and not (c.get("notes") or "").strip():
-            self.add_error("notes", "Type the reason for returning it, so the filer knows what to fix.")
+        if c.get("action") in ("return", "reject") and not (c.get("notes") or "").strip():
+            self.add_error("notes", "Type the reason for returning or rejecting it, so the filer knows why.")
         return c

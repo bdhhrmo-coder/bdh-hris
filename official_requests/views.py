@@ -1,4 +1,5 @@
 from django.contrib import messages
+from leave.permissions import RETURN_NEEDS_REMARK
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
@@ -78,6 +79,10 @@ def request_action(request, pk):
 
     if acting_employee is None:
         raise PermissionDenied("No employee record is linked to your account.")
+    # A return or rejection always carries a remark (owner requests 2026-11-03).
+    if action in ("return", "reject") and not notes:
+        messages.error(request, RETURN_NEEDS_REMARK)
+        return redirect("official_requests:request_queue")
 
     target_status = next_status_for(official_request)
     expected_action = action_name_for(target_status) if target_status else None

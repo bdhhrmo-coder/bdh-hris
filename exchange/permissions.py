@@ -7,6 +7,7 @@ from leave.permissions import (  # noqa: F401 (re-exported for exchange callers)
     can_act_ao_step,
     can_act_coh_step,
     can_act_hr_step,
+    exclude_own_endorsements,
     UNIT_STEP,
     can_endorse,
     can_endorse_second,
@@ -87,5 +88,7 @@ def visible_exchange_requests_for(acting_employee):
     ]
     qs = qs | DutyExchangeRequest.objects.filter(pk__in=second_ids)
 
-    # Never one's own exchange, at any step (owner decision 2026-10-26).
+    # Never one's own exchange, at any step (owner decision 2026-10-26),
+    # and never at the HR step after endorsing it (2026-11-03).
+    qs = exclude_own_endorsements(qs, acting_employee)
     return qs.exclude(employee_a=acting_employee).exclude(employee_b=acting_employee).distinct()
