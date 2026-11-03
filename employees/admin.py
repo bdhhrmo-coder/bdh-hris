@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from accounts.admin import RoleAssignmentInline
+
 from .models import EducationHistory, Employee, EmployeeEditHistory, EmployeeProfileEditRequest
 
 
@@ -13,7 +15,7 @@ class EmployeeAdmin(admin.ModelAdmin):
     list_display = ("employee_id", "surname", "first_name", "position", "employment_status", "is_active")
     search_fields = ("employee_id", "surname", "first_name")
     list_filter = ("employment_status", "is_active", "sections")
-    inlines = [EducationHistoryInline]
+    inlines = [RoleAssignmentInline, EducationHistoryInline]
     filter_horizontal = ("sections", "units")
 
 
