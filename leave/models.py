@@ -271,6 +271,13 @@ class LeaveApplication(models.Model):
             rows.append(("Wellness Leave reason", self.get_wellness_reason_display()))
         return rows
 
+    def queue_details(self):
+        """Short details for the approver lists (dry-run item 9, 2026-11-03).
+        Illness is left out: it is medical information and stays on the
+        application's own page."""
+        return "; ".join(f"{label}: {value}" for label, value in self.details_6b()
+                         if label not in ("Sick Leave", "Special Leave Benefits for Women"))
+
     def is_editable_by_filer(self):
         """The filer may correct the application before anyone acts on it,
         or after it is returned (Batch 8)."""

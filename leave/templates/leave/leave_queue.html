@@ -9,7 +9,7 @@
   {% for a in applications %}
   <tr>
     <td><a href="{% url 'leave:leave_detail' a.pk %}">{{ a.employee.full_name }}</a></td>
-    <td>{{ a.leave_type.name }}</td>
+    <td><strong>{{ a.leave_type.name }}</strong>{% with d=a.queue_details %}{% if d %}<br><small>{{ d }}</small>{% endif %}{% endwith %}</td>
     <td>{{ a.dates_label }}</td>
     <td>{{ a.number_of_days }}</td>
     <td>{% status_badge a.status a.get_status_display %}</td>

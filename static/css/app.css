@@ -949,3 +949,6 @@ body.is-test-system { padding-bottom: 40px; }
    one is typed. */
 .remark-input { width: 15rem; max-width: 100%; margin: 0 0 0.4rem 0; display: block; }
 .row-actions button[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+/* Approver lists show the whole reason, not a cut-off one (dry-run item 9, 2026-11-03). */
+.reason-cell { display: inline-block; min-width: 14rem; max-width: 32rem; white-space: normal; }
