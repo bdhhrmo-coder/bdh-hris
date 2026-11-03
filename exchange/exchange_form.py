@@ -37,11 +37,14 @@ def fill_exchange_form(req, printed_by=None):
     a, b = req.employee_a, req.employee_b
 
     f.section("1.  EMPLOYEES AND DUTY DATES")
+    def on(day, shift):
+        return f"{day:%b %d, %Y}" + (f"\n{shift.code}" if shift else "")
+
     f.table(
         ["Employee", "Original Duty Date", "Will Render Duty On"],
         [
-            [f"A:  {a.full_name}\n{a.position}", f"{req.date_a:%b %d, %Y}", f"{req.date_b:%b %d, %Y}"],
-            [f"B:  {b.full_name}\n{b.position}", f"{req.date_b:%b %d, %Y}", f"{req.date_a:%b %d, %Y}"],
+            [f"A:  {a.full_name}\n{a.position}", on(req.date_a, req.shift_a), on(req.date_b, req.shift_b)],
+            [f"B:  {b.full_name}\n{b.position}", on(req.date_b, req.shift_b), on(req.date_a, req.shift_a)],
         ],
         [("A", "C"), ("D", "D"), ("E", "G")],
     )
@@ -53,6 +56,7 @@ def fill_exchange_form(req, printed_by=None):
     f.field("Section/Unit (A):", _sections(a))
     f.field("Section/Unit (B):", _sections(b))
     f.field("Date Filed:", f"{req.filed_at:%m/%d/%Y}")
+    f.field("Type:", req.get_kind_display())
     f.field("Reason:", req.reason)
     if req.is_emergency:
         f.field("Emergency:", f"Yes — {req.emergency_justification}")

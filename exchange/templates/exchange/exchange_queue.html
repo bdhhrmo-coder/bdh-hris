@@ -5,14 +5,14 @@
 <h1>Duty exchange requests awaiting my action</h1>
 <div class="card">
 <table>
-  <tr><th>Employee A</th><th>Date A</th><th>Employee B</th><th>Date B</th><th>Emergency?</th><th>Status</th><th>Action</th></tr>
+  <tr><th>Employee A</th><th>Date A</th><th>Employee B</th><th>Date B</th><th>Type / shifts</th><th>Status</th><th>Action</th></tr>
   {% for r in requests %}
   <tr>
     <td>{{ r.employee_a.full_name }}</td>
     <td>{{ r.date_a }}</td>
     <td>{{ r.employee_b.full_name }}</td>
     <td>{{ r.date_b }}</td>
-    <td>{% if r.is_emergency %}Yes — {{ r.emergency_justification }}{% else %}No{% endif %}</td>
+    <td>{{ r.get_kind_display }}{% if r.shifts_label %}<br><small>Shifts: {{ r.shifts_label }}</small>{% endif %}{% if r.is_emergency %}<br><small>{{ r.emergency_justification }}</small>{% endif %}</td>
     <td>{% status_badge r.status r.get_status_display %}</td>
     <td class="row-actions">
       <a href="{% url 'exchange:print_exchange_form' r.pk %}" target="_blank">Print form</a>

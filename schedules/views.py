@@ -157,12 +157,20 @@ def schedule_edit(request, pk):
             except ValueError:
                 messages.error(request, "The cut-off date was not understood; it was not changed.")
         schedule.save(update_fields=fields)
+        from exchange.regular import apply_all_to_new_draft, locked_cells
+
         add_id = request.POST.get("add_employee")
         if add_id:
             services.add_row(schedule, get_object_or_404(Employee, pk=add_id, is_active=True))
+            apply_all_to_new_draft(schedule, request.user)
         remove_id = request.POST.get("remove_row")
         if remove_id:
-            schedule.rows.filter(pk=remove_id).delete()
+            row = schedule.rows.filter(pk=remove_id).first()
+            if row and any(emp_id == row.employee_id for emp_id, _ in locked_cells(schedule)):
+                messages.error(request, f"{row.employee} has an approved Exchange of Duty this month, so they "
+                                        "stay on the schedule.")
+            elif row:
+                row.delete()
         if request.POST.get("then") == "submit":
             try:
                 services.submit(schedule, request.user)
@@ -175,19 +183,26 @@ def schedule_edit(request, pk):
                          if schedule.status == DutySchedule.DRAFT else "Schedule saved.")
         return redirect("schedules:edit", pk=pk)
 
+    from exchange.regular import approved_for_schedule, locked_cells
+
     codes = list(ShiftCode.objects.filter(is_active=True))
     grid = _grid(schedule)
+    locked = locked_cells(schedule)
     editor = {
         "codes": [{"id": c.pk, "code": c.code, "hours": float(c.paid_hours), "duty": c.is_duty} for c in codes],
         "days": [{"d": d.day, "wd": d.strftime("%a")[:2]} for d in schedule.days],
         "rows": [{"id": g["row"].pk, "name": g["row"].employee.full_name, "designation": g["row"].designation,
-                  "cells": [c.shift_id if c and c.shift_id else "" for c in g["cells"]]} for g in grid],
+                  "cells": [c.shift_id if c and c.shift_id else "" for c in g["cells"]],
+                  # days set by an approved regular Exchange of Duty: locked (2026-11-03)
+                  "locked": [i for i, d in enumerate(schedule.days) if (g["row"].employee_id, d) in locked]}
+                 for g in grid],
     }
     in_schedule = set(schedule.rows.values_list("employee_id", flat=True))
     return render(request, "schedules/edit.html", {
         "schedule": schedule, "editor": editor, "can_set_cutoff": is_hr(acting),
         "addable": Employee.objects.filter(is_active=True, archived_at__isnull=True).exclude(pk__in=in_schedule),
         "conflicts": services.double_bookings(schedule), "latest_return": schedule.actions.filter(action="return").last(),
+        "exchanges": approved_for_schedule(schedule),
     })
 
 
@@ -195,6 +210,8 @@ def schedule_edit(request, pk):
 
 @login_required
 def schedule_detail(request, pk):
+    from exchange.regular import approved_for_schedule
+
     acting, schedule = _get(request, pk)
     return render(request, "schedules/detail.html", {
         "schedule": schedule, "grid": _grid(schedule), "history": schedule.actions.select_related("acted_by__employee"),
@@ -206,6 +223,7 @@ def schedule_detail(request, pk):
             DutySchedule.DRAFT, DutySchedule.APPROVED, DutySchedule.RECORDED),
         "codes": ShiftCode.objects.filter(is_active=True),
         "conflicts": services.double_bookings(schedule),
+        "exchanges": approved_for_schedule(schedule),
     })
 
 

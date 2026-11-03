@@ -59,6 +59,7 @@ MENU = [
     ("workforce", "Workforce", "users", [
         ("Employees", "employees:employee_list", "user-round", "can_list_employees"),
         ("Duty Schedules", "schedules:list", "calendar-range", "can_view_schedules"),
+        ("Approved Exchanges of Duty", "exchange:approved_exchanges", "repeat", "can_view_schedules"),
     ]),
     ("reports", "Reports", "chart-column", [
         ("Dashboard", "dashboard:dashboard_home", "chart-column", "can_view_dashboard"),

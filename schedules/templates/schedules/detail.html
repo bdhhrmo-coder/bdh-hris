@@ -12,6 +12,7 @@
   {% if schedule.recorded_at %} · Recorded by HR {{ schedule.recorded_at|date:"M j, Y g:i A" }}{% endif %}
   · Exchange cut-off: {{ schedule.cutoff_date|date:"M j, Y" }}
 </p>
+{% include "schedules/_exchanges.html" %}
 {% if can_set_cutoff %}
 <form method="post" action="{% url 'schedules:cutoff' schedule.pk %}" class="row-actions">
   {% csrf_token %}

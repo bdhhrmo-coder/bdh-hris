@@ -318,16 +318,23 @@ Decided by the project owner in a 2026-11-01 design session; these **replace** t
 - Requires mutual written consent between the two employees, plus Supervisor endorsement as part of the full Employee→Supervisor→HR→AO→COH chain (Supervisor endorsement is a step within that chain, not a substitute for it)
 - Must never generate extra OT, extra CTO, or extra pay
 - **Timing:**
-  - Normal requests: filed at least 1 week before the next month's schedule is approved
+  - Normal (regular) requests: filed and approved before the next month's schedule is submitted (owner clarification 2026-11-03, §8.1)
   - Modifications to an already-approved schedule: 24–72 hours notice
   - Documented emergency: same-day filing allowed, with written follow-up within 24 hours
 
-### 8.1 Settled with duty schedules (2026-10-09, Batch 5)
+### 8.1 Exchange of Duty and the duty schedule (Batch 5, 2026-10-09; reworked by the owner 2026-11-03)
 - Partners must be in the **same unit**, or the **same section where that section has no units**; their positions may differ (owner decision 2026-11-03, dry-run item 8; replaces "same position"). `exchange/schedule_checks.py same_work_area`.
-- A must be on duty on date A and B on date B; A must be **off** on date B and B off on date A.
-- **Before the schedule is approved:** file at least **7 days before the schedule's cut-off date**, checked against the submitted schedule. The cut-off is set by HR per schedule (default: the 20th of the month before, `SCHEDULE_CUTOFF_DAY`). **After COH approval:** the 24-hour rule. Emergency: same day.
-- A date with no submitted schedule on file is not checked against a schedule (allowed as before, with a note).
-- At COH approval the swap is written into the schedule (giver → OFF, taker → the shift); every change is kept in the schedule's change history. If the schedule changed since filing, approval stops and the approver is told to return the request.
+- **Three kinds, decided by the system at filing from the month's schedule** (`DutyExchangeRequest.kind`, `exchange/regular.py kind_for`; owner decisions 2026-11-03):
+  - **Regular** — that month's schedule is not submitted yet (none, or only a draft). Policy: requested **and approved before the supervisor submits** the schedule. Both shifts are picked on the request (`shift_a` = A's shift on date A, which B works; `shift_b` = B's shift on date B, which A works; duty shifts only). Filing closes **7 days before the month's cut-off** (the draft's cut-off, else the default 20th of the month before). Not checked against a schedule (there is none yet).
+  - **Change to an approved schedule** (`MODIFICATION`) — the schedule is approved/recorded: **24 hours' notice**; checked against the schedule (A on duty on date A, B on date B, each off on the other's date); shifts copied from it.
+  - **Emergency** — "Documented emergency" ticked: same day allowed; written follow-up within 24 hours (checked by HR, not tracked by the system).
+  - While the schedule is **submitted but not yet approved**, only an emergency can be filed. One date in an approved month and one in an unprepared month must be filed separately.
+- **At COH approval:**
+  - Regular → written into that month's **draft** (giver OFF, taker the shift), or into the draft when it is created later (`apply_to_drafts`, `apply_all_to_new_draft`). Those days are **locked** in the draft (`locked_cells`; `schedules.services.save_grid` ignores changes to them, the grid shows them disabled with a gold outline, the pattern tool and Excel upload skip them, and an employee with a locked day can't be removed from the schedule).
+  - Change / Emergency → written into the submitted/approved schedule (`schedule_checks.apply_to_schedules`) with change history; **never into a draft**. If the schedule changed since filing, approval stops and the approver returns it.
+- **Submitting a schedule** (`services._check_exchanges_before_submit`): refused while a regular exchange for that month is still in the chain after consent; one still waiting for the partner's consent is **cancelled** (both employees notified).
+- **Supervisor visibility:** "Approved Exchanges of Duty" (Workforce menu, `/exchange/approved/`, by month; Supervisors see their own units/sections, HR/AO/COH all) and a card on the schedule edit and detail pages.
+- No one may be on two live or approved exchanges for the same date. Max 3 per month and partner consent are unchanged. Older requests became "Emergency" or "Change" by migration `exchange 0003`.
 
 ---
 
@@ -338,7 +345,7 @@ Decided by the project owner in a 2026-11-01 design session; these **replace** t
 - Prepared by the section/unit **Supervisor** (incl. OIC) **or HR**. Entry: monthly grid with dropdowns + "repeat pattern" tool, or the Excel template (F50 layout).
 - Routing (whole schedule): **Prepared → Reviewed (HR) → Recommending approval (AO) → Approved (COH) → Recorded (HR)**. A return needs a remark; the resubmitted schedule restarts at HR review. The preparer never acts on it later (so an HR-prepared schedule is reviewed and recorded by a different HR person).
 - **Locks at COH approval** (the approval date is stored per schedule). Shown in "My Schedule" and staff notified only after HR records it.
-- After approval, changes come only from an approved Exchange of Duty or an HR correction with a reason; both are logged (ScheduleChange, Audit Log).
+- After approval, changes come only from an approved Exchange of Duty (change or emergency) or an HR correction with a reason; both are logged (ScheduleChange, Audit Log). Approved regular exchanges are already in the draft and locked there (§8.1).
 - Double-booking (same person on duty in two schedules on one day) is **flagged, not blocked**.
 - **Save as draft (owner 2026-11-03, dry-run item 5):** a schedule stays a Draft until "Save and submit"; a Draft is seen and edited **only by its preparer** (not HR, AO or COH; nothing is routed or notified). If someone else's draft exists for the same area and month, a new one is refused with the preparer's name. HR sets the Exchange of Duty cut-off on the schedule page once it is submitted (before COH approval). The grid has cell lines on screen and in print.
 - Printout: long bond landscape, **whole month on one page**, digital stamps for Prepared / Reviewed / Recommending Approval / Approved plus "Recorded by HR", from the action log (current cycle only).

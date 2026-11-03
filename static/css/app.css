@@ -783,6 +783,10 @@ a.kpi-card:hover, a.kpi-card:focus-visible { border-color: var(--navy-700); box-
 .sched-readonly td { min-width: 2.6rem; }
 .cell-duty { background: #e7f4ec; }
 .cell-off { background: #f3f4f6; color: var(--gray-600, #6b7280); }
+/* Day set by an approved regular Exchange of Duty: locked in the draft (2026-11-03). */
+.sched-grid td.cell-eod { box-shadow: inset 0 0 0 2px #E5B83F; }
+.sched-grid td.cell-eod select { cursor: not-allowed; }
+.cell-eod-key { box-shadow: inset 0 0 0 2px #E5B83F; padding: 0 .3rem; border-radius: 3px; }
 .my-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; margin-top: .75rem; }
 .my-day { display: flex; flex-direction: column; align-items: center; padding: 4px 2px; border: 1px solid var(--gray-200, #e5e7eb); border-radius: 6px; font-size: .8rem; }
 .my-day small { color: var(--gray-600, #6b7280); font-size: .7rem; }

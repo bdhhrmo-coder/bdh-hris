@@ -48,8 +48,10 @@
           <tr>
             <td class="sticky-col"><strong x-text="r.name"></strong><br><small x-text="r.designation"></small></td>
             <template x-for="(d, di) in days" :key="d.d">
-              <td :class="cellClass(r.cells[di])">
-                <select :name="'c-' + r.id + '-' + d.d" x-model="r.cells[di]" :aria-label="r.name + ' day ' + d.d">
+              <td :class="cellClass(r.cells[di]) + (isLocked(r, di) ? ' cell-eod' : '')"
+                  :title="isLocked(r, di) ? 'Set by an approved Exchange of Duty - locked' : ''">
+                <select :name="'c-' + r.id + '-' + d.d" x-model="r.cells[di]" :aria-label="r.name + ' day ' + d.d"
+                        :disabled="isLocked(r, di)">
                   <option value=""></option>
                   <template x-for="c in codes" :key="c.id"><option :value="String(c.id)" x-text="c.code" :selected="String(c.id) === r.cells[di]"></option></template>
                 </select>
@@ -96,6 +98,8 @@
   </div>
 </form>
 
+{% include "schedules/_exchanges.html" %}
+
 <div class="card">
   <h2 class="mt-0">Excel</h2>
   <p class="field-help">Download the template (laid out like F50), fill the day columns, then upload it here. Uploading replaces the days in this grid.</p>
@@ -124,6 +128,7 @@ function scheduleGrid() {
       return { hours: Math.round(hours * 100) / 100, days };
     },
     cellClass(v) { const c = byId[v]; return c ? (c.duty ? "cell-duty" : "cell-off") : ""; },
+    isLocked(r, i) { return (r.locked || []).includes(i); },
     fill() {
       const on = Math.max(1, this.p.onDays || 1), offN = Math.max(0, this.p.offDays || 0);
       const start = Math.min(Math.max(1, this.p.start || 1), this.days.length) - 1;
@@ -131,7 +136,7 @@ function scheduleGrid() {
       targets.forEach(r => {
         for (let i = start; i < this.days.length; i++) {
           const pos = (i - start) % (on + offN);
-          r.cells[i] = pos < on ? this.p.on : this.p.off;
+          if (!this.isLocked(r, i)) r.cells[i] = pos < on ? this.p.on : this.p.off;
         }
       });
       if (window.BDH && BDH.toast) BDH.toast("Pattern filled. Press Save to keep it.", "info");

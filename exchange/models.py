@@ -90,6 +90,36 @@ class DutyExchangeRequest(models.Model):
         max_length=255, blank=True, help_text="Required when is_emergency is set — the documentation §8 requires.",
     )
 
+    # Kind of exchange (owner decisions 2026-11-03), decided by the system at
+    # filing from the state of that month's duty schedule (exchange/regular.py):
+    #   REGULAR      - filed and approved BEFORE the schedule is submitted; the
+    #                  employees pick the shifts; at COH approval it is written
+    #                  into the supervisor's draft and those days are locked.
+    #   MODIFICATION - the schedule is already approved; 24 hours' notice;
+    #                  written into the approved schedule at COH approval.
+    #   EMERGENCY    - documented emergency, same day allowed; written into a
+    #                  submitted/approved schedule only, never into a draft.
+    KIND_REGULAR = "REGULAR"
+    KIND_MODIFICATION = "MODIFICATION"
+    KIND_EMERGENCY = "EMERGENCY"
+    KIND_CHOICES = [
+        (KIND_REGULAR, "Regular (before the schedule is submitted)"),
+        (KIND_MODIFICATION, "Change to an approved schedule"),
+        (KIND_EMERGENCY, "Emergency"),
+    ]
+    kind = models.CharField(max_length=15, choices=KIND_CHOICES, default=KIND_MODIFICATION)
+    # The shift each one gives up: B works shift_a on date_a, A works shift_b
+    # on date_b. Picked by the employees for a regular exchange (no schedule
+    # yet); copied from the schedule for the other kinds.
+    shift_a = models.ForeignKey("schedules.ShiftCode", on_delete=models.PROTECT, null=True, blank=True,
+                                related_name="+", verbose_name="Shift on your date")
+    shift_b = models.ForeignKey("schedules.ShiftCode", on_delete=models.PROTECT, null=True, blank=True,
+                                related_name="+", verbose_name="Shift on their date")
+
+    # Still waiting somewhere in the chain (consent included).
+    LIVE_STATUSES = {PENDING_CONSENT, SUBMITTED, ENDORSED_BY_UNIT_HEAD, ENDORSED_BY_SUPERVISOR,
+                     PROCESSED_BY_HR, RECOMMENDED_BY_AO}
+
     status = models.CharField(max_length=25, choices=STATUS_CHOICES, default=PENDING_CONSENT)
     filed_at = models.DateTimeField(auto_now_add=True)
     consented_at = models.DateTimeField(null=True, blank=True)
@@ -109,6 +139,12 @@ class DutyExchangeRequest(models.Model):
             raise ValidationError("Employee A and Employee B must be two different employees.")
         if self.date_a and self.date_b and self.date_a == self.date_b:
             raise ValidationError("An exchange requires two different duty dates to swap.")
+
+    @property
+    def shifts_label(self):
+        if not (self.shift_a_id or self.shift_b_id):
+            return ""
+        return f"{self.shift_a.code if self.shift_a_id else '?'} / {self.shift_b.code if self.shift_b_id else '?'}"
 
     @property
     def earliest_affected_date(self):

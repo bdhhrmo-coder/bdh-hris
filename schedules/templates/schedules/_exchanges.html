@@ -1,0 +1,15 @@
+{# Approved regular Exchanges of Duty for this month (owner decisions 2026-11-03). #}
+{% if exchanges %}
+<div class="card">
+  <h2 class="mt-0">Approved Exchanges of Duty this month</h2>
+  <p class="field-help">Approved before the schedule was submitted. They are already filled in and those days are locked{% if schedule.status == "DRAFT" or schedule.status == "RETURNED" %} (marked <span class="cell-eod-key">EOD</span> in the grid){% endif %}.</p>
+  <div class="table-scroll"><table>
+    <tr><th>#</th><th>Employee A</th><th>A's date (B works it)</th><th>Employee B</th><th>B's date (A works it)</th></tr>
+    {% for x in exchanges %}
+    <tr><td>{{ x.pk }}</td>
+      <td>{{ x.employee_a.full_name }}</td><td>{{ x.date_a|date:"M j" }} &middot; {{ x.shift_a.code|default:"—" }}</td>
+      <td>{{ x.employee_b.full_name }}</td><td>{{ x.date_b|date:"M j" }} &middot; {{ x.shift_b.code|default:"—" }}</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endif %}

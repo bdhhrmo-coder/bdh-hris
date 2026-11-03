@@ -198,11 +198,17 @@ def exchange_action(request, pk):
             from django.core.exceptions import ValidationError
             from django.db import transaction
 
+            from .regular import apply_to_drafts
             from .schedule_checks import apply_to_schedules
 
             try:
                 with transaction.atomic():
-                    apply_to_schedules(exchange_request, request.user)
+                    if exchange_request.kind == DutyExchangeRequest.KIND_REGULAR:
+                        # Regular (owner 2026-11-03): filled into the month's draft and
+                        # locked there; applied to a draft created later as well.
+                        apply_to_drafts(exchange_request, request.user)
+                    else:
+                        apply_to_schedules(exchange_request, request.user)  # never touches a draft
                     apply_transition(DutyExchangeRequest.APPROVED, "approve")
             except ValidationError as exc:
                 messages.error(request, "Not approved - the duty schedule no longer fits this exchange: "
@@ -236,3 +242,41 @@ def print_exchange_form(request, pk):
         request, lambda: render_pdf(req, printed_by=request.user),
         f"Exchange-of-Duty_{req.employee_a.surname}_{req.pk}.pdf", "exchange:my_exchanges",
     )
+
+
+@login_required
+def approved_exchanges(request):
+    """Approved regular Exchanges of Duty by month, for the people who prepare
+    and check schedules (owner decisions 2026-11-03): Supervisors see their
+    own units/sections; HR, AO and COH see all."""
+    from datetime import date
+
+    from django.db.models import Q
+
+    from leave.permissions import is_administrative_officer, is_chief_of_hospital, is_hr
+    from official_requests.batch import supervised_employees
+
+    acting = get_acting_employee(request.user)
+    if acting is None:
+        raise PermissionDenied("No employee record is linked to your account.")
+    see_all = is_hr(acting, True) or is_administrative_officer(acting, True) or is_chief_of_hospital(acting, True)
+    if not see_all and not acting.has_role("SUPERVISOR", viewing=True):
+        raise PermissionDenied("Only Supervisors, HR, the AO and the COH can see this list.")
+    today = date.today()
+    nxt = date(today.year + (today.month == 12), today.month % 12 + 1, 1)
+    try:
+        year, month = int(request.GET.get("y", nxt.year)), int(request.GET.get("m", nxt.month))
+        first = date(year, month, 1)
+    except ValueError:
+        first = nxt
+    last = date(first.year + (first.month == 12), first.month % 12 + 1, 1)
+    qs = (DutyExchangeRequest.objects.filter(kind=DutyExchangeRequest.KIND_REGULAR,
+                                             status=DutyExchangeRequest.APPROVED)
+          .filter(Q(date_a__gte=first, date_a__lt=last) | Q(date_b__gte=first, date_b__lt=last))
+          .select_related("employee_a", "employee_b", "shift_a", "shift_b").order_by("date_a", "pk"))
+    if not see_all:
+        ids = supervised_employees(acting, viewing=True).values_list("pk", flat=True)
+        qs = qs.filter(Q(employee_a_id__in=ids) | Q(employee_b_id__in=ids))
+    prev = date(first.year - (first.month == 1), (first.month - 2) % 12 + 1, 1)
+    return render(request, "exchange/approved_exchanges.html", {
+        "exchanges": qs, "first": first, "prev": prev, "next": last})
