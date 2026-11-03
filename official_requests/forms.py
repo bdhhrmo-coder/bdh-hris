@@ -4,13 +4,31 @@ from .models import OfficialRequest
 
 
 class OfficialRequestForm(forms.ModelForm):
+    """One form for the three request types (owner decisions 2026-11-03):
+    Official Business (Travel Order), Local Official Errand and Authorized
+    OT / rest day / holiday work. Official Time is no longer offered."""
+
     class Meta:
         model = OfficialRequest
         fields = [
             "request_type", "start_date", "end_date", "time_from", "time_to",
-            "destination", "purpose", "hours_requested", "is_restday_or_holiday",
+            "destination", "expenses_authorized", "transportation_allowed",
+            "purpose", "hours_requested", "is_restday_or_holiday",
         ]
+        labels = {
+            "time_from": "Time from", "time_to": "Time to",
+            "expenses_authorized": "Expenses authorized",
+            "transportation_allowed": "Transportation allowed",
+            "is_restday_or_holiday": "Falls on a rest day or holiday",
+        }
+        help_texts = {
+            "time_from": "", "destination": "",
+            "expenses_authorized": "Per Diem goes through the Provincial Budget Office before the Governor.",
+            "transportation_allowed": "For example: Government Vehicle, Public Transportation.",
+            "hours_requested": "Hours worked.", "is_restday_or_holiday": "",
+        }
         widgets = {
+            "request_type": forms.Select(attrs={"x-model": "t"}),
             "start_date": forms.DateInput(attrs={"type": "date"}),
             "end_date": forms.DateInput(attrs={"type": "date"}),
             "time_from": forms.TimeInput(attrs={"type": "time"}),
@@ -18,13 +36,29 @@ class OfficialRequestForm(forms.ModelForm):
             "purpose": forms.Textarea(attrs={"rows": 3}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        labels = dict(OfficialRequest.REQUEST_TYPE_CHOICES)
+        self.fields["request_type"].choices = [("", "---------")] + [
+            (code, labels[code]) for code in OfficialRequest.ACTIVE_REQUEST_TYPES]
+        self.fields["transportation_allowed"].initial = "Government Vehicle"
+
     def clean(self):
         cleaned = super().clean()
         request_type = cleaned.get("request_type")
         if request_type == OfficialRequest.OT_RESTDAY_HOLIDAY and not cleaned.get("hours_requested"):
             self.add_error("hours_requested", "Required for Authorized OT/restday/holiday work.")
-        if request_type == OfficialRequest.TRAVEL and not cleaned.get("destination"):
-            self.add_error("destination", "Required for a Travel request.")
+        if request_type in (OfficialRequest.TRAVEL, OfficialRequest.OFFICIAL_BUSINESS) \
+                and not (cleaned.get("destination") or "").strip():
+            self.add_error("destination", "Required for this request type.")
+        if request_type == OfficialRequest.OFFICIAL_BUSINESS:
+            if not cleaned.get("expenses_authorized"):
+                self.add_error("expenses_authorized", "Choose Per Diem or Official Time.")
+            if not (cleaned.get("transportation_allowed") or "").strip():
+                self.add_error("transportation_allowed", "Required for a Travel Order.")
+        else:
+            cleaned["expenses_authorized"] = ""
+            cleaned["transportation_allowed"] = ""
         start = cleaned.get("start_date")
         end = cleaned.get("end_date")
         if start and end and end < start:
@@ -55,6 +89,8 @@ class BatchForm(forms.Form):
     apply_same = forms.BooleanField(required=False, initial=True)
     purpose = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}))
     destination = forms.CharField(max_length=255, required=False)
+    expenses_authorized = forms.ChoiceField(choices=[("", "")] + OfficialRequest.EXPENSES_CHOICES, required=False)
+    transportation_allowed = forms.CharField(max_length=100, required=False)
 
     def __init__(self, *args, acting_employee=None, batch=None, line_initial=None, **kwargs):
         from . import batch as batch_rules
@@ -90,8 +126,13 @@ class BatchForm(forms.Form):
     def clean(self):
         c = super().clean()
         kind = c.get("kind")
-        if kind == "TRAVEL" and not (c.get("destination") or "").strip():
-            self.add_error("destination", "Required for Travel.")
+        if kind in ("TRAVEL", "OFFICIAL_BUSINESS") and not (c.get("destination") or "").strip():
+            self.add_error("destination", "Required for this type.")
+        if kind == "OFFICIAL_BUSINESS":
+            if not c.get("expenses_authorized"):
+                self.add_error("expenses_authorized", "Choose Per Diem or Official Time.")
+            if not (c.get("transportation_allowed") or "").strip():
+                self.add_error("transportation_allowed", "Required for a Travel Order.")
         employees = c.get("employees")
         if kind and employees is not None:
             role = self.filer_role()

@@ -13,36 +13,77 @@ from .models import OfficialRequest as OR
 
 ROUTING_CONFIG = {
     OR.OFFICIAL_BUSINESS: dict(skip_supervisor=False, skip_hr=False),
-    OR.OFFICIAL_TIME: dict(skip_supervisor=True, skip_hr=False),
+    OR.OFFICIAL_TIME: dict(skip_supervisor=True, skip_hr=False),  # retired 2026-11-03; old records only
     OR.TRAVEL: dict(skip_supervisor=False, skip_hr=True),
     OR.OT_RESTDAY_HOLIDAY: dict(skip_supervisor=False, skip_hr=False),
 }
 
-# Which role acts to reach a given status, and the action-name posted for it.
+# Which action name is posted to reach a given status. APPROVED differs by
+# type, see action_name_for().
 STEP_META = {
     OR.ENDORSED_BY_UNIT_HEAD: "endorse",
     OR.ENDORSED_BY_SUPERVISOR: "endorse",
     OR.PROCESSED_BY_HR: "process",
     OR.RECOMMENDED_BY_AO: "recommend",
+    OR.FORWARDED_TO_CAPITOL: "forward",
     OR.APPROVED: "approve",
     OR.RECORDED: "record",
 }
 
+# Button wording for each action (the queue shows these).
+ACTION_LABELS = {
+    "endorse": "Endorse",
+    "process": "Process",
+    "recommend": "Recommend",
+    "forward": "Recommend approval (forward to the Capitol)",
+    "approve": "Approve",
+    "record": "Record",
+    "record_approval": "Record the Governor's approval",
+}
+
 
 def routing_steps(request_type):
-    """Ordered list of statuses this request_type passes through, e.g.
-    [SUBMITTED, ENDORSED_BY_SUPERVISOR, PROCESSED_BY_HR, RECOMMENDED_BY_AO, APPROVED]
-    for Official Business, with ENDORSED_BY_SUPERVISOR or PROCESSED_BY_HR
-    omitted for a type that skips that step."""
+    """Ordered list of statuses this request_type passes through.
+
+    Owner decisions 2026-11-03:
+      Official Business (Travel Order): Supervisor -> HR -> AO -> COH
+        (recommending approval, FORWARDED_TO_CAPITOL) -> APPROVED, which HR
+        records once the Governor has signed the Travel Order.
+      Local Official Errand (TRAVEL): Supervisor -> AO, who approves (F59).
+      OT / rest day / holiday: Supervisor -> HR -> AO -> COH (unchanged)."""
     config = ROUTING_CONFIG[request_type]
     steps = [OR.SUBMITTED]
     if not config["skip_supervisor"]:
         steps.append(OR.ENDORSED_BY_SUPERVISOR)
     if not config["skip_hr"]:
         steps.append(OR.PROCESSED_BY_HR)
+    if request_type == OR.TRAVEL:
+        steps.append(OR.APPROVED)  # approved by the AO
+        return steps
     steps.append(OR.RECOMMENDED_BY_AO)
+    if request_type == OR.OFFICIAL_BUSINESS:
+        steps.append(OR.FORWARDED_TO_CAPITOL)
     steps.append(OR.APPROVED)
     return steps
+
+
+def approver_role(request_type, target_status):
+    """Who acts to reach target_status: "SUPERVISOR", "HR", "AO" or "COH"."""
+    if target_status in (OR.ENDORSED_BY_UNIT_HEAD, OR.ENDORSED_BY_SUPERVISOR):
+        return "SUPERVISOR"
+    if target_status in (OR.PROCESSED_BY_HR, OR.RECORDED):
+        return "HR"
+    if target_status == OR.RECOMMENDED_BY_AO:
+        return "AO"
+    if target_status == OR.FORWARDED_TO_CAPITOL:
+        return "COH"
+    if target_status == OR.APPROVED:
+        if request_type == OR.TRAVEL:
+            return "AO"
+        if request_type == OR.OFFICIAL_BUSINESS:
+            return "HR"  # records the Governor's approval
+        return "COH"
+    return None
 
 
 def next_status(request_type, current_status):
@@ -75,5 +116,11 @@ def next_status_for(official_request):
     return nxt
 
 
-def action_name_for(status):
+def action_name_for(status, request_type=None):
+    if status == OR.APPROVED and request_type == OR.OFFICIAL_BUSINESS:
+        return "record_approval"
     return STEP_META.get(status)
+
+
+def action_label(action):
+    return ACTION_LABELS.get(action, (action or "").capitalize())

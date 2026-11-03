@@ -151,17 +151,24 @@ Implemented as a **custom `Role` model tied to Employee** (not Django's built-in
 | **Exchange of Duty** | Employee A/B → Supervisor → HR → AO → COH |
 | **Attendance Correction (formal)** | Employee → **one validator by reason** → AO. ICTU Staff validate Offline / Failed Attempt / Wrong Button-Invalid Entry; HR validates Attended meeting-activity-training / Others. No Supervisor step. (Changed 2026-10-06 by the project owner to follow the Missed Log Justification Form, BDH-ADM-AO-01F10; previously Employee → Supervisor → HR → AO.) |
 | **Attendance Correction (minor administrative)** | HR Processor → HR Admin (no formal approval chain needed) |
-| **Official Business** | Employee → Supervisor → HR → AO → COH |
-| **Official Time** | Employee → HR → AO → COH (no Supervisor step) |
-| **Travel** | Employee → Supervisor → AO → COH (no HR step) |
+| **Official Business (Travel Order)** | Employee → Supervisor → HR → AO → COH **recommending approval** → status **Forwarded to the Capitol** → HR records the Governor's decision (approved / disapproved with a remark). (Owner decisions 2026-11-03.) |
+| **Local Official Errand** (code `TRAVEL`) | Employee → Supervisor → **AO approves** (matches F59). Kept until the Out-on-Pass / travel authorization module replaces it (owner, 2026-11-03, Option B). |
+| ~~Official Time~~ | **Retired 2026-11-03**: it only meant a trip without per diem, now the Travel Order's "Expenses authorized: Official Time" option. Code kept for old records only. |
 | **Authorized OT/restday/holiday work** | Employee → Supervisor → HR → AO → COH |
+
+**Official Business (Travel Order) and Local Official Errand (owner decisions 2026-11-03):**
+- Names: "Official Business (Travel Order)" = an official trip outside the area covered by a **Governor-approved Travel Order**, with or without per diem; "Local Official Errand" = official work away from the workstation during office hours, nearby (Municipal Hall, bank). The stored codes `OFFICIAL_BUSINESS`/`TRAVEL` are unchanged.
+- The Travel Order is approved at the Capitol (rank-and-file: COH recommends; per diem goes through the Provincial Budget Office). The COH's own Travel Order is recorded by HR (`recorded_only`, as before). HR may not return a Travel Order already at the Capitol; "Record disapproval" needs a remark.
+- New fields: `expenses_authorized` (Per Diem / Official Time) and `transportation_allowed`; destination required for both types.
+- **Printout** (`official_requests/travel_order.py`): BDH's own Travel Order template (`printouts/assets/travel_order_base.docx`: letterhead, footer note), filled in, **wet-signature lines, no BDH code, no digital stamps**. "Recommending approval" (COH) except on the COH's own; "Certified as to Availability of Funds" (Budget Officer) **only with Per Diem**; "Approved by" the Governor always. A group request prints one Travel Order listing everyone. Printable once forwarded (or, for the COH's own, once filed). Names of officials: `TravelOrderSettings` (System Administration). Red "TEST SYSTEM" line on the test PC.
+- F59 (Travel Authorization and Transportation Request) printout for the errand: not built yet.
 
 **Attendance Correction, multiple dates (settled 2026-10-07):** one request holds 1–10 dates, each with its own times and reason. All dates in one formal request must belong to the same validator (ICTU-type and HR-type reasons are filed separately). Approvers act on the whole request only (validate/approve, return, reject); **a return needs a remark**. The filer edits and resubmits the same request, which **starts again from the first step**; the return history is kept and printed on F10.
 
 **Group (batch) filing — Travel, Official Business, OT / rest-day / holiday work (settled 2026-10-07):**
 - Who files: **Supervisor** (own sections/units incl. OIC; all types), **HR Processor** (any employee; **Travel and Official Business only**), **HR Administrator** (any employee; all types). The filer cannot include themselves.
 - One batch; each employee-date is its own OfficialRequest line. Whole-batch approve/return (remark required); filer edits and resubmits, starting the route again.
-- Routes (filer's step counts as done): OT/rest/holiday by Supervisor → HR → AO → COH; by HR Admin → AO → COH. Travel by Supervisor or HR → AO → COH. **Official Business by Supervisor → HR → AO → COH; by HR → Supervisor → AO → COH** (the Supervisor still endorses).
+- Routes (filer's step counts as done): OT/rest/holiday by Supervisor → HR → AO → COH; by HR Admin → AO → COH. **Local Official Errand by Supervisor or HR → AO approves. Official Business (Travel Order) by Supervisor → HR → AO → COH (recommending) → Capitol, HR records; by HR → Supervisor → AO → COH (recommending) → Capitol, HR records** (2026-11-03).
 - The filer can never act on their own batch at a later step, even with other roles or OIC. Approved OT creates no CTO (§7.1 unchanged). A regular employee filing their own request keeps the normal route.
 
 **No self-approval; next level up (owner decision 2026-10-26, pilot import):**
@@ -357,7 +364,7 @@ Must include:
 Planned after HRIS go-live and a stable period; not in scope yet. One system, one database, one employee list; each module its own Django app reusing roles/OIC, routing, digital stamps, documents, notifications, Audit Log and the menu.
 - **HR:** Recruitment and Selection, Performance Management (CSC SPMS), Learning and Development.
 - **Administrative:** Job Order, Trip Request and Vehicle Dispatching, Out-on-Pass (build only after the revised policy is approved), Activity Scheduler.
-- **Travel authority = the existing HRIS Travel request** (OfficialRequest). Do NOT build a separate Travel Authorization module; the administrative side adds only vehicle dispatching (trip, vehicle, driver), linked to the approved Travel request.
+- **Changed by the owner 2026-11-03:** local official errands and travel authorization (F59) move to the planned **Out-on-Pass / travel authorization** module; until it exists, the HRIS keeps "Local Official Errand". Governor-approved trips stay in the HRIS as "Official Business (Travel Order)". Vehicle dispatching links to these.
 - **Applications are encoded by HR on the hospital network.** No online/public applicant portal (it would need internet exposure and Data Privacy Act work, §13).
 - Suggested order: Activity Scheduler + Out-on-Pass → Job Order + Dispatching → L&D + Recruitment → Performance Management. Existing Google Sheets tools are migrated once, then retired.
 

@@ -25,6 +25,13 @@
 <div class="card">
   <p class="mt-0"><strong>Purpose:</strong> {{ batch.purpose|linebreaksbr }}</p>
   {% if batch.destination %}<p><strong>Destination:</strong> {{ batch.destination }}</p>{% endif %}
+  {% if batch.request_type == "OFFICIAL_BUSINESS" %}
+  <p><strong>Expenses authorized:</strong> {{ batch.get_expenses_authorized_display|default:"—" }} &middot;
+     <strong>Transportation allowed:</strong> {{ batch.transportation_allowed|default:"—" }}</p>
+  {% if batch.status == "FORWARDED_TO_CAPITOL" or batch.status == "APPROVED" %}
+  <p><a class="btn" href="{% url 'official_requests:print_batch_travel_order' batch.pk %}" target="_blank">Print Travel Order</a></p>
+  {% endif %}
+  {% endif %}
   <h2>Lines ({{ lines|length }})</h2>
   <div class="table-scroll">
   <table>

@@ -229,8 +229,8 @@ class COHOwnRequestTests(TestCase):
         c = Client()
         c.force_login(emp.user)
         c.post(reverse("official_requests:request_apply"), {
-            "request_type": OfficialRequest.OFFICIAL_TIME, "start_date": "2026-11-20", "end_date": "2026-11-20",
-            "purpose": "Seminar"})
+            "request_type": OfficialRequest.TRAVEL, "start_date": "2026-11-20", "end_date": "2026-11-20",
+            "destination": "Municipal Hall", "purpose": "Seminar"})
         req = OfficialRequest.objects.get(employee=emp)
         self.assertFalse(req.recorded_only)
         c.force_login(self.hr.user)

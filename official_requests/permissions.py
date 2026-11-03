@@ -15,7 +15,7 @@ from leave.permissions import (  # noqa: F401 (re-exported for callers)
 )
 
 from .models import OfficialRequest
-from .routing import next_status_for
+from .routing import approver_role, next_status_for
 
 
 def can_view_request(acting_employee, official_request):
@@ -45,11 +45,12 @@ def actor_may_advance(acting_employee, official_request):
         if official_request.status == OfficialRequest.ENDORSED_BY_UNIT_HEAD:
             return can_endorse_second(acting_employee, filers)
         return can_endorse(acting_employee, filers)
-    if target_status in (OfficialRequest.PROCESSED_BY_HR, OfficialRequest.RECORDED):
+    role = approver_role(official_request.request_type, target_status)
+    if role == "HR":
         return can_act_hr_step(acting_employee, filers, official_request)
-    if target_status == OfficialRequest.RECOMMENDED_BY_AO:
+    if role == "AO":
         return can_act_ao_step(acting_employee, filers)
-    if target_status == OfficialRequest.APPROVED:
+    if role == "COH":
         return can_act_coh_step(acting_employee, filers)
     return False
 

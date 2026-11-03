@@ -102,7 +102,7 @@ unchanged (CLAUDE.md 8B); homepage/views.py _role_cards() decides which cards sh
       <li><a href="{% url 'cto:my_cto' %}">CTO</a></li>
       <li><a href="{% url 'exchange:my_exchanges' %}">Exchange of Duty</a></li>
       <li><a href="{% url 'attendance:formal_correction_apply' %}">Attendance correction</a></li>
-      <li><a href="{% url 'official_requests:my_requests' %}">Official Business/Time/Travel/OT</a></li>
+      <li><a href="{% url 'official_requests:my_requests' %}">Official Business / Errand / OT</a></li>
       {% if can_file_batch %}<li><a href="{% url 'official_requests:batch_file' %}">File for a group</a></li>{% endif %}
       {% if can_view_dashboard %}<li><a href="{% url 'dashboard:dashboard_home' %}">Dashboard (analytics)</a></li>{% endif %}
     </ul>
