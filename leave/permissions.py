@@ -292,6 +292,16 @@ def exclude_own_endorsements(qs, acting_employee, hr_status="ENDORSED_BY_SUPERVI
     return qs.exclude(pk__in=blocked) if blocked else qs
 
 
+def remark_suffix(obj):
+    """' Remark: "..."' from the latest action of a returned/rejected request
+    (owner request 2026-11-03: the filer must see why it was returned)."""
+    last = obj.actions.order_by("-acted_at", "-pk").first() if obj.pk else None
+    return f' Remark: "{last.notes}"' if last and last.notes else ""
+
+
+RETURN_NEEDS_REMARK = "Please type a remark explaining why it is being returned. Nothing was changed."
+
+
 def can_act_hr_step(acting_employee, filers, obj=None):
     return (is_hr(acting_employee) and acting_employee.pk not in _ids(filers)
             and acting_employee.pk not in endorser_ids(obj))

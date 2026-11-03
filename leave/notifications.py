@@ -12,7 +12,7 @@ LeaveApplicationAction.objects.create() from.
 from notifications.services import notify
 
 from .models import LeaveApplication
-from .permissions import ao_step_actors, coh_step_actors, endorsers_for, hr_step_actors, second_endorsers_for
+from .permissions import remark_suffix, ao_step_actors, coh_step_actors, endorsers_for, hr_step_actors, second_endorsers_for
 
 _QUEUE_URL = "/leave/queue/"
 _MINE_URL = "/leave/mine/"
@@ -72,6 +72,6 @@ def notify_status_change(application):
     elif status in _OUTCOME_STATUSES:
         notify(
             application.employee,
-            f"Your {leave_type_name} application was {application.get_status_display().lower()}.",
+            f"Your {leave_type_name} application was {application.get_status_display().lower()}.{remark_suffix(application)}",
             _MINE_URL,
         )

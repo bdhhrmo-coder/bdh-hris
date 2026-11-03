@@ -1,5 +1,6 @@
 from datetime import date
 
+from leave.permissions import RETURN_NEEDS_REMARK
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
@@ -181,6 +182,10 @@ def leave_action(request, pk):
 
     if acting_employee is None:
         raise PermissionDenied("No employee record is linked to your account.")
+    # A return always carries a remark (owner request 2026-11-03).
+    if action == "return" and not notes:
+        messages.error(request, RETURN_NEEDS_REMARK)
+        return redirect("leave:leave_queue")
 
     full_routing = application.leave_type.requires_full_routing
     status = application.status

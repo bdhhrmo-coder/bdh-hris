@@ -241,13 +241,32 @@ class BatchTests(TestCase):
         self.assertEqual(list(batch.actions.values_list("action", flat=True)),
                          ["submit", "process", "return", "resubmit"])
 
-    def test_only_the_filer_edits_and_only_when_returned(self):
+    def test_only_the_filer_edits_while_pending_or_returned(self):
+        # Owner request 2026-11-03: the filer may edit while nobody has acted yet.
         self.file(self.sup, post_data("TRAVEL", [self.a], [{"date": "2026-10-20"}]))
         batch = B.objects.get()
+        url = reverse("official_requests:batch_edit", args=[batch.pk])
         self.client.force_login(self.proc.user)
-        self.assertEqual(self.client.get(reverse("official_requests:batch_edit", args=[batch.pk])).status_code, 403)
+        self.assertEqual(self.client.get(url).status_code, 403)
         self.client.force_login(self.sup.user)
-        self.assertEqual(self.client.get(reverse("official_requests:batch_edit", args=[batch.pk])).status_code, 302)
+        self.assertEqual(self.client.get(url).status_code, 200)
+        self.assertContains(self.client.get(reverse("official_requests:batch_detail", args=[batch.pk])), "edit it")
+        self.act(self.ao, batch, "recommend")
+        self.client.force_login(self.sup.user)
+        self.assertEqual(self.client.get(url).status_code, 302)   # an approver acted: no more edits
+
+    def test_pending_edit_keeps_first_step_and_logs_edit(self):
+        self.file(self.sup, post_data("OT", [self.a, self.b], self.ot_lines()))
+        batch = B.objects.get()
+        lines = [{"date": "2026-09-05", "time_from": "17:00", "time_to": "20:00", "employee": self.a}]
+        self.file(self.sup, post_data("OT", [self.a], lines, apply_same=False),
+                  url=reverse("official_requests:batch_edit", args=[batch.pk]))
+        batch.refresh_from_db()
+        self.assertEqual(batch.status, R.SUBMITTED)
+        self.assertEqual(batch.active_lines().count(), 1)
+        self.assertEqual(list(batch.actions.values_list("action", flat=True)), ["submit", "edit"])
+        self.assertTrue(rules.pending_untouched(batch))   # still editable until someone acts
+        self.assertTrue(Notification.objects.filter(recipient=self.proc, message__contains="edited a group").exists())
 
     # -- audit, notifications, CTO ------------------------------------------------
 

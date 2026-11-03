@@ -13,6 +13,10 @@
   <small>Skipped: {{ skipped }} (filed on behalf by {{ batch.get_filer_role_display }}).</small>
 </p>
 
+{% if can_edit_pending %}
+<div class="msg info" role="status">No approver has acted on this group request yet, so you can still
+  <a href="{% url 'official_requests:batch_edit' batch.pk %}"><strong>edit it</strong></a>.</div>
+{% endif %}
 {% if is_filer and batch.status == "RETURNED" %}
 <div class="msg warning" role="status">This group request was returned. Read the remark in the history below, then
   <a href="{% url 'official_requests:batch_edit' batch.pk %}"><strong>edit and resubmit it</strong></a>.</div>

@@ -42,14 +42,15 @@
     <td>{{ r.purpose|truncatechars:60 }}</td>
     <td>{% status_badge r.status r.get_status_display %}</td>
     <td class="row-actions">
-      <form method="post" action="{% url 'official_requests:request_action' r.pk %}">
+      <form method="post" action="{% url 'official_requests:request_action' r.pk %}" x-data="{ remark: \'\' }">
         {% csrf_token %}
+        <input type="text" name="notes" maxlength="255" x-model="remark" class="remark-input" placeholder="Remark (required to return)" aria-label="Remark (required to return)">
         {% if r.next_action %}
           <button type="submit" name="action" value="{{ r.next_action }}">{{ r.next_action|capfirst }}</button>
         {% endif %}
         <button type="submit" name="action" value="reject">Reject</button>
         {% if r.next_action != "approve" %}
-          <button type="submit" name="action" value="return">Return</button>
+          <button type="submit" name="action" value="return" :disabled="!remark.trim()" :title="remark.trim() ? '' : 'Type a remark first'">Return</button>
         {% endif %}
       </form>
     </td>

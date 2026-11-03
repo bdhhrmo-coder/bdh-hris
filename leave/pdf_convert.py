@@ -58,19 +58,34 @@ def find_libreoffice() -> str:
 def workbook_to_pdf(workbook, label: str) -> bytes:
     """Save `workbook` (an openpyxl Workbook) to a temp file, convert it to
     PDF with headless LibreOffice, and return the PDF bytes. `label` names
-    the form in error messages (e.g. "CSC Form 6")."""
+    the form in error messages (e.g. "CSC Form 6").
+
+    Each conversion uses its own throw-away LibreOffice profile folder
+    (-env:UserInstallation, fix 2026-11-03). Without it, LibreOffice run by
+    the Windows service account often does nothing - no profile it can use,
+    a first-start dialog nobody can click, or a LibreOffice window already
+    open on the server that takes the job and drops it - and the form "cannot
+    be converted to PDF". A private profile also lets two people print at
+    the same moment."""
     executable = find_libreoffice()
     with tempfile.TemporaryDirectory() as tmpdir:
         xlsx_path = Path(tmpdir) / "form.xlsx"
         workbook.save(xlsx_path)
-        result = subprocess.run(
-            [
-                executable, "--headless", "--norestore",
-                "--convert-to", "pdf", "--outdir", tmpdir, str(xlsx_path),
-            ],
-            capture_output=True, timeout=60,
-        )
+        profile = (Path(tmpdir) / "lo_profile").resolve().as_uri()
+        try:
+            result = subprocess.run(
+                [
+                    executable, f"-env:UserInstallation={profile}",
+                    "--headless", "--norestore", "--nologo", "--nodefault", "--nolockcheck",
+                    "--convert-to", "pdf", "--outdir", tmpdir, str(xlsx_path),
+                ],
+                capture_output=True, timeout=120,
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"{label} PDF conversion timed out after 120 seconds ({executable}).")
         pdf_path = Path(tmpdir) / "form.pdf"
         if not pdf_path.exists():
-            raise RuntimeError(f"{label} PDF conversion failed: {result.stderr.decode(errors='replace')}")
+            detail = (result.stderr or result.stdout or b"").decode(errors="replace").strip() or "no message"
+            raise RuntimeError(f"{label} PDF conversion failed (exit code {result.returncode}, "
+                               f"{executable}): {detail}")
         return pdf_path.read_bytes()

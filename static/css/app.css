@@ -943,3 +943,9 @@ body.is-test-system { padding-bottom: 40px; }
   .test-system-bar { position: static; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body.is-test-system { padding-bottom: 0; }
 }
+
+/* Remark box beside the action buttons in the approval queues (owner request
+   2026-11-03): a return always needs a remark, so Return stays disabled until
+   one is typed. */
+.remark-input { width: 15rem; max-width: 100%; margin: 0 0 0.4rem 0; display: block; }
+.row-actions button[disabled] { opacity: 0.5; cursor: not-allowed; }
