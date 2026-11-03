@@ -119,7 +119,7 @@ class HomepageTests(TestCase):
                                        start_date=TODAY, end_date=TODAY)
         self.assertEqual(self.page(self.ao).context["pending_apps_total"], 3)    # AO sees all
         # HR Processor and Supervisor: only requests they handle (owner 2026-11-03, dry-run item 4).
-        self.assertEqual(self.page(self.hr).context["pending_apps_total"], 0)   # none waiting for HR yet
+        self.assertEqual(self.page(self.hr).context["pending_apps_total"], 1)   # only the request waiting for HR
         self.assertEqual(self.page(self.sup).context["pending_apps_total"], 1)  # the one waiting for them
         self.assertEqual(self.page(self.staff).context["pending_apps_total"], 1)  # own request only
         self.assertEqual(self.page(self.cosp).context["pending_apps_total"], 0)

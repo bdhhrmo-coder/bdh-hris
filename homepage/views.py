@@ -25,16 +25,21 @@ def _context(request):
     return acting, scope, kpis.scoped_employee_ids(acting, scope), kpis.shows_leave_type(acting)
 
 
-def _request_ids(request, acting, scope, ids):
-    """Employee ids whose PENDING REQUESTS this user may list (owner decision
-    2026-11-03, dry-run item 4): everyone for the HR Administrator, AO and
-    COH; only requests they are involved in for HR Processors and
-    Supervisors; their own for everyone else."""
+def _request_filter(request, acting, scope, ids):
+    """(ids, only) for the PENDING-REQUEST lists (owner decision 2026-11-03,
+    dry-run item 4): everyone for the HR Administrator, AO and COH; only the
+    requests they are involved in for HR Processors and Supervisors; their
+    own for everyone else."""
     if scope == "self":
-        return ids
+        return ids, None
     if kpis.sees_all_requests(acting):
-        return None
-    return kpis.involved_employee_ids(acting, request.user)
+        return None, None
+    return None, kpis.involved_requests(acting, request.user)
+
+
+def _pending_lc_rows(request, acting, scope, ids, with_type):
+    req_ids, only = _request_filter(request, acting, scope, ids)
+    return kpis.pending_leave_cto(ids=req_ids, with_type=with_type, only=only)
 
 
 @login_required
@@ -42,9 +47,9 @@ def home(request):
     acting, scope, ids, with_type = _context(request)
     absent_ids = None if scope == "self" else ids  # employees see the hospital-wide NUMBER only
     absent = kpis.absent_today(ids=absent_ids)
-    req_ids = _request_ids(request, acting, scope, ids)
-    pending_lc = kpis.pending_leave_cto(ids=None if scope == "self" else req_ids)
-    pending_apps = kpis.pending_applications(ids=req_ids)
+    req_ids, only = _request_filter(request, acting, scope, ids)
+    pending_lc = kpis.pending_leave_cto(ids=None if scope == "self" else req_ids, only=only)
+    pending_apps = kpis.pending_applications(ids=req_ids, only=only)
     ctx = {
         "scope": scope,
         "as_of": timezone.localtime(),
@@ -132,7 +137,7 @@ def pending_leave_list(request):
     _names_allowed(scope)
     return render(request, "homepage/person_list.html", {
         "title": "Pending leave and CTO",
-        "rows": kpis.pending_leave_cto(ids=_request_ids(request, acting, scope, ids), with_type=with_type),
+        "rows": _pending_lc_rows(request, acting, scope, ids, with_type),
         "scope": scope, "as_of": timezone.localtime(), "show_status": True,
         "note": "Filed but not yet approved or recorded. These are NOT counted as absent.",
     })
@@ -142,6 +147,6 @@ def pending_leave_list(request):
 def pending_applications_list(request):
     acting, scope, ids, with_type = _context(request)
     return render(request, "homepage/pending_list.html", {
-        "rows": kpis.pending_rows(ids=_request_ids(request, acting, scope, ids)), "scope": scope,
+        "rows": kpis.pending_rows(*_request_filter(request, acting, scope, ids)), "scope": scope,
         "as_of": timezone.localtime(), "involved_only": scope != "self" and not kpis.sees_all_requests(acting),
     })

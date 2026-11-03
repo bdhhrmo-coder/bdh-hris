@@ -52,41 +52,40 @@ def sees_all_requests(acting_employee):
         or is_administrative_officer(acting_employee, True) or is_chief_of_hospital(acting_employee, True))
 
 
-def involved_employee_ids(acting_employee, user):
-    """Employees whose requests acting_employee is involved in: waiting for
-    their action now, or acted on by them (any module), plus their own."""
-    from attendance.models import AttendanceCorrectionRequest
+def involved_requests(acting_employee, user):
+    """{list label: request ids} acting_employee is involved in: waiting for
+    their action now, or acted on by them, plus their own. Labels match
+    _pending_querysets()."""
     from attendance.permissions import visible_correction_requests_for
-    from cto.models import CTOClaim
     from cto.permissions import visible_cto_applications_for
     from exchange.permissions import visible_exchange_requests_for
     from leave.permissions import visible_applications_for
     from official_requests.batch import batches_awaiting
     from official_requests.permissions import visible_requests_for
 
+    out = {"Leave": set(), "CTO": set(), "Exchange of Duty": set(), "Attendance correction": set(),
+           "Official Business/Errand/OT": set()}
     if acting_employee is None:
-        return set()
-    ids = {acting_employee.pk}
+        return out
+    me = acting_employee
 
-    def add(qs, *fields):
-        for f in fields:
-            ids.update(v for v in qs.values_list(f, flat=True) if v)
+    def ids(qs):
+        return set(qs.values_list("pk", flat=True))
 
-    add(visible_applications_for(acting_employee), "employee_id")
-    add(visible_cto_applications_for(acting_employee), "employee_id")
-    add(visible_exchange_requests_for(acting_employee), "employee_a_id", "employee_b_id")
-    add(visible_correction_requests_for(acting_employee), "employee_id")
-    add(visible_requests_for(acting_employee), "employee_id")
-    for b in batches_awaiting(acting_employee, user):
-        add(b.lines.all(), "employee_id")
-    add(LeaveApplication.objects.filter(actions__acted_by=user), "employee_id")
-    add(CTOUsageApplication.objects.filter(actions__acted_by=user), "employee_id")
-    add(CTOClaim.objects.filter(actions__acted_by=user), "employee_id")
-    add(DutyExchangeRequest.objects.filter(actions__acted_by=user), "employee_a_id", "employee_b_id")
-    add(AttendanceCorrectionRequest.objects.filter(actions__acted_by=user), "employee_id")
-    add(OfficialRequest.objects.filter(actions__acted_by=user), "employee_id")
-    add(OfficialRequest.objects.filter(batch__actions__acted_by=user), "employee_id")
-    return ids
+    out["Leave"] = ids(visible_applications_for(me)) | ids(LeaveApplication.objects.filter(
+        Q(actions__acted_by=user) | Q(employee=me)))
+    out["CTO"] = ids(visible_cto_applications_for(me)) | ids(CTOUsageApplication.objects.filter(
+        Q(actions__acted_by=user) | Q(employee=me)))
+    out["Exchange of Duty"] = ids(visible_exchange_requests_for(me)) | ids(DutyExchangeRequest.objects.filter(
+        Q(actions__acted_by=user) | Q(employee_a=me) | Q(employee_b=me)))
+    out["Attendance correction"] = ids(visible_correction_requests_for(me)) | ids(
+        AttendanceCorrectionRequest.objects.filter(Q(actions__acted_by=user) | Q(employee=me)))
+    official = ids(visible_requests_for(me)) | ids(OfficialRequest.objects.filter(
+        Q(actions__acted_by=user) | Q(batch__actions__acted_by=user) | Q(employee=me)))
+    for b in batches_awaiting(me, user):
+        official |= ids(b.lines.all())
+    out["Official Business/Errand/OT"] = official
+    return out
 
 
 def shows_leave_type(acting_employee):
@@ -182,15 +181,20 @@ def on_cto_this_month(today=None, ids=None):
 
 # -- pending leave / CTO (beside Absent Today) --------------------------------------
 
-def pending_leave_cto(ids=None, with_type=False):
+def pending_leave_cto(ids=None, with_type=False, only=None):
+    """only: involved_requests() result, to list just those requests."""
     rows = []
     leave = _limit(LeaveApplication.objects.exclude(status__in=list(LeaveApplication.TERMINAL_STATUSES)
                                                     + [LeaveApplication.RETURNED]), ids)
+    if only is not None:
+        leave = leave.filter(pk__in=only["Leave"])
     for app in leave.select_related("employee", "leave_type"):
         rows.append({"employee": app.employee, "what": [app.leave_type.name if with_type else "Leave"],
                      "dates": [(app.start_date, app.end_date)], "status": app.get_status_display()})
     cto = _limit(CTOUsageApplication.objects.exclude(status__in=list(CTOUsageApplication.TERMINAL_STATUSES)
                                                      + [CTOUsageApplication.RETURNED]), ids)
+    if only is not None:
+        cto = cto.filter(pk__in=only["CTO"])
     for app in cto.select_related("employee"):
         rows.append({"employee": app.employee, "what": ["CTO"], "dates": [(app.start_date, app.end_date)],
                      "status": app.get_status_display()})
@@ -227,16 +231,21 @@ def _in_scope(qs, field, ids):
     return qs.filter(cond).distinct()
 
 
-def pending_applications(ids=None):
+def _only(qs, label, only):
+    return qs if only is None else qs.filter(pk__in=only.get(label, set()))
+
+
+def pending_applications(ids=None, only=None):
     """[(label, count)] of requests waiting at any approval step, within scope."""
-    return [(label, _in_scope(qs, field, ids).count()) for label, qs, field in _pending_querysets()]
+    return [(label, _only(_in_scope(qs, field, ids), label, only).count())
+            for label, qs, field in _pending_querysets()]
 
 
-def pending_rows(ids=None):
+def pending_rows(ids=None, only=None):
     """Detailed list for the 'Pending applications' page."""
     rows = []
     for label, qs, field in _pending_querysets():
-        for obj in _in_scope(qs, field, ids):
+        for obj in _only(_in_scope(qs, field, ids), label, only):
             emp = getattr(obj, "employee", None) or getattr(obj, "employee_a", None)
             filed = getattr(obj, "submitted_at", None) or getattr(obj, "filed_at", None)
             rows.append({"type": label, "employee": emp, "filed": filed, "status": obj.get_status_display()})
