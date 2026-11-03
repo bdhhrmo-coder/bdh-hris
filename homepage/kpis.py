@@ -43,6 +43,52 @@ def scope_for(acting_employee):
     return "self"
 
 
+def sees_all_requests(acting_employee):
+    """Owner decision 2026-11-03 (dry-run item 4): only the HR Administrator,
+    the AO and the COH see every pending request. HR Processors and
+    Supervisors see only the requests they are involved in."""
+    return acting_employee is not None and (
+        acting_employee.has_role("HR_ADMINISTRATOR", viewing=True)
+        or is_administrative_officer(acting_employee, True) or is_chief_of_hospital(acting_employee, True))
+
+
+def involved_employee_ids(acting_employee, user):
+    """Employees whose requests acting_employee is involved in: waiting for
+    their action now, or acted on by them (any module), plus their own."""
+    from attendance.models import AttendanceCorrectionRequest
+    from attendance.permissions import visible_correction_requests_for
+    from cto.models import CTOClaim
+    from cto.permissions import visible_cto_applications_for
+    from exchange.permissions import visible_exchange_requests_for
+    from leave.permissions import visible_applications_for
+    from official_requests.batch import batches_awaiting
+    from official_requests.permissions import visible_requests_for
+
+    if acting_employee is None:
+        return set()
+    ids = {acting_employee.pk}
+
+    def add(qs, *fields):
+        for f in fields:
+            ids.update(v for v in qs.values_list(f, flat=True) if v)
+
+    add(visible_applications_for(acting_employee), "employee_id")
+    add(visible_cto_applications_for(acting_employee), "employee_id")
+    add(visible_exchange_requests_for(acting_employee), "employee_a_id", "employee_b_id")
+    add(visible_correction_requests_for(acting_employee), "employee_id")
+    add(visible_requests_for(acting_employee), "employee_id")
+    for b in batches_awaiting(acting_employee, user):
+        add(b.lines.all(), "employee_id")
+    add(LeaveApplication.objects.filter(actions__acted_by=user), "employee_id")
+    add(CTOUsageApplication.objects.filter(actions__acted_by=user), "employee_id")
+    add(CTOClaim.objects.filter(actions__acted_by=user), "employee_id")
+    add(DutyExchangeRequest.objects.filter(actions__acted_by=user), "employee_a_id", "employee_b_id")
+    add(AttendanceCorrectionRequest.objects.filter(actions__acted_by=user), "employee_id")
+    add(OfficialRequest.objects.filter(actions__acted_by=user), "employee_id")
+    add(OfficialRequest.objects.filter(batch__actions__acted_by=user), "employee_id")
+    return ids
+
+
 def shows_leave_type(acting_employee):
     return acting_employee is not None and is_hr(acting_employee, True)
 

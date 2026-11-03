@@ -133,8 +133,15 @@ class AttendanceRecord(models.Model):
 
     employee = models.ForeignKey("employees.Employee", on_delete=models.CASCADE, related_name="attendance_records")
     date = models.DateField()
-    time_in = models.TimeField(null=True, blank=True)
-    time_out = models.TimeField(null=True, blank=True)
+    time_in = models.TimeField(null=True, blank=True, help_text="First time in of the day (AM in, else PM in).")
+    time_out = models.TimeField(null=True, blank=True, help_text="Last regular time out (PM out, else AM out).")
+    # Break and overtime logs from a correction (dry-run item 10, 2026-11-03).
+    # Kept for the record and the printout only: undertime is still worked
+    # out from time_in and time_out, as before; OT logs never create CTO.
+    am_out = models.TimeField("AM out", null=True, blank=True)
+    pm_in = models.TimeField("PM in", null=True, blank=True)
+    ot_in = models.TimeField("OT in", null=True, blank=True)
+    ot_out = models.TimeField("OT out", null=True, blank=True)
     is_absent = models.BooleanField(
         default=False,
         help_text="Only ever set by a manual/correction entry — a missing biometric punch on its own "
@@ -315,8 +322,15 @@ class AttendanceCorrectionLine(models.Model):
 
     request = models.ForeignKey(AttendanceCorrectionRequest, on_delete=models.CASCADE, related_name="lines")
     date = models.DateField(help_text="The attendance date being corrected.")
-    time_in = models.TimeField(null=True, blank=True)
-    time_out = models.TimeField(null=True, blank=True)
+    # AM in / AM out / PM in / PM out / OT in / OT out, as on a DTR (dry-run
+    # item 10, owner 2026-11-03). time_in is the AM in and time_out the PM
+    # out, so older lines (one in, one out) read the same.
+    time_in = models.TimeField("AM in", null=True, blank=True)
+    am_out = models.TimeField("AM out", null=True, blank=True)
+    pm_in = models.TimeField("PM in", null=True, blank=True)
+    time_out = models.TimeField("PM out", null=True, blank=True)
+    ot_in = models.TimeField("OT in", null=True, blank=True)
+    ot_out = models.TimeField("OT out", null=True, blank=True)
     overnight = models.BooleanField(default=False, help_text="Shift ends the next day (time out earlier than time in).")
     is_absent = models.BooleanField(default=False, help_text="Correct this date to Absent instead of supplying times.")
     reason_category = models.CharField(
@@ -332,13 +346,34 @@ class AttendanceCorrectionLine(models.Model):
     def __str__(self):
         return f"{self.request_id}: {self.date}"
 
+    @staticmethod
+    def _pair(t_in, t_out):
+        if not t_in and not t_out:
+            return ""
+        a = f"{t_in:%I:%M %p}" if t_in else "—"
+        b = f"{t_out:%I:%M %p}" if t_out else "—"
+        return f"{a} – {b}"
+
+    def time_pairs(self):
+        """[(label, 'in – out')] for the pairs that were given."""
+        pairs = [("AM", self._pair(self.time_in, self.am_out)), ("PM", self._pair(self.pm_in, self.time_out)),
+                 ("OT", self._pair(self.ot_in, self.ot_out))]
+        return [(label, text) for label, text in pairs if text]
+
+    @property
+    def first_in(self):
+        return self.time_in or self.pm_in
+
+    @property
+    def last_out(self):
+        return self.time_out or self.am_out
+
     @property
     def times_display(self):
         if self.is_absent:
             return "Mark as Absent"
-        t_in = f"{self.time_in:%I:%M %p}" if self.time_in else "—"
-        t_out = f"{self.time_out:%I:%M %p}" if self.time_out else "—"
-        return f"{t_in} – {t_out}{' (overnight)' if self.overnight else ''}"
+        text = "; ".join(f"{label} {t}" for label, t in self.time_pairs()) or "—"
+        return f"{text}{' (overnight)' if self.overnight else ''}"
 
 
 class AttendanceCorrectionRequestAction(models.Model):

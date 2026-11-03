@@ -25,13 +25,26 @@ def _context(request):
     return acting, scope, kpis.scoped_employee_ids(acting, scope), kpis.shows_leave_type(acting)
 
 
+def _request_ids(request, acting, scope, ids):
+    """Employee ids whose PENDING REQUESTS this user may list (owner decision
+    2026-11-03, dry-run item 4): everyone for the HR Administrator, AO and
+    COH; only requests they are involved in for HR Processors and
+    Supervisors; their own for everyone else."""
+    if scope == "self":
+        return ids
+    if kpis.sees_all_requests(acting):
+        return None
+    return kpis.involved_employee_ids(acting, request.user)
+
+
 @login_required
 def home(request):
     acting, scope, ids, with_type = _context(request)
     absent_ids = None if scope == "self" else ids  # employees see the hospital-wide NUMBER only
     absent = kpis.absent_today(ids=absent_ids)
-    pending_lc = kpis.pending_leave_cto(ids=absent_ids)
-    pending_apps = kpis.pending_applications(ids=ids)
+    req_ids = _request_ids(request, acting, scope, ids)
+    pending_lc = kpis.pending_leave_cto(ids=None if scope == "self" else req_ids)
+    pending_apps = kpis.pending_applications(ids=req_ids)
     ctx = {
         "scope": scope,
         "as_of": timezone.localtime(),
@@ -40,6 +53,7 @@ def home(request):
         "pending_lc_count": len(pending_lc),
         "pending_apps": pending_apps,
         "pending_apps_total": sum(n for _, n in pending_apps),
+        "pending_involved_only": scope != "self" and not kpis.sees_all_requests(acting),
         "waiting": kpis.waiting_for_me(acting, request.user),
         "watermark_url": watermark_url(),
     }
@@ -61,7 +75,7 @@ def _role_cards(acting, scope):
     """Which Home cards this person gets (Batch 6, owner-approved arrangement,
     max 5, actions first). Only existing data; the KPI rules are unchanged.
       HR / AO / COH ("all"):  Waiting for my action, Absent today, Pending applications, Headcount
-      Supervisor ("sections"): Waiting for my action, Absent today, Pending in my sections
+      Supervisor ("sections"): Waiting for my action, Absent today, Pending requests I handle
       Everyone else ("self"):  [Waiting - ICTU] / [User accounts - System Administrator],
                                My pending requests, Absent today (number), My balances, My schedule this week
     """
@@ -117,7 +131,8 @@ def pending_leave_list(request):
     acting, scope, ids, with_type = _context(request)
     _names_allowed(scope)
     return render(request, "homepage/person_list.html", {
-        "title": "Pending leave and CTO", "rows": kpis.pending_leave_cto(ids=ids, with_type=with_type),
+        "title": "Pending leave and CTO",
+        "rows": kpis.pending_leave_cto(ids=_request_ids(request, acting, scope, ids), with_type=with_type),
         "scope": scope, "as_of": timezone.localtime(), "show_status": True,
         "note": "Filed but not yet approved or recorded. These are NOT counted as absent.",
     })
@@ -127,5 +142,6 @@ def pending_leave_list(request):
 def pending_applications_list(request):
     acting, scope, ids, with_type = _context(request)
     return render(request, "homepage/pending_list.html", {
-        "rows": kpis.pending_rows(ids=ids), "scope": scope, "as_of": timezone.localtime(),
+        "rows": kpis.pending_rows(ids=_request_ids(request, acting, scope, ids)), "scope": scope,
+        "as_of": timezone.localtime(), "involved_only": scope != "self" and not kpis.sees_all_requests(acting),
     })

@@ -14,6 +14,7 @@ urlpatterns = [
     path("<int:pk>/", views.schedule_detail, name="detail"),
     path("<int:pk>/edit/", views.schedule_edit, name="edit"),
     path("<int:pk>/action/", views.schedule_action, name="action"),
+    path("<int:pk>/cutoff/", views.schedule_cutoff, name="cutoff"),
     path("<int:pk>/correct/", views.schedule_correct, name="correct"),
     path("<int:pk>/excel/", views.excel_template, name="excel_template"),
     path("<int:pk>/excel/import/", views.excel_import, name="excel_import"),

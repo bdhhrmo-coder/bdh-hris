@@ -90,7 +90,7 @@
     <p class="field-help">Exchange of Duty cut-off: {{ schedule.cutoff_date|date:"F j, Y" }} (set by HR).</p>
     {% endif %}
     <div class="row-actions">
-      <button type="submit" name="then" value="save">Save</button>
+      <button type="submit" name="then" value="save">{% if schedule.status == "DRAFT" %}Save as draft{% else %}Save{% endif %}</button>
       <button type="submit" name="then" value="submit" data-confirm="Submit this schedule for HR review? You can't edit it unless it is returned." data-confirm-ok="Submit">Save and submit</button>
     </div>
   </div>

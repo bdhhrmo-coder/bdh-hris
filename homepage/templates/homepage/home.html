@@ -57,9 +57,9 @@ unchanged (CLAUDE.md 8B); homepage/views.py _role_cards() decides which cards sh
 
   {% if not show_personal %}
   <a class="kpi-card" href="{% url 'homepage:pending_applications_list' %}">
-    <p class="kpi-label">{% if scope == "sections" %}Pending in my sections{% else %}Pending applications{% endif %}</p>
+    <p class="kpi-label">{% if pending_involved_only %}Pending requests I handle{% else %}Pending applications{% endif %}</p>
     <p class="kpi-value">{{ pending_apps_total }}</p>
-    <p class="kpi-sub">Waiting at an approval step</p>
+    <p class="kpi-sub">Waiting at an approval step{% if pending_involved_only %} &mdash; waiting for me or acted on by me{% endif %}</p>
   </a>
   {% endif %}
 

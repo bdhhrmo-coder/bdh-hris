@@ -214,3 +214,53 @@ class ViewOnlyDuringOICTests(TestCase):
         labels = {g["label"]: [i["label"] for i in g["items"]] for g in groups}
         self.assertIn("Dashboard", labels["Reports"])
         self.assertEqual(labels["Approvals"], ["Officer-in-Charge (OIC)"])  # only the screen to end it early
+
+
+class CospOICTests(TestCase):
+    """Owner decision 2026-11-03 (dry-run item 11): a COSP employee may be OIC
+    for their own unit, or their own section when it has no units - never
+    for the Chief Nurse (section head above unit heads), the AO or the COH."""
+
+    def setUp(self):
+        from orgstructure.models import Unit
+
+        self.today = timezone.localdate()
+        self.lab = Section.objects.get(name="Laboratory Section")
+        self.nursing = Section.objects.get(name="Nursing Service Section")
+        self.er = Unit.objects.get(section=self.nursing, name="ER")
+        self.lab_head = person("cospoic_lab", R.SUPERVISOR, self.lab)
+        self.er_head = person("cospoic_er")
+        R.objects.create(employee=self.er_head, role=R.SUPERVISOR, unit=self.er)
+        self.cn = person("cospoic_cn", R.SUPERVISOR, self.nursing)
+        self.ao = person("cospoic_ao", R.ADMINISTRATIVE_OFFICER)
+        self.cosp_lab = person("cospoic_c1")
+        self.cosp_lab.employment_status = "COSP"
+        self.cosp_lab.save()
+        self.cosp_lab.sections.add(self.lab)
+        self.cosp_er = person("cospoic_c2")
+        self.cosp_er.employment_status = "COSP"
+        self.cosp_er.save()
+        self.cosp_er.sections.add(self.nursing)
+        self.cosp_er.units.add(self.er)
+        self.regular = person("cospoic_reg")
+        self.regular.sections.add(self.lab)
+
+    def post(self, who, oic):
+        self.client.force_login(who.user)
+        scope = R.objects.get(employee=who, is_oic=False, role__in=R.OIC_ELIGIBLE_ROLES)
+        return self.client.post(reverse("oic_home"), {
+            "scope": scope.pk, "oic": oic.pk, "start_date": self.today, "end_date": self.today + timedelta(days=2)})
+
+    def test_cosp_can_be_oic_of_own_unit_or_section_without_units(self):
+        self.assertRedirects(self.post(self.er_head, self.cosp_er), reverse("oic_home"))
+        self.assertRedirects(self.post(self.lab_head, self.cosp_lab), reverse("oic_home"))
+        self.assertEqual(R.objects.filter(is_oic=True).count(), 2)
+
+    def test_cosp_never_for_chief_nurse_ao_or_another_area(self):
+        for who, oic in ((self.cn, self.cosp_er), (self.ao, self.cosp_lab), (self.lab_head, self.cosp_er)):
+            self.assertEqual(self.post(who, oic).status_code, 200)
+        self.assertFalse(R.objects.filter(is_oic=True).exists())
+
+    def test_regular_non_supervisor_still_cannot_be_oic(self):
+        self.assertEqual(self.post(self.lab_head, self.regular).status_code, 200)
+        self.assertFalse(R.objects.filter(is_oic=True).exists())

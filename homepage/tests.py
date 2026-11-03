@@ -117,8 +117,10 @@ class HomepageTests(TestCase):
         leave(self.other, "VL", "SUBMITTED")
         OfficialRequest.objects.create(employee=self.other, request_type=OfficialRequest.OFFICIAL_TIME, purpose="x",
                                        start_date=TODAY, end_date=TODAY)
-        self.assertEqual(self.page(self.hr).context["pending_apps_total"], 3)
-        self.assertEqual(self.page(self.sup).context["pending_apps_total"], 1)   # own section
+        self.assertEqual(self.page(self.ao).context["pending_apps_total"], 3)    # AO sees all
+        # HR Processor and Supervisor: only requests they handle (owner 2026-11-03, dry-run item 4).
+        self.assertEqual(self.page(self.hr).context["pending_apps_total"], 0)   # none waiting for HR yet
+        self.assertEqual(self.page(self.sup).context["pending_apps_total"], 1)  # the one waiting for them
         self.assertEqual(self.page(self.staff).context["pending_apps_total"], 1)  # own request only
         self.assertEqual(self.page(self.cosp).context["pending_apps_total"], 0)
         mine = self.page(self.staff, "homepage:pending_applications_list").content.decode()
@@ -218,3 +220,26 @@ class ThisMonthListsTests(TestCase):
         self.assertContains(r, staff.full_name)
         self.client.force_login(staff.user)
         self.assertNotContains(self.client.get("/hris/home/"), "On CTO this month")
+
+
+class PendingInvolvementTests(TestCase):
+    """Owner decision 2026-11-03 (dry-run item 4): HR Administrator, AO and COH
+    see every pending request; an HR Processor sees only those waiting for
+    them or acted on by them."""
+
+    def setUp(self):
+        self.lab = Section.objects.get(name="Laboratory Section")
+        self.hrp = emp("pi_hrp", role=RoleAssignment.HR_PROCESSOR)
+        self.hra = emp("pi_hra", role=RoleAssignment.HR_ADMINISTRATOR)
+        self.staff = emp("pi_staff", self.lab)
+        self.staff2 = emp("pi_staff2", self.lab)
+
+    def total(self, who):
+        self.client.force_login(who.user)
+        return self.client.get(reverse("homepage:home")).context["pending_apps_total"]
+
+    def test_hr_processor_sees_only_what_waits_for_them(self):
+        leave(self.staff, "VL", "SUBMITTED")
+        leave(self.staff2, "VL", "ENDORSED_BY_SUPERVISOR")
+        self.assertEqual(self.total(self.hra), 2)
+        self.assertEqual(self.total(self.hrp), 1)

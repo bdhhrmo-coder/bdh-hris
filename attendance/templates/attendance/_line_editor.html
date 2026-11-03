@@ -18,7 +18,7 @@ normal Django formset ("lines-N-field") so the server validates everything.
           if (this.rows.length >= this.max) return;
           var last = this.rows[this.rows.length - 1] || {};
           // the new date starts with the same reason as the previous one
-          this.rows.push({ key: ++key, date: "", time_in: "", time_out: "", overnight: false, is_absent: false,
+          this.rows.push({ key: ++key, date: "", time_in: "", am_out: "", pm_in: "", time_out: "", ot_in: "", ot_out: "", overnight: false, is_absent: false,
                            reason_category: last.reason_category || "", reason: "", errors: [] });
         },
         remove: function (i) { if (this.rows.length > 1) this.rows.splice(i, 1); },
@@ -48,12 +48,26 @@ normal Django formset ("lines-N-field") so the server validates everything.
         <label>Date
           <input type="date" :name="'lines-' + i + '-date'" x-model="row.date" max="{{ today }}" required>
         </label>
-        <label>Correct time IN
+        <div class="time-pairs">
+        <label>AM in
           <input type="time" :name="'lines-' + i + '-time_in'" x-model="row.time_in" :disabled="row.is_absent">
         </label>
-        <label>Correct time OUT
+        <label>AM out
+          <input type="time" :name="'lines-' + i + '-am_out'" x-model="row.am_out" :disabled="row.is_absent">
+        </label>
+        <label>PM in
+          <input type="time" :name="'lines-' + i + '-pm_in'" x-model="row.pm_in" :disabled="row.is_absent">
+        </label>
+        <label>PM out
           <input type="time" :name="'lines-' + i + '-time_out'" x-model="row.time_out" :disabled="row.is_absent">
         </label>
+        <label>OT in
+          <input type="time" :name="'lines-' + i + '-ot_in'" x-model="row.ot_in" :disabled="row.is_absent">
+        </label>
+        <label>OT out
+          <input type="time" :name="'lines-' + i + '-ot_out'" x-model="row.ot_out" :disabled="row.is_absent">
+        </label>
+        </div>
         <div class="line-checks">
           <label class="inline-check"><input type="checkbox" :name="'lines-' + i + '-overnight'" x-model="row.overnight" :disabled="row.is_absent"> Overnight shift</label>
           <label class="inline-check"><input type="checkbox" :name="'lines-' + i + '-is_absent'" x-model="row.is_absent"> Absent (no times)</label>

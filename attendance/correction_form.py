@@ -92,21 +92,31 @@ def fill_correction_form(correction, printed_by=None):
     lines = correction.sorted_lines
     rows = []
     for line in lines:
-        if line.is_absent:
-            t_in = t_out = "Absent"
-        else:
-            t_in = f"{line.time_in:%I:%M %p}" if line.time_in else "—"
-            t_out = f"{line.time_out:%I:%M %p}" if line.time_out else "—"
-            if line.overnight:
-                t_out += " (+1 day)"
+        # AM / PM / OT in-out (dry-run item 10, 2026-11-03), one column each.
+        def pair(t_in, t_out):
+            if line.is_absent:
+                return "Absent"
+            if not t_in and not t_out:
+                return ""
+            return f"{t_in:%I:%M %p}" if t_in else "—", f"{t_out:%I:%M %p}" if t_out else "—"
+
+        cells = []
+        for t_in, t_out in ((line.time_in, line.am_out), (line.pm_in, line.time_out), (line.ot_in, line.ot_out)):
+            p = pair(t_in, t_out)
+            cells.append(p if isinstance(p, str) else f"{p[0]}\n{p[1]}")
+        if line.overnight and not line.is_absent:
+            cells[1] += " (+1 day)"
         reason = line.get_reason_category_display() if line.reason_category else ""
         if line.reason:
             reason = f"{reason}: {line.reason}" if reason else line.reason
-        rows.append([f"{line.date:%b %d, %Y}", t_in, t_out, reason])
-    f.table(["Date", "IN", "OUT", "Reason"], rows, [("A", "B"), ("C", "C"), ("D", "D"), ("E", "G")])
+        rows.append([f"{line.date:%b %d, %Y}", *cells, reason])
+    f.table(["Date", "AM in / out", "PM in / out", "OT in / out", "Reason"], rows,
+            [("A", "A"), ("B", "B"), ("C", "C"), ("D", "D"), ("E", "G")])
     for i, line in enumerate(lines):
         r = f.row - len(lines) + i
-        ws.row_dimensions[r].height = 30 if (len(rows[i][3]) > 28 or line.overnight) else 20
+        ws.row_dimensions[r].height = 34 if len(rows[i][4]) <= 40 else 46
+        for col in "BCD":
+            ws[f"{col}{r}"].alignment = Alignment(wrap_text=True, vertical="center", horizontal="center")
         ws[f"D{r}"].alignment = Alignment(wrap_text=True, vertical="center", horizontal="center")
         for col in "EFG":
             ws[f"{col}{r}"].alignment = Alignment(wrap_text=True, vertical="center", horizontal="left", indent=1)

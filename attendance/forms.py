@@ -18,13 +18,20 @@ class BiometricImportForm(forms.Form):
 
 # -- correction lines (Batch 2, Item 6) ---------------------------------------
 
+# AM in, AM out, PM in, PM out, OT in, OT out (dry-run item 10, 2026-11-03).
+TIME_FIELDS = ("time_in", "am_out", "pm_in", "time_out", "ot_in", "ot_out")
+
 class CorrectionLineForm(forms.Form):
     """One date. `formal` decides whether the reason is a Missed Log
     Justification category (+ details) or HR's free-text reason."""
 
     date = forms.DateField()
-    time_in = forms.TimeField(required=False)
-    time_out = forms.TimeField(required=False)
+    time_in = forms.TimeField(required=False)   # AM in
+    am_out = forms.TimeField(required=False)
+    pm_in = forms.TimeField(required=False)
+    time_out = forms.TimeField(required=False)  # PM out
+    ot_in = forms.TimeField(required=False)
+    ot_out = forms.TimeField(required=False)
     overnight = forms.BooleanField(required=False)
     is_absent = forms.BooleanField(required=False)
     reason_category = forms.ChoiceField(
@@ -38,16 +45,28 @@ class CorrectionLineForm(forms.Form):
 
     def clean(self):
         c = super().clean()
-        day, t_in, t_out = c.get("date"), c.get("time_in"), c.get("time_out")
+        day = c.get("date")
+        am_in, am_out, pm_in, pm_out = c.get("time_in"), c.get("am_out"), c.get("pm_in"), c.get("time_out")
+        ot_in, ot_out = c.get("ot_in"), c.get("ot_out")
+        any_time = any(t for t in (am_in, am_out, pm_in, pm_out, ot_in, ot_out))
+        overnight = c.get("overnight")
         if day and day > timezone.localdate():
             self.add_error("date", "Future dates can't be corrected.")
         if c.get("is_absent"):
-            if t_in or t_out:
+            if any_time:
                 self.add_error(None, "Tick 'Absent' OR give the times, not both.")
-        elif not t_in and not t_out:
-            self.add_error(None, "Give the correct time in and/or time out (or tick 'Absent').")
-        if t_in and t_out and t_out <= t_in and not c.get("overnight"):
+        elif not any_time:
+            self.add_error(None, "Give at least one correct time (AM, PM or OT in/out), or tick 'Absent'.")
+        if am_in and am_out and am_out <= am_in:
+            self.add_error("am_out", "AM out must be later than AM in.")
+        if am_out and pm_in and pm_in < am_out:
+            self.add_error("pm_in", "PM in can't be earlier than AM out.")
+        if pm_in and pm_out and pm_out <= pm_in and not overnight:
+            self.add_error("time_out", "PM out must be later than PM in (tick 'Overnight' for a shift that ends the next day).")
+        if am_in and pm_out and not (am_out or pm_in) and pm_out <= am_in and not overnight:
             self.add_error("time_out", "Time out must be later than time in (tick 'Overnight' for a shift that ends the next day).")
+        if ot_in and ot_out and ot_out <= ot_in and not overnight:
+            self.add_error("ot_out", "OT out must be later than OT in.")
         reason = (c.get("reason") or "").strip()
         if self.formal:
             category = c.get("reason_category")
@@ -122,7 +141,8 @@ def line_formset(data=None, *, formal, employee=None, request_obj=None):
     initial = None
     if request_obj is not None:
         initial = [
-            {"date": line.date, "time_in": line.time_in, "time_out": line.time_out, "overnight": line.overnight,
+            {"date": line.date, "time_in": line.time_in, "am_out": line.am_out, "pm_in": line.pm_in,
+             "time_out": line.time_out, "ot_in": line.ot_in, "ot_out": line.ot_out, "overnight": line.overnight,
              "is_absent": line.is_absent, "reason_category": line.reason_category, "reason": line.reason}
             for line in request_obj.sorted_lines
         ]
@@ -145,7 +165,7 @@ def formset_rows(formset):
                 return bool(v)
             if v is None:
                 return ""
-            if name in ("time_in", "time_out"):
+            if name in TIME_FIELDS:
                 return v.strftime("%H:%M")
             return str(v)
         errors = []
@@ -153,9 +173,9 @@ def formset_rows(formset):
             for field, errs in f.errors.items():
                 errors.extend(errs)
         rows.append({name: val(name) for name in
-                     ("date", "time_in", "time_out", "overnight", "is_absent", "reason_category", "reason")}
+                     ("date",) + TIME_FIELDS + ("overnight", "is_absent", "reason_category", "reason")}
                     | {"errors": errors})
-    return rows or [{"date": "", "time_in": "", "time_out": "", "overnight": False, "is_absent": False,
+    return rows or [{"date": "", **{t: "" for t in TIME_FIELDS}, "overnight": False, "is_absent": False,
                      "reason_category": "", "reason": "", "errors": []}]
 
 
@@ -165,7 +185,7 @@ def save_lines(correction, formset):
     correction.lines.all().delete()
     for data in (f.cleaned_data for f in formset.forms if f.cleaned_data):
         AttendanceCorrectionLine.objects.create(
-            request=correction, date=data["date"], time_in=data.get("time_in"), time_out=data.get("time_out"),
+            request=correction, date=data["date"], **{t: data.get(t) for t in TIME_FIELDS},
             overnight=bool(data.get("overnight")), is_absent=bool(data.get("is_absent")),
             reason_category=data.get("reason_category") or "" if formset.formal else "",
             reason=(data.get("reason") or "").strip(),

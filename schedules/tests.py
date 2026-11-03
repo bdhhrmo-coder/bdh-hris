@@ -227,12 +227,38 @@ class RoutingTests(Base):
 
     def test_visibility(self):
         s = self.new_schedule()
+        services.submit(s, self.sup.user)
         self.client.force_login(self.alice.user)
         self.assertEqual(self.client.get(reverse("schedules:detail", args=[s.pk])).status_code, 403)
         self.client.force_login(self.outsider.user)
         self.assertEqual(self.client.get(reverse("schedules:detail", args=[s.pk])).status_code, 403)
         self.client.force_login(self.ao.user)
         self.assertEqual(self.client.get(reverse("schedules:detail", args=[s.pk])).status_code, 200)
+
+    def test_draft_is_seen_only_by_its_preparer(self):
+        # Dry-run item 5 (owner 2026-11-03): Save as draft; nobody else sees it until it is submitted.
+        s = self.new_schedule()
+        for who in (self.hr, self.ao, self.coh):
+            self.client.force_login(who.user)
+            self.assertEqual(self.client.get(reverse("schedules:detail", args=[s.pk])).status_code, 403)
+            self.assertNotIn(s, self.client.get(reverse("schedules:list")).context["schedules"])
+        self.client.force_login(self.sup.user)
+        page = self.client.get(reverse("schedules:edit", args=[s.pk]))
+        self.assertContains(page, "Save as draft")
+        services.submit(s, self.sup.user)
+        self.client.force_login(self.hr.user)
+        self.assertEqual(self.client.get(reverse("schedules:detail", args=[s.pk])).status_code, 200)
+
+    def test_hr_sets_cutoff_on_a_submitted_schedule(self):
+        s = self.new_schedule()
+        services.submit(s, self.sup.user)
+        self.client.force_login(self.hr.user)
+        self.client.post(reverse("schedules:cutoff", args=[s.pk]), {"cutoff_date": "2027-02-15"})
+        s.refresh_from_db()
+        self.assertEqual(s.cutoff_date, date(2027, 2, 15))
+        self.client.force_login(self.sup.user)
+        self.assertEqual(self.client.post(reverse("schedules:cutoff", args=[s.pk]),
+                                          {"cutoff_date": "2027-02-10"}).status_code, 403)
 
     def test_audit_log_has_steps(self):
         s = self.new_schedule()

@@ -459,10 +459,11 @@ class OtFilingTests(TestCase):
         self.assertEqual(B.objects.get().active_lines().count(), 12)
 
     def test_employees_supervisor_gets_info_notice_when_someone_else_files(self):
-        # D5: covering Supervisors are told, information only; the filer is not.
+        # D5: the employee's own next-level endorser is told, information only;
+        # the filer is not. Not the Chief Nurse as well (owner 2026-11-03, item 4).
         self.ot(self.hradmin, [self.a, self.nurse])
         info = Notification.objects.filter(message__startswith="For your information")
-        self.assertEqual({n.recipient for n in info}, {self.sup, self.er_head, self.chief_nurse})
+        self.assertEqual({n.recipient for n in info}, {self.sup, self.er_head})
         Notification.objects.all().delete()
         self.ot(self.sup, [self.a], "2026-10-21")  # filed by the employee's own Supervisor
         self.assertFalse(Notification.objects.filter(message__startswith="For your information").exists())
