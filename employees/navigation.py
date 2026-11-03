@@ -20,6 +20,11 @@ from auditlog.permissions import can_view_audit_log
 from dashboard.permissions import can_view_dashboard
 
 from accounts.oic import can_designate_oic
+from cto.claims import can_file_exception
+from cto.opening import can_enter_opening
+from cto.permissions import is_cto_eligible
+from leave.permissions import employees_with_role
+from cto.separation import can_set_separation
 
 from .context_processors import nav_links
 from .permissions import can_review_profile_requests, get_acting_employee
@@ -33,7 +38,7 @@ MENU = [
     ]),
     ("mine", "My Requests", "folder-open", [
         ("Leave", "leave:my_applications", "file-text", "all"),
-        ("CTO", "cto:my_cto", "clock-3", "all"),
+        ("CTO", "cto:my_cto", "clock-3", "cto_eligible"),
         ("Exchange of Duty", "exchange:my_exchanges", "repeat", "all"),
         ("Attendance", "attendance:my_attendance", "fingerprint", "all"),
         ("Official Business / Errand / OT", "official_requests:my_requests", "briefcase", "all"),
@@ -49,6 +54,7 @@ MENU = [
         ("Official Business / Errand / OT", "official_requests:request_queue", "briefcase", "approver"),
         ("Profile Changes", "employees:profile_edit_request_queue", "clipboard-check", "can_review_profile_requests"),
         ("Officer-in-Charge (OIC)", "oic_home", "calendar-clock", "can_designate_oic"),
+        ("CTO Year-end Carry-over", "cto:carry_over", "calendar-days", "approver"),
     ]),
     ("workforce", "Workforce", "users", [
         ("Employees", "employees:employee_list", "user-round", "can_list_employees"),
@@ -62,6 +68,9 @@ MENU = [
         ("Data Import", "dataimport:home", "upload", "can_import_data"),
         ("Import Biometric Attendance", "attendance:biometric_import", "fingerprint", "is_hr"),
         ("Minor Attendance Correction", "attendance:minor_correction_create", "clipboard-check", "is_hr"),
+        ("CTO Opening Balances", "cto:opening_balances", "clock-3", "can_enter_opening"),
+        ("Exception CTO Claim", "cto:exception_claim_new", "clock-3", "can_file_exception"),
+        ("CTO Separation Status", "cto:separation", "user-round", "can_set_separation"),
         ("Manage Announcements", "announcements:manage", "megaphone", "can_manage_announcements"),
         ("Shift Codes", "schedules:shift_codes", "list", "can_manage_announcements"),
         ("User Accounts and Roles", "admin:index", "user-cog", "is_system_admin"),
@@ -86,8 +95,27 @@ def _flags(request, acting):
                                          or acting.has_role(RoleAssignment.HR_ADMINISTRATOR))
     f["can_review_profile_requests"] = can_review_profile_requests(acting)
     f["can_designate_oic"] = can_designate_oic(acting)
+    # OT/CTO pages (2026-11-02): the pages' own checks, but the AO sees them
+    # only while the D3 fallback can apply (at most one other HR holder).
+    hr_admin = [RoleAssignment.HR_ADMINISTRATOR]
+    hr_any = [RoleAssignment.HR_PROCESSOR, RoleAssignment.HR_ADMINISTRATOR]
+    f["can_enter_opening"] = can_enter_opening(acting) and _hr_or_ao_fallback(acting, hr_admin)
+    f["can_file_exception"] = can_file_exception(acting) and _hr_or_ao_fallback(acting, hr_admin)
+    f["can_set_separation"] = can_set_separation(acting) and _hr_or_ao_fallback(acting, hr_any)
+    # CTO does not apply to the COH (Dec 16, 2025 policy; main hides the homepage CTO card too).
+    f["cto_eligible"] = acting is None or is_cto_eligible(acting)
     f["all"] = True
     return f
+
+
+def _hr_or_ao_fallback(acting, roles):
+    """True if acting holds one of the HR roles, or at most ONE other person
+    does: that person may be the subject (e.g. the only HR Administrator's
+    own opening lines), so the AO fallback (D3) can apply."""
+    if any(acting.has_role(r) for r in roles):
+        return True
+    others = {e.pk for r in roles for e in employees_with_role(r)} - {acting.pk}
+    return len(others) <= 1
 
 
 def _queue_counts(acting, user):

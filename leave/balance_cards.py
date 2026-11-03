@@ -8,7 +8,8 @@ stored or entered.
 
 Per card:
   remaining = the existing available balance (today)
-  used      = days used this calendar year (ledger USED entries, or for
+  used      = days used this calendar year (ledger USED entries; for CTO,
+              approved use drawn from credit lines; or for
               Emergency Leave, which has no balance, its approved/recorded
               applications this year)
   total     = remaining + used (what the person had to work with this year)
@@ -27,7 +28,7 @@ from django.conf import settings
 from django.db.models import Sum
 
 from cto.balances import compute_available_cto_balance
-from cto.models import CTOCreditTransaction
+from cto.models import CTOCreditAllocation, CTOUsageApplication
 
 from .balances import compute_available_balance
 from .models import LeaveApplication, LeaveCreditTransaction, LeaveType
@@ -98,10 +99,11 @@ def balance_cards(employee, today=None):
                                _used_leave_this_year(employee, lt, today), note, lt.pk))
 
     if not is_chief_of_hospital(employee):  # CTO is not applicable to the Chief of Hospital (CLAUDE.md §7)
-        used = -(CTOCreditTransaction.objects.filter(
-            employee=employee, transaction_type=CTOCreditTransaction.USED,
-            transaction_date__gte=date(today.year, 1, 1), transaction_date__lte=today,
-        ).aggregate(t=Sum("days"))["t"] or Decimal("0"))
+        # Used this year = days of approved CTO use dated Jan 1..today, drawn from credit lines (§7.1).
+        used = CTOCreditAllocation.objects.filter(
+            usage_application__employee=employee, usage_application__status=CTOUsageApplication.APPROVED,
+            usage_application__start_date__gte=date(today.year, 1, 1), usage_application__start_date__lte=today,
+        ).aggregate(t=Sum("days"))["t"] or Decimal("0")
         cutoff = date(today.year, *settings.CTO_USAGE_CUTOFF_MONTH_DAY)
         cards.append(_card("CTO", "CTO", compute_available_cto_balance(employee, today), used,
                            f"Use by {cutoff:%b} {cutoff.day}"))

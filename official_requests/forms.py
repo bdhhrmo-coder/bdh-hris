@@ -1,4 +1,5 @@
 from django import forms
+from django.utils import timezone
 
 from .models import OfficialRequest
 
@@ -36,11 +37,16 @@ class OfficialRequestForm(forms.ModelForm):
             "purpose": forms.Textarea(attrs={"rows": 3}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, acting_employee=None, **kwargs):
         super().__init__(*args, **kwargs)
         labels = dict(OfficialRequest.REQUEST_TYPE_CHOICES)
-        self.fields["request_type"].choices = [("", "---------")] + [
-            (code, labels[code]) for code in OfficialRequest.ACTIVE_REQUEST_TYPES]
+        codes = list(OfficialRequest.ACTIVE_REQUEST_TYPES)
+        # 8a (2026-11-02): OT is filed for employees as a group request by a
+        # Supervisor, HR or the AO. Only the COH files their own OT here, and
+        # HR records it (approval is outside BDH).
+        if acting_employee is None or not acting_employee.has_role("CHIEF_OF_HOSPITAL"):
+            codes.remove(OfficialRequest.OT_RESTDAY_HOLIDAY)
+        self.fields["request_type"].choices = [("", "---------")] + [(code, labels[code]) for code in codes]
         self.fields["transportation_allowed"].initial = "Government Vehicle"
 
     def clean(self):
@@ -91,6 +97,7 @@ class BatchForm(forms.Form):
     destination = forms.CharField(max_length=255, required=False)
     expenses_authorized = forms.ChoiceField(choices=[("", "")] + OfficialRequest.EXPENSES_CHOICES, required=False)
     transportation_allowed = forms.CharField(max_length=100, required=False)
+    past_date_reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}), required=False)
 
     def __init__(self, *args, acting_employee=None, batch=None, line_initial=None, **kwargs):
         from . import batch as batch_rules
@@ -135,8 +142,14 @@ class BatchForm(forms.Form):
                 self.add_error("transportation_allowed", "Required for a Travel Order.")
         employees = c.get("employees")
         if kind and employees is not None:
-            role = self.filer_role()
-            allowed = set(self.rules.employees_for(self.acting_employee, role).values_list("pk", flat=True))
+            # Scope comes from the roles held NOW. A returned batch is edited
+            # only under the same role it was filed with, which decides its
+            # route; otherwise file a new batch (security review 2026-11-02).
+            role = self.rules.filing_role_for(self.acting_employee, kind)
+            if role is None or (self.batch is not None and role != self.batch.filer_role):
+                self.add_error("kind", "Your roles have changed since this was filed - file a new group request.")
+                return c
+            allowed = set(self.rules.employees_for(self.acting_employee, role, kind).values_list("pk", flat=True))
             outside = [e.full_name for e in employees if e.pk not in allowed]
             if self.acting_employee is not None and any(e.pk == self.acting_employee.pk for e in employees):
                 # Including yourself would skip your own Supervisor's check.
@@ -182,6 +195,8 @@ class BatchForm(forms.Form):
             for emp in targets:
                 entries.append({"employee": emp, "date": line["date"], "time_from": line.get("time_from"),
                                 "time_to": line.get("time_to"), "note": (line.get("note") or "").strip()})
+        if kind in self.rules.WORK_KINDS:
+            self._check_ot_dates(entries, c)
         keys = [(e["employee"].pk, e["date"]) for e in entries]
         dupes = {k for k in keys if keys.count(k) > 1}
         if dupes:
@@ -190,3 +205,16 @@ class BatchForm(forms.Form):
         if len(entries) > self.rules.MAX_ENTRIES:
             self.add_error(None, f"Too many lines ({len(entries)}); at most {self.rules.MAX_ENTRIES} per batch.")
         self.entries = entries
+
+    def _check_ot_dates(self, entries, c):
+        """OT (CLAUDE.md §7.1): past dates need a typed reason; no line after
+        the employee's last day of service."""
+        today = timezone.localdate()
+        if any(e["date"] < today for e in entries) and not (c.get("past_date_reason") or "").strip():
+            self.add_error("past_date_reason", "Some dates are in the past - type why this is filed late.")
+        late = sorted({f'{e["employee"].full_name} on {e["date"]:%b %d, %Y} (last day of service '
+                       f'{e["employee"].last_day_of_service:%b %d, %Y})'
+                       for e in entries
+                       if e["employee"].last_day_of_service and e["date"] > e["employee"].last_day_of_service})
+        if late:
+            self.add_error(None, "After the last day of service: " + "; ".join(late) + ".")

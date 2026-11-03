@@ -1,25 +1,61 @@
 {% extends "base.html" %}
-{% load documents_tags %}
-{% block title %}CTO claim — BDH HRIS{% endblock %}
+{% load documents_tags badges %}
+{% block title %}CTO claim #{{ claim.pk }} — BDH HRIS{% endblock %}
 {% block content %}
-<h1>CTO claim</h1>
+<h1>CTO claim #{{ claim.pk }}</h1>
 
 <div class="card">
   <p class="mt-0">
-    {% if entry.status == "CREDITED" %}<span class="badge badge-approved">Credited</span>{% else %}<span class="badge badge-pending">Draft — not yet credited</span>{% endif %}
+    {% status_badge claim.status claim.get_status_display %}{% if step_label %} <span class="muted">waiting for {{ step_label }}</span>{% endif %}
   </p>
   <table>
-    <tr><th>Employee</th><td>{{ entry.employee.full_name }}</td></tr>
-    <tr><th>OT request</th><td>{% if entry.ot_request %}Approved OT {{ entry.ot_request.start_date }} to {{ entry.ot_request.end_date }} ({{ entry.ot_request.hours_requested }} approved hours){% else %}None — exception claim: {{ entry.exception_reason }}{% endif %}</td></tr>
-    <tr><th>Work date</th><td>{{ entry.work_date }}</td></tr>
-    <tr><th>Duty type</th><td>{{ entry.get_duty_type_display }}</td></tr>
-    <tr><th>Hours worked</th><td>{{ entry.hours_worked }}{% if entry.is_restday_or_holiday %} (rest day/holiday){% endif %}</td></tr>
-    <tr><th>{% if entry.status == "CREDITED" %}Credited{% else %}Would credit{% endif %}</th><td>{{ entry.credited_hours }} hours = {{ entry.credited_days }} day(s) at {{ entry.multiplier_applied }}x</td></tr>
-    <tr><th>Filing window</th><td>{{ filing_window_opens }} to {{ filing_deadline }}</td></tr>
-    <tr><th>Drafted by</th><td>{{ entry.recorded_by }} on {{ entry.recorded_at|date:"Y-m-d H:i" }}</td></tr>
-    {% if entry.credited_at %}<tr><th>Credited by</th><td>{{ entry.credited_by }} on {{ entry.credited_at|date:"Y-m-d H:i" }}</td></tr>{% endif %}
-    {% if entry.notes %}<tr><th>Notes</th><td>{{ entry.notes }}</td></tr>{% endif %}
+    <tr><th>Employee</th><td>{{ claim.employee.full_name }}{% if claim.employee.separation_status %} <span class="badge badge-pending">Separating — {{ claim.employee.get_separation_status_display }}, last day {{ claim.employee.last_day_of_service }}. Unapproved claims lapse after that day.</span>{% endif %}</td></tr>
+    <tr><th>Type</th><td>{{ claim.get_duty_type_display }}</td></tr>
+    {% if claim.is_exception %}<tr><th>Exception reason</th><td>{{ claim.exception_reason }}</td></tr>{% endif %}
+    {% if claim.first_filed_on %}<tr><th>First filed</th><td>{{ claim.first_filed_on }}</td></tr>{% endif %}
+    {% if claim.approved_on %}<tr><th>Approved</th><td>{{ claim.approved_on }}</td></tr>{% endif %}
   </table>
+</div>
+
+<div class="card">
+  <h2 class="mt-0">Lines</h2>
+  <table>
+    <tr><th>Workday</th><th>Day type</th><th>Hours</th><th>{% if claim.status == "APPROVED" %}Credited{% else %}Would credit{% endif %}</th><th>Filing deadline</th><th>Effective</th><th></th></tr>
+    {% for l in lines %}
+    <tr>
+      <td>{{ l.work_date }}{% if l.ot_line %} <small class="muted">({% if l.ot_line.batch_id %}<a href="{% url 'official_requests:batch_detail' l.ot_line.batch_id %}">OT group request #{{ l.ot_line.batch_id }}</a>{% else %}OT request #{{ l.ot_line.pk }}{% endif %}, {{ l.ot_line.hours_requested }} h approved)</small>{% endif %}</td>
+      <td>{{ l.get_day_type_display }}</td>
+      <td>{{ l.hours_worked }}</td>
+      <td>{{ l.credited_days }} day(s) at {{ l.multiplier_applied }}x</td>
+      <td>{{ l.filing_deadline }}</td>
+      <td>{{ l.effective_date|default:"—" }}{% if l.year_earned %} ({{ l.year_earned }} CTO){% endif %}</td>
+      <td>
+        {% if editable %}
+        <form method="post" action="{% url 'cto:claim_action' claim.pk %}">{% csrf_token %}
+          <input type="hidden" name="line" value="{{ l.pk }}"><button type="submit" name="action" value="remove_line">Remove</button>
+        </form>
+        {% elif can_correct_day_type %}
+        <form method="post" action="{% url 'cto:claim_action' claim.pk %}">{% csrf_token %}
+          <input type="hidden" name="line" value="{{ l.pk }}">
+          <select name="day_type">{% for v, label in day_type_choices %}<option value="{{ v }}" {% if v == l.day_type %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+          <input type="text" name="notes" placeholder="Remark (required)">
+          <button type="submit" name="action" value="correct_day_type">Correct day type</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="7" class="empty-note">No lines yet.</td></tr>
+    {% endfor %}
+  </table>
+
+  {% if line_form %}
+  <form method="post" action="{% url 'cto:claim_action' claim.pk %}">
+    {% csrf_token %}
+    {{ line_form.as_p }}
+    <button type="submit" name="action" value="add_line">Add line</button>
+  </form>
+  {% endif %}
 </div>
 
 <div class="card">
@@ -34,10 +70,10 @@
     <tr><td class="empty-note">No document requirements configured.</td></tr>
     {% endfor %}
   </table>
-  <p><a href="{% documents_url entry %}">View / upload documents</a></p>
+  <p><a href="{% documents_url claim %}">View / upload documents</a></p>
 </div>
 
-{% if can_act %}
+{% if editable %}
 <div class="card">
   {% if submission_errors %}
   <h2 class="mt-0">Not ready to submit</h2>
@@ -45,20 +81,37 @@
   {% else %}
   <h2 class="mt-0">Ready to submit</h2>
   {% endif %}
-  <form method="post" action="{% url 'cto:claim_submit' entry.pk %}" style="display:inline;">
+  <form method="post" action="{% url 'cto:claim_action' claim.pk %}" style="display:inline;">
     {% csrf_token %}
-    <button type="submit" {% if submission_errors %}disabled{% endif %}>Submit and credit CTO</button>
+    <button type="submit" name="action" value="submit" {% if submission_errors %}disabled{% endif %}>{% if claim.status == "RETURNED" %}Resubmit{% else %}Submit{% endif %}</button>
   </form>
-  {% if can_discard %}
-  <form method="post" action="{% url 'cto:claim_discard' entry.pk %}" style="display:inline;"
-        data-confirm="This draft claim will be permanently deleted. This cannot be undone."
-        data-confirm-title="Discard this draft claim?" data-confirm-ok="Discard draft">
+  <form method="post" action="{% url 'cto:claim_action' claim.pk %}" style="display:inline;"
+        data-confirm="This claim will be cancelled and cannot be submitted again. It stays in the history."
+        data-confirm-title="Cancel this claim?" data-confirm-ok="Cancel claim">
     {% csrf_token %}
-    <button type="submit" class="btn-danger">Discard draft</button>
+    <button type="submit" name="action" value="cancel" class="btn-danger">Cancel claim</button>
   </form>
-  {% endif %}
 </div>
 {% endif %}
 
-<p>{% if is_hr %}<a href="{% url 'cto:claims_home' %}">&larr; CTO claims</a>{% else %}<a href="{% url 'cto:my_cto' %}">&larr; My CTO</a>{% endif %}</p>
+{% if can_act %}
+<div class="card">
+  <form method="post" action="{% url 'cto:claim_action' claim.pk %}">
+    {% csrf_token %}
+    <p><label>Remark (required to return)<br><textarea name="notes" rows="2" cols="60"></textarea></label></p>
+    <button type="submit" name="action" value="approve">Approve</button>
+    <button type="submit" name="action" value="return">Return to employee</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2 class="mt-0">History</h2>
+  <table>
+    {% for a in actions %}
+    <tr><td>{{ a.acted_at|date:"Y-m-d H:i" }}</td><td>{{ a.action }}</td><td>{{ a.step }}</td><td>{{ a.acted_by|default:"System" }}</td><td>{{ a.notes }}</td></tr>
+    {% endfor %}
+  </table>
+</div>
+<p><a href="{% url 'cto:my_cto' %}">&larr; My CTO</a> · <a href="{% url 'cto:cto_queue' %}">CTO queue</a></p>
 {% endblock %}

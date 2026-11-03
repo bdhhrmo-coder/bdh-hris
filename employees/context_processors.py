@@ -58,10 +58,12 @@ def nav_links(request):
         "can_view_schedules": acting_employee is not None and any(
             acting_employee.has_role(role, viewing=True) for role in _APPROVAL_ROLES
         ),
-        # Group filing of Travel / OB / OT (Batch 2, Item 7): Supervisors and HR.
+        # Group filing of Travel / OB / OT (Batch 2, Item 7): Supervisors, HR,
+        # and the AO for OT (D5, 2026-11-02) - official_requests.batch.filer_roles.
         "can_file_batch": acting_employee is not None and any(
             acting_employee.has_role(role) for role in
-            (RoleAssignment.SUPERVISOR, RoleAssignment.HR_PROCESSOR, RoleAssignment.HR_ADMINISTRATOR)
+            (RoleAssignment.SUPERVISOR, RoleAssignment.HR_PROCESSOR, RoleAssignment.HR_ADMINISTRATOR,
+             RoleAssignment.ADMINISTRATIVE_OFFICER)
         ),
         # Employee and opening-balance imports: HR Administrator and HR
         # Processor (owner decision, 2026-10-06).

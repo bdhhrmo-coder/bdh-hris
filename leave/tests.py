@@ -439,9 +439,6 @@ class BalanceCardTests(TestCase):
     TODAY = date(2026, 10, 7)
 
     def setUp(self):
-        from cto.models import CTOCreditTransaction
-
-        self.CTO = CTOCreditTransaction
         self.recorder = User.objects.create_user("bc_recorder", password="x")
 
     def cards(self, employee):
@@ -478,11 +475,18 @@ class BalanceCardTests(TestCase):
         self.assertEqual(status_colour(None, None), "neutral")
 
     def test_cto_card_uses_existing_ledger_and_is_hidden_for_coh(self):
+        from cto.models import CTOCreditAllocation, CTOUsageApplication
+        from cto.opening import add_opening_line
+
         emp = make_employee("bc_cto", "BC-3", date_hired=date(2020, 1, 1))
-        self.CTO.objects.create(employee=emp, transaction_type="EARNED", days=3, transaction_date=date(2026, 3, 1),
-                                created_by=self.recorder)
-        self.CTO.objects.create(employee=emp, transaction_type="USED", days=-1, transaction_date=date(2026, 4, 1),
-                                created_by=self.recorder)
+        hr_admin = make_employee("bc_hradmin", "BC-9")
+        RoleAssignment.objects.create(employee=hr_admin, role=RoleAssignment.HR_ADMINISTRATOR)
+        # 3 days earned (opening line, CLAUDE.md 7.1), 1 day used on an approved CTO application.
+        line = add_opening_line(hr_admin, emp, Decimal("3"), date(2026, 3, 1), "paper card", hr_admin.user,
+                                date(2026, 3, 1))
+        app = CTOUsageApplication.objects.create(employee=emp, start_date=date(2026, 4, 1), end_date=date(2026, 4, 1),
+                                                 number_of_days=1, reason="rest", status=CTOUsageApplication.APPROVED)
+        CTOCreditAllocation.objects.create(line=line, usage_application=app, days=1)
         cto = self.cards(emp)["CTO"]
         self.assertEqual((cto["remaining"], cto["used"], cto["total"]), (Decimal("2"), Decimal("1"), Decimal("3")))
         RoleAssignment.objects.create(employee=emp, role=RoleAssignment.CHIEF_OF_HOSPITAL)

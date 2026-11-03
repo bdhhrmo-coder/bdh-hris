@@ -32,7 +32,7 @@ def _section_options(acting_employee):
     """Sections offered for 'Select all in section': for a Supervisor, the
     ones they supervise; for HR, all of them."""
     roles = rules.filer_roles(acting_employee)
-    if any(r in rules.HR_ROLES for r in roles):
+    if any(r in rules.ANY_EMPLOYEE_ROLES for r in roles):
         return list(Section.objects.filter(is_active=True).order_by("name").values("id", "name"))
     ids = set(acting_employee.active_role_assignments().filter(role="SUPERVISOR").values_list("section_id", flat=True))
     return list(Section.objects.filter(pk__in=ids - {None}).order_by("name").values("id", "name"))
@@ -83,7 +83,7 @@ def _drop_skipped(entries, data):
 def batch_file(request):
     acting_employee = get_acting_employee(request.user)
     if not rules.filer_roles(acting_employee):
-        raise PermissionDenied("Group filing is for Supervisors, HR Processors and HR Administrators.")
+        raise PermissionDenied("Group filing is for Supervisors, HR Processors, HR Administrators and the AO.")
 
     if request.method == "POST":
         form = BatchForm(request.POST, acting_employee=acting_employee)
@@ -97,7 +97,8 @@ def batch_file(request):
                 batch = rules.create_batch(request.user, form.filer_role(), c["kind"], c["purpose"].strip(),
                                            (c.get("destination") or "").strip(), entries,
                                            c.get("expenses_authorized") or "",
-                                           (c.get("transportation_allowed") or "").strip())
+                                           (c.get("transportation_allowed") or "").strip(),
+                                           (c.get("past_date_reason") or "").strip())
                 messages.success(request, f"Group request #{batch.pk} filed for {len(entries)} employee-date line(s).")
                 return redirect("official_requests:batch_detail", pk=batch.pk)
             ctx = _form_context(request, form, acting_employee, _rows_from_post(request.POST),
@@ -120,6 +121,9 @@ def batch_edit(request, pk):
         messages.error(request, "This group request can no longer be edited: an approver has already acted on it. "
                                 "Ask them to return it if a change is needed.")
         return redirect("official_requests:batch_detail", pk=pk)
+    kind = next(k for k, v in rules.KINDS.items() if v[1] == batch.request_type and v[2] == batch.work_kind)
+    if rules.filing_role_for(acting_employee, kind) != batch.filer_role:  # the role decides the route
+        raise PermissionDenied("Your roles have changed since this group request was filed. File a new one.")
     latest_return = batch.actions.filter(action="return").order_by("-acted_at").first()
 
     if request.method == "POST":
@@ -137,7 +141,8 @@ def batch_edit(request, pk):
                     msg = "Group request updated. It is still waiting at the first approval step."
                 rules.resubmit_batch(batch, request.user, c["purpose"].strip(), (c.get("destination") or "").strip(),
                                      entries, request.POST.get("resubmit_note", "").strip(),
-                                     c.get("expenses_authorized") or "", (c.get("transportation_allowed") or "").strip())
+                                     c.get("expenses_authorized") or "", (c.get("transportation_allowed") or "").strip(),
+                                     (c.get("past_date_reason") or "").strip())
                 messages.success(request, msg)
                 return redirect("official_requests:batch_detail", pk=pk)
             ctx = _form_context(request, form, acting_employee, _rows_from_post(request.POST),
@@ -146,12 +151,11 @@ def batch_edit(request, pk):
             ctx = _form_context(request, form, acting_employee, _rows_from_post(request.POST),
                                 request.POST.getlist("employees"), batch=batch)
     else:
-        kind = next(k for k, v in rules.KINDS.items() if v[1] == batch.request_type and v[2] == batch.work_kind)
         form = BatchForm(acting_employee=acting_employee, batch=batch,
                          initial={"kind": kind, "purpose": batch.purpose, "destination": batch.destination,
                                   "expenses_authorized": batch.expenses_authorized,
                                   "transportation_allowed": batch.transportation_allowed,
-                                  "apply_same": False})
+                                  "past_date_reason": batch.past_date_reason, "apply_same": False})
         selected = sorted({line.employee_id for line in batch.active_lines()})
         ctx = _form_context(request, form, acting_employee, _rows_from_batch(batch), selected, batch=batch)
     ctx["latest_return"] = latest_return

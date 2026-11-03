@@ -1,43 +1,24 @@
 """
-CTO compliance math, isolated from views/forms for the same reason
-leave/balances.py is: CLAUDE.md §7 flags this as the highest
-compliance-risk module in the build and specifically asks for it to be
-unit-tested in isolation.
+CTO compliance math, isolated from views/forms so it can be unit-tested
+on its own (CLAUDE.md §7 flags CTO as the highest compliance-risk module).
+Rules: CLAUDE.md §7.1 (decided 2026-11-01, pending approved HR memo).
 
-Confirmed with the project owner on 2026-09-27 (not guessed):
-  - Conversion: credited_hours = hours_worked * multiplier (1.0 weekday /
-    1.5 rest day or holiday, from the active CTOMultiplierRate).
-  - Day length is per employee, by shift: 8-hour-shift staff use CTO in
-    4-hour (half-day) or 8-hour (full-day) blocks; 12-hour-shift staff use
-    6-hour (half) or 12-hour (full) blocks. Both normalize to the same
-    "day" unit (0.5 or 1.0), so credited_days = credited_hours /
-    employee.shift_hours, and every usage application's number_of_days
-    must be a multiple of 0.5 regardless of shift length.
-  - The "max 5 CTO days/month, no 3+ consecutive days" cap in §7 is a
-    USAGE cap (confirmed), not an earning cap.
-
-Documented interpretation, not explicitly stated in CLAUDE.md (flagged to
-the project owner alongside this phase, same as the leave-accrual
-anchor-date question was):
-  - "No 3+ consecutive days" is checked against the employee's full CTO
-    usage history, not just within a single application — two separate
-    2-day applications filed back-to-back would still form an illegal
-    4-day run, so the adjacency check looks at CTO usage immediately
-    before/after the requested range, not just the range itself.
-  - "CTO usage dates cannot extend past Dec 15" is read as: no CTO usage
-    application's end_date may fall after December 15 of ITS OWN year,
-    for any year (a standing year-end cutoff, not tied to which year the
-    credit was earned).
-  - Forfeiture (see cto/management/commands/forfeit_expired_cto.py) sweeps
-    an employee's entire remaining CTO balance at each year-end, on the
-    assumption that the sweep runs every year without a gap — under that
-    assumption a whole-balance sweep and a strict "only forfeit what was
-    earned in year Y" calculation give the same result, because nothing
-    from before year Y should still be on the books by the time year Y's
-    sweep runs. A Chief-of-Hospital-approved exception is handled by
-    simply not running (or partially running) that sweep for the
-    employee it covers, with the reason recorded in the ledger entry's
-    notes — see the management command for the exact mechanics.
+  - credited_hours = hours_worked * multiplier for the day type (weekday
+    vs rest day/holiday), from the CTOMultiplierRate in force on the
+    workday. credited_days = credited_hours / employee.shift_hours (8- and
+    12-hour shifts both normalize to the same "day" unit).
+  - Effective date = later of the 1st of the month after the workday and
+    the COH approval date. Year earned = year of the effective date. The
+    balance counts only credit lines whose effective date has arrived.
+  - Filing deadline for a line = Nov 30 (settings) of the year containing
+    the 1st of the month after its workday.
+  - Use draws from the soonest use deadline, then earliest effective date,
+    first. Days are held against specific lines from filing
+    (CTOCreditAllocation). A line can only be used on dates up to its
+    use_deadline (Dec 15 of the year earned, moved forward by carry-over —
+    see cto/carryover.py); separating employees are exempt.
+  - The "max 5 days/month, no 3+ consecutive days" limits are USAGE caps,
+    and "no 3+ consecutive" also looks at adjacent applications.
 """
 
 from datetime import date, timedelta
@@ -45,6 +26,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from django.conf import settings
 from django.db.models import Sum
+from django.utils import timezone
 
 MONTHLY_USAGE_CAP_DAYS = Decimal("5")
 MAX_CONSECUTIVE_DAYS = 2  # "no 3+ consecutive days" -> at most 2 in a row
@@ -56,12 +38,12 @@ MAX_CONSECUTIVE_DAYS = 2  # "no 3+ consecutive days" -> at most 2 in a row
 def compute_credit(hours_worked, is_restday_or_holiday, multiplier_rate, shift_hours):
     """
     Returns (multiplier_applied, credited_hours, credited_days) for one
-    CTOCreditEntry. multiplier_rate is a CTOMultiplierRate instance (the
+    CTOClaimLine (callers pass day_type != WEEKDAY). multiplier_rate is a CTOMultiplierRate instance (the
     one active on the work date — callers look that up so the choice of
     "which rate applies" stays visible and testable on its own).
 
     Both results are quantized to 2 decimal places (matching
-    CTOCreditEntry.credited_hours/credited_days) — a plain Decimal
+    CTOClaimLine.credited_hours/credited_days) — a plain Decimal
     multiply/divide of two 2-decimal-place values (e.g. 8.00 hours * 1.00
     multiplier) otherwise produces more decimal places than the model
     field allows (8.0000), which fails full_clean() on every ordinary
@@ -77,19 +59,71 @@ def compute_credit(hours_worked, is_restday_or_holiday, multiplier_rate, shift_h
     return multiplier, credited_hours, credited_days
 
 
-def _ledger_total(employee, start_date=None, end_date=None):
-    qs = employee.cto_credit_transactions.all()
-    if start_date is not None:
-        qs = qs.filter(transaction_date__gte=start_date)
-    if end_date is not None:
-        qs = qs.filter(transaction_date__lte=end_date)
-    return qs.aggregate(total=Sum("days"))["total"] or Decimal("0")
+def first_of_next_month(d):
+    return date(d.year + 1, 1, 1) if d.month == 12 else date(d.year, d.month + 1, 1)
+
+
+def filing_deadline_for(work_date):
+    """Nov 30 (settings) of the year containing the 1st of the month after
+    the workday: November work -> Nov 30 same year; December work -> Nov 30
+    of the next year."""
+    return date(first_of_next_month(work_date).year, *settings.CTO_FILING_DEADLINE_MONTH_DAY)
+
+
+def violates_filing_deadline(work_date, filed_date):
+    return filed_date > filing_deadline_for(work_date)
+
+
+def effective_date_for(work_date, approved_on):
+    return max(first_of_next_month(work_date), approved_on)
+
+
+def _remaining_days(line):
+    used = line.allocations.aggregate(total=Sum("days"))["total"] or Decimal("0")
+    return line.credited_days - used
+
+
+def usable_lines(employee, as_of_date, usage_date=None):
+    """Credited lines of this employee with days left, soonest use deadline
+    first, then oldest effective date (so carried-over credit goes first).
+    Normally only lines whose effective date has arrived by as_of_date and,
+    with usage_date, whose use_deadline is on or after it. For a separating
+    employee both limits are waived (CLAUDE.md §7.1); the caller limits use
+    to the last day of service. Each line gets a .remaining attribute."""
+    from .models import CTOClaimLine
+    from .separation import is_separating
+
+    lines = CTOClaimLine.objects.filter(claim__employee=employee, state=CTOClaimLine.CREDITED)
+    if not is_separating(employee):
+        lines = lines.filter(effective_date__lte=as_of_date)
+        if usage_date is not None:
+            lines = lines.filter(use_deadline__gte=usage_date)
+    result = []
+    for line in lines.order_by("use_deadline", "effective_date", "id"):
+        line.remaining = _remaining_days(line)
+        if line.remaining > 0:
+            result.append(line)
+    return result
 
 
 def compute_available_cto_balance(employee, as_of_date=None):
-    """Current CTO balance: the running sum of the ledger, full stop."""
-    as_of_date = as_of_date or date.today()
-    return _ledger_total(employee, end_date=as_of_date)
+    """Days available now: credited, effective, not yet used or held."""
+    as_of_date = as_of_date or timezone.localdate()
+    return sum((line.remaining for line in usable_lines(employee, as_of_date)), Decimal("0"))
+
+
+def plan_allocation(employee, number_of_days, as_of_date, usage_date):
+    """[(line, days), ...] covering number_of_days from the oldest usable
+    lines, or None if there isn't enough."""
+    plan = []
+    needed = number_of_days
+    for line in usable_lines(employee, as_of_date, usage_date):
+        if needed <= 0:
+            break
+        take = min(line.remaining, needed)
+        plan.append((line, take))
+        needed -= take
+    return plan if needed <= 0 else None
 
 
 def cto_used_in_month(employee, year, month, exclude_application=None):
@@ -159,33 +193,3 @@ def forms_illegal_consecutive_run(employee, start_date, end_date, exclude_applic
         else:
             run = 1
     return False
-
-
-def violates_usage_cutoff(end_date):
-    """True if end_date falls after December 15 of its own year."""
-    cutoff = date(end_date.year, *settings.CTO_USAGE_CUTOFF_MONTH_DAY)
-    return end_date > cutoff
-
-
-def violates_filing_deadline(work_date, filed_date):
-    """True if a credit claim for work_date is being filed after that
-    year's November 30 deadline."""
-    deadline = date(work_date.year, *settings.CTO_FILING_DEADLINE_MONTH_DAY)
-    return filed_date > deadline
-
-
-def filing_window_opens(work_date):
-    """First day a CTO claim for work_date may be filed: the 1st of the
-    following month (§7: "claims filed the month after the compensable
-    workday"). Confirmed 2026-09-28 as "no earlier than next month" — the
-    window then stays open until that year's filing deadline, so November
-    and December work cannot be claimed without a COH exception."""
-    if work_date.month == 12:
-        return date(work_date.year + 1, 1, 1)
-    return date(work_date.year, work_date.month + 1, 1)
-
-
-def filed_too_early(work_date, filed_date):
-    """True if a claim for work_date is being filed before its filing
-    window opens (see filing_window_opens)."""
-    return filed_date < filing_window_opens(work_date)

@@ -79,6 +79,50 @@ class MenuTests(TestCase):
                         self.assertNotIn("login", self.client.get(item["url"])["Location"])
 
 
+class OtCtoMenuTests(TestCase):
+    """Step 6 (2026-11-02): the AO's HR Administration CTO items follow the D3
+    fallback; the COH has no CTO in My Requests."""
+
+    CTO_ADMIN = ["CTO Opening Balances", "Exception CTO Claim", "CTO Separation Status"]
+
+    def items(self, employee):
+        self.client.force_login(employee.user)
+        return [i["label"] for g in self.client.get("/hris/home/").context["nav_groups"] for i in g["items"]]
+
+    def setUp(self):
+        self.ao = person("navao", R.ADMINISTRATIVE_OFFICER)
+
+    def test_one_hr_administrator_ao_sees_opening_and_exception(self):
+        person("navhra1", R.HR_ADMINISTRATOR)
+        items = self.items(self.ao)
+        self.assertIn("CTO Opening Balances", items)
+        self.assertIn("Exception CTO Claim", items)
+
+    def test_two_hr_administrators_ao_does_not(self):
+        person("navhra1", R.HR_ADMINISTRATOR)
+        person("navhra2", R.HR_ADMINISTRATOR)
+        items = self.items(self.ao)
+        self.assertNotIn("CTO Opening Balances", items)
+        self.assertNotIn("Exception CTO Claim", items)
+        self.assertIn("CTO Opening Balances", self.items(person("navhra3", R.HR_ADMINISTRATOR)))  # HR always
+
+    def test_separation_one_hr_person_ao_sees_it_two_do_not(self):
+        person("navproc1", R.HR_PROCESSOR)
+        self.assertIn("CTO Separation Status", self.items(self.ao))
+        person("navhra1", R.HR_ADMINISTRATOR)  # a second HR person, other role
+        self.assertNotIn("CTO Separation Status", self.items(self.ao))
+
+    def test_coh_has_no_cto_entry_or_new_claim_button(self):
+        coh = person("navcoh", R.CHIEF_OF_HOSPITAL)
+        menu = {g["label"]: [i["label"] for i in g["items"]] for g in
+                (self.client.force_login(coh.user) or self.client.get("/hris/home/").context["nav_groups"])}
+        self.assertNotIn("CTO", menu["My Requests"])
+        self.assertIn("CTO", menu["Approvals"])  # the COH still approves CTO
+        self.assertNotContains(self.client.get(reverse("cto:my_cto")), "New CTO claim")
+        self.assertIn("CTO", self.items(person("navplain")))  # an ordinary employee keeps it
+        self.assertContains(self.client.get(reverse("cto:my_cto")), "New CTO claim")
+
+
 class DirectUrlStillDeniedTests(TestCase):
     """Hiding a menu item is not the security: the pages still refuse."""
 
