@@ -37,8 +37,17 @@ class OfficialRequestForm(forms.ModelForm):
             "purpose": forms.Textarea(attrs={"rows": 3}),
         }
 
+    # Local Official Errand: the vehicle for F59 "Type of Transport" (2026-11-03),
+    # stored in transportation_allowed.
+    vehicle = forms.ChoiceField(label="Type of transport", required=False, choices=[])
+
     def __init__(self, *args, acting_employee=None, **kwargs):
+        from .f59 import VEHICLE_CHOICES
+
         super().__init__(*args, **kwargs)
+        self.fields["vehicle"].choices = VEHICLE_CHOICES
+        if self.instance.pk and self.instance.request_type == OfficialRequest.TRAVEL:
+            self.initial.setdefault("vehicle", self.instance.transportation_allowed)
         labels = dict(OfficialRequest.REQUEST_TYPE_CHOICES)
         codes = list(OfficialRequest.ACTIVE_REQUEST_TYPES)
         # 8a (2026-11-02): OT is filed for employees as a group request by a
@@ -62,6 +71,9 @@ class OfficialRequestForm(forms.ModelForm):
                 self.add_error("expenses_authorized", "Choose Per Diem or Official Time.")
             if not (cleaned.get("transportation_allowed") or "").strip():
                 self.add_error("transportation_allowed", "Required for a Travel Order.")
+        elif request_type == OfficialRequest.TRAVEL:
+            cleaned["expenses_authorized"] = ""
+            cleaned["transportation_allowed"] = cleaned.get("vehicle") or ""
         else:
             cleaned["expenses_authorized"] = ""
             cleaned["transportation_allowed"] = ""
@@ -97,12 +109,16 @@ class BatchForm(forms.Form):
     destination = forms.CharField(max_length=255, required=False)
     expenses_authorized = forms.ChoiceField(choices=[("", "")] + OfficialRequest.EXPENSES_CHOICES, required=False)
     transportation_allowed = forms.CharField(max_length=100, required=False)
+    vehicle = forms.ChoiceField(required=False, choices=[])  # errand: F59 Type of Transport (2026-11-03)
     past_date_reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}), required=False)
 
     def __init__(self, *args, acting_employee=None, batch=None, line_initial=None, **kwargs):
         from . import batch as batch_rules
 
+        from .f59 import VEHICLE_CHOICES
+
         super().__init__(*args, **kwargs)
+        self.fields["vehicle"].choices = VEHICLE_CHOICES
         self.rules = batch_rules
         self.acting_employee = acting_employee
         self.batch = batch
@@ -140,6 +156,8 @@ class BatchForm(forms.Form):
                 self.add_error("expenses_authorized", "Choose Per Diem or Official Time.")
             if not (c.get("transportation_allowed") or "").strip():
                 self.add_error("transportation_allowed", "Required for a Travel Order.")
+        elif kind == "TRAVEL":
+            c["transportation_allowed"] = c.get("vehicle") or ""
         employees = c.get("employees")
         if kind and employees is not None:
             # Scope comes from the roles held NOW. A returned batch is edited

@@ -417,7 +417,7 @@ def create_batch(user, filer_role, kind, purpose, destination, entries, expenses
     batch = B.objects.create(request_type=request_type, work_kind=work_kind, purpose=purpose,
                              destination=destination if request_type in (R.TRAVEL, R.OFFICIAL_BUSINESS) else "",
                              expenses_authorized=expenses if is_ob else "",
-                             transportation_allowed=transport if is_ob else "",
+                             transportation_allowed=transport if request_type in (R.OFFICIAL_BUSINESS, R.TRAVEL) else "",
                              past_date_reason=past_date_reason if request_type == R.OT_RESTDAY_HOLIDAY else "",
                              filed_by=user, filer_role=filer_role)
     lines = [R.objects.create(batch=batch, **_line_values(batch, e)) for e in entries]
@@ -458,6 +458,8 @@ def resubmit_batch(batch, user, purpose, destination, entries, note="", expenses
     batch.destination = destination if batch.request_type in (R.TRAVEL, R.OFFICIAL_BUSINESS) else ""
     if batch.request_type == R.OFFICIAL_BUSINESS:
         batch.expenses_authorized, batch.transportation_allowed = expenses, transport
+    elif batch.request_type == R.TRAVEL:
+        batch.transportation_allowed = transport  # the F59 vehicle (2026-11-03)
     batch.past_date_reason = past_date_reason if batch.request_type == R.OT_RESTDAY_HOLIDAY else ""
     batch.status = R.SUBMITTED
     batch.save()

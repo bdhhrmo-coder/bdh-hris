@@ -22,6 +22,9 @@
     <template x-if="t === 'OFFICIAL_BUSINESS' || t === 'TRAVEL'"><div>
       {% include "official_requests/_field.html" with field=form.destination %}
     </div></template>
+    <template x-if="t === 'TRAVEL'"><div>
+      {% include "official_requests/_field.html" with field=form.vehicle %}
+    </div></template>
     <template x-if="t === 'OFFICIAL_BUSINESS'"><div>
       {% include "official_requests/_field.html" with field=form.expenses_authorized %}
       {% include "official_requests/_field.html" with field=form.transportation_allowed %}

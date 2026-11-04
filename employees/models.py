@@ -73,6 +73,14 @@ class Employee(models.Model):
     employee_id = models.CharField(
         max_length=20, unique=True, help_text="System Administrator only."
     )
+    # PALMIRA biometric ID (owner request 2026-11-03). Kept now so the PALMIRA
+    # PDF reader built after the pilot can match each printed block to an
+    # employee by this ID, never by name (CLAUDE.md §9). Optional; unique when
+    # filled; kept as text so leading zeros stay.
+    biometric_id = models.CharField(
+        "Biometric ID", max_length=30, blank=True,
+        help_text="The ID this employee has in PALMIRA (the biometric system), as printed on its report.",
+    )
     position = models.CharField(max_length=150, blank=True)
     item_plantilla_no = models.CharField("Item/Plantilla No.", max_length=50, blank=True)
     salary_grade = models.CharField(max_length=10, blank=True)
@@ -177,6 +185,11 @@ class Employee(models.Model):
         # Applied by the database on every query, so new and edited records
         # fall into place automatically (owner request, 2026-10-06).
         ordering = ["surname", "first_name", "middle_name", "employee_id"]
+        constraints = [
+            models.UniqueConstraint(fields=["biometric_id"], condition=~models.Q(biometric_id=""),
+                                    name="unique_biometric_id_when_filled",
+                                    violation_error_message="Another employee already has this Biometric ID."),
+        ]
 
     def __str__(self):
         full = f"{self.surname}, {self.first_name}"

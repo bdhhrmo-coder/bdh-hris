@@ -243,3 +243,33 @@ class ImportScreenTests(TestCase):
         bad = SimpleUploadedFile("x.xlsx", b"not a workbook")
         r = self.client.post(reverse("dataimport:upload", args=["employees"]), {"file": bad}, follow=True)
         self.assertContains(r, "could not be opened")
+
+
+class BiometricIdImportTests(TestCase):
+    """Biometric ID column (owner request 2026-11-03): optional and last, so the
+    pilot templates prepared before it still upload; unique when filled."""
+
+    def setUp(self):
+        self.hradmin = make_employee("bio_hradmin", "EMP-9911", RoleAssignment.HR_ADMINISTRATOR)
+
+    def plan(self, rows, cols=EMP_COLS):
+        return employee_import.build_plan(workbook_file(employee_import.SHEET, cols, rows), self.hradmin)
+
+    def test_older_template_without_the_column_still_uploads(self):
+        old_cols = [c for c in EMP_COLS if c[0] != "biometric_id"]
+        plans = self.plan([NEW_ROW], cols=old_cols)
+        self.assertEqual(plans[0].errors, [])
+
+    def test_biometric_id_is_saved_and_must_be_unique(self):
+        plans = self.plan([dict(NEW_ROW, biometric_id="00123")])
+        self.assertEqual(plans[0].errors, [])
+        employee_import.apply_plan(plans, self.hradmin.user, "f.xlsx")
+        self.assertEqual(Employee.objects.get(employee_id="EMP-0101").biometric_id, "00123")
+        plans = self.plan([dict(NEW_ROW, employee_id="EMP-0102", biometric_id="00123")])
+        self.assertTrue(any("already belongs to" in e for e in plans[0].errors))
+        plans = self.plan([dict(NEW_ROW, employee_id="EMP-0103", biometric_id="777"),
+                           dict(NEW_ROW, employee_id="EMP-0104", biometric_id="777")])
+        self.assertTrue(any("also on row" in e for e in plans[1].errors))
+
+    def test_template_has_the_column_last(self):
+        self.assertEqual(employee_import.COLUMNS[-1][0], "biometric_id")
