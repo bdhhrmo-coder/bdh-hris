@@ -452,6 +452,36 @@ Must include:
 
 ---
 
+## 13B. Out-on-Pass module (owner decisions 2026-11-14; BRANCH `feature/out-on-pass`, merge only after the pilot Go/No-Go)
+
+Rule set: BDH-ADM-AO-01 Rev 0 (effective 2027-01-01) **as revised by the pending DICR (Rev 1)**, slip form BDH-ADM-AO-01F16. The COH must sign Rev 1 before the Dec 18 test. Do not merge to main, and do not change leave, CTO or approval logic, without the owner's say-so.
+
+**Scope**
+- Personal pass only. "Local Official Errand" and F59 stay as they are.
+- 2026 passes are not charged. The Google Sheets tracker covers Jan 1-10, 2027; the HRIS takes over Jan 11, 2027, with a one-off "hours already used Jan 1-10" line per employee.
+- PGSS security personnel get HRIS accounts. Excludes official business and approved leave.
+
+**Gate time and hours**
+- The employee taps **Out** and **In** on a hospital computer; the HRIS time is the official gate time. The guard keeps a name / pass number cross-check log.
+- Hours charged = actual minutes, whole minutes, seconds ignored. **No rounding.**
+- Over 2 hours by not more than 5 minutes: not counted as excess, but the minutes are still charged to the balance.
+- A missed Tap Out/In: confirmed by the supervisor, time verified by the guard on duty, reviewed by HRMO before hours are charged.
+
+**Allowance and limits (the system checks all of them at filing)**
+- Per policy year (Jan 1-Dec 31): permanent 12 h; COSP 1 h per full month of contract, up to 12 h (contracts started before 2027 count from Jan 1, 2027). Non-cumulative, forfeited at year/contract end.
+- Max 2 h per pass; 2 passes a month; never more than 3 a month; 1 pass a day; none in the first or last hour of the shift; max 2 employees of a unit out at once; none during a surge or Code activation.
+- Violation: the system **flags it, does not process the pass and tells the user why**. No filing after the fact.
+- Shift-hour rule: refuse when the duty schedule shows the shift; with no schedule, the supervisor confirms. Surge/Code and coverage: the supervisor confirms.
+
+**Routing**
+- Ordinary pass: Employee -> Supervisor (unit head, else section head; single level) -> AO or COH approves. **No HRMO step.** The AO's own pass goes to the COH. Nobody acts on their own pass. A return needs a remark.
+- Third pass, exception (beyond balance or 2 h) and documented emergency pass: separate request types with a reason; Supervisor endorses, **COH alone decides**; the system marks the type. A third pass needs its proof **attached at filing**; no proof, not processed. HRMO sees these only in the monthly list. No COH, no approval.
+- Time not covered (over 2 h, over balance, unapproved): permanent staff = undertime; COSP and PGSS = hours not rendered, unpaid.
+- Proof documents are confidential: visible only to the filer, supervisor and approver (see section 10).
+- Monthly report to the COH from the HRIS (hours per unit, third passes, exceptions, unapproved absences, low balances).
+
+---
+
 ## 13A. Future Expansion — Integrated HR and Administrative System (owner decisions 2026-10-17)
 
 Planned after HRIS go-live and a stable period; not in scope yet. One system, one database, one employee list; each module its own Django app reusing roles/OIC, routing, digital stamps, documents, notifications, Audit Log and the menu.
