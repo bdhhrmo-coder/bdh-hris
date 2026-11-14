@@ -45,7 +45,7 @@ class Base(TestCase):
         self.a = emp("staffa", self.lab)
 
     def make(self, e, d, out, back, status=P.APPROVED, kind=P.ORDINARY, charged=None):
-        return P.objects.create(employee=e, kind=kind, pass_date=d, time_out=out, time_in=back, reason="Bank",
+        return P.objects.create(employee=e, kind=kind, pass_date=d, time_out=out, time_in=back, reason_type=P.REASON_GOVT_BANK, reason="Bank",
                                 status=status, minutes_charged=charged, filed_by=e.user)
 
     def check(self, e, d, out, back, kind=P.ORDINARY, **kw):
@@ -181,6 +181,7 @@ class CheckTests(Base):
         # Shift ends 7:00 AM on Feb 3: 6:15-6:45 is in its last hour.
         self.assertIn("last_hour", self.check(self.a, FEB, time(6, 15), time(6, 45)))
 
-    def test_coh_not_filed_here(self):
+    def test_coh_pass_is_checked_like_anyone_elses(self):
         coh = emp("coh", roles=[RoleAssignment.CHIEF_OF_HOSPITAL])
-        self.assertIn("coh", self.check(coh, FEB, time(10), time(11)))
+        self.assertEqual(self.check(coh, FEB, time(10), time(11)), set())
+        self.assertIn("over_2_hours", self.check(coh, FEB, time(9), time(12)))

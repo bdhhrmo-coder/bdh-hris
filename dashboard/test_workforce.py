@@ -43,7 +43,7 @@ class WorkforceTests(TestCase):
         emp("F", is_active=False, separation_date=date(2026, 9, 15))
         emp("G", is_active=False, separation_date=date(2025, 1, 1))
         c = workforce.workforce_counts(START, END)
-        self.assertEqual(c, {"active": 5, "separated": 1, "permanent": 1, "cosp": 3, "cosp_pgp": 1, "cosp_lgu": 1,
+        self.assertEqual(c, {"active": 5, "separated": 1, "permanent": 1, "cosp": 3, "cosp_pgp": 1, "cosp_lgu": 1, "cosp_pgss": 0,
                              "cosp_unassigned": 1})
 
     def record(self, e, day, absent=False):

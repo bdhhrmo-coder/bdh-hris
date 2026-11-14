@@ -77,6 +77,7 @@ class OutOnPass(models.Model):
     SUBMITTED = "SUBMITTED"
     ENDORSED = "ENDORSED"
     APPROVED = "APPROVED"
+    RECORDED = "RECORDED"
     COMPLETED = "COMPLETED"
     RETURNED = "RETURNED"
     REJECTED = "REJECTED"
@@ -85,6 +86,7 @@ class OutOnPass(models.Model):
         (SUBMITTED, "Submitted (for supervisor endorsement)"),
         (ENDORSED, "Endorsed by supervisor"),
         (APPROVED, "Approved"),
+        (RECORDED, "Recorded by HR (Chief of Hospital's own pass)"),
         (COMPLETED, "Completed (back in)"),
         (RETURNED, "Returned"),
         (REJECTED, "Rejected"),
@@ -92,15 +94,38 @@ class OutOnPass(models.Model):
     ]
     # Statuses that hold a slot: they count toward the daily/monthly limits,
     # the unit limit and (as planned minutes) the balance.
-    LIVE_STATUSES = (SUBMITTED, ENDORSED, APPROVED)
+    LIVE_STATUSES = (SUBMITTED, ENDORSED, APPROVED, RECORDED)
+    # Cleared to leave: the employee may Tap Out (stage 3).
+    CLEARED_STATUSES = (APPROVED, RECORDED)
+    PENDING_STATUSES = (SUBMITTED, ENDORSED)
+
+    # Part I reasons, as on slip BDH-ADM-AO-01F16.
+    REASON_MEDICAL = "MEDICAL"
+    REASON_LEGAL = "LEGAL"
+    REASON_GOVT_BANK = "GOVT_BANK"
+    REASON_FAMILY = "FAMILY"
+    REASON_ERRAND = "ERRAND"
+    REASON_OTHER = "OTHER"
+    REASON_CHOICES = [
+        (REASON_MEDICAL, "Medical appointment"),
+        (REASON_LEGAL, "Legal matter"),
+        (REASON_GOVT_BANK, "Government or bank transaction"),
+        (REASON_FAMILY, "Family emergency"),
+        (REASON_ERRAND, "Personal errand"),
+        (REASON_OTHER, "Other"),
+    ]
 
     employee = models.ForeignKey("employees.Employee", on_delete=models.PROTECT, related_name="out_on_passes")
     kind = models.CharField(max_length=10, choices=KIND_CHOICES, default=ORDINARY)
     pass_date = models.DateField()
     time_out = models.TimeField(help_text="Planned time out.")
     time_in = models.TimeField(help_text="Expected time back. Earlier than the time out = the next day.")
-    reason = models.TextField()
+    reason_type = models.CharField("Reason", max_length=10, choices=REASON_CHOICES)
+    reason = models.TextField("Details")
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=SUBMITTED)
+    recorded_only = models.BooleanField(
+        default=False, help_text="The Chief of Hospital's own pass: recorded by HR, no approval step "
+                                 "(owner decision 2026-11-14, Option B).")
 
     # Supervisor confirmations at endorsement (CLAUDE.md 13B): no surge or
     # Code activation, coverage, and the shift-hour rule when the employee
@@ -126,6 +151,15 @@ class OutOnPass(models.Model):
 
     def __str__(self):
         return f"{self.get_kind_display()}: {self.employee} on {self.pass_date} {self.time_out:%H:%M}"
+
+    @property
+    def pass_number(self):
+        """Shown to the guard for the cross-check log."""
+        return f"OOP-{self.pass_date:%Y}-{self.pk:05d}" if self.pk else ""
+
+    @property
+    def is_special(self):
+        return self.kind in self.SPECIAL_KINDS
 
     @property
     def planned_minutes(self):

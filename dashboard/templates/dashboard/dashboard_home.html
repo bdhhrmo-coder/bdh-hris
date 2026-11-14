@@ -78,9 +78,15 @@
     <div class="kpi-value">{{ workforce.cosp_lgu }}</div>
     <div class="kpi-label">COSP under LGU (active)</div>
   </div>
+  {% if workforce.cosp_pgss %}
+  <div class="kpi-tile accent-teal">
+    <div class="kpi-value">{{ workforce.cosp_pgss }}</div>
+    <div class="kpi-label">PGSS security (active)</div>
+  </div>
+  {% endif %}
 </div>
 {% if workforce.cosp_unassigned %}
-<p class="field-help">{{ workforce.cosp_unassigned }} active COSP employee(s) have no "COSP under" (PGP/LGU) recorded yet, so they are not in either COSP tile.</p>
+<p class="field-help">{{ workforce.cosp_unassigned }} active COSP employee(s) have no "COSP under" (PGP/LGU/PGSS) recorded yet, so they are not in any COSP tile.</p>
 {% endif %}
 </details>
 <details class="dash-section" data-remember="dash-attendance">

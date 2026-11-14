@@ -217,10 +217,6 @@ def check_pass(employee, kind, pass_date, time_out, time_in, *, now=None, has_pr
     start, end = window(pass_date, time_out, time_in)
     minutes = int((end - start).total_seconds() // 60)
 
-    # Who may file at all.
-    if employee.has_role("CHIEF_OF_HOSPITAL"):
-        refuse("coh", "The Chief of Hospital's own pass is not filed here (no approver above).")
-
     # No filing after the fact, except a documented emergency pass.
     if kind != OutOnPass.EMERGENCY and start <= now:
         refuse("after_the_fact",
