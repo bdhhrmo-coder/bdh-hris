@@ -42,6 +42,7 @@ MENU = [
         ("Exchange of Duty", "exchange:my_exchanges", "repeat", "all"),
         ("Attendance", "attendance:my_attendance", "fingerprint", "all"),
         ("Official Business / Errand / OT", "official_requests:my_requests", "briefcase", "all"),
+        ("Out-on-Pass", "outonpass:mine", "door-open", "has_employee"),
         ("File for a Group", "official_requests:batch_file", "users-round", "can_file_batch"),
         ("My Schedule", "schedules:mine", "calendar-days", "all"),
         ("My Profile", "employees:my_profile_edit_request", "user-round", "has_employee"),
@@ -52,6 +53,7 @@ MENU = [
         ("Exchange of Duty", "exchange:exchange_queue", "repeat", "approver"),
         ("Attendance Correction", "attendance:correction_queue", "fingerprint", "correction_validator"),
         ("Official Business / Errand / OT", "official_requests:request_queue", "briefcase", "approver"),
+        ("Out-on-Pass", "outonpass:queue", "door-open", "approver"),
         ("Profile Changes", "employees:profile_edit_request_queue", "clipboard-check", "can_review_profile_requests"),
         ("Officer-in-Charge (OIC)", "oic_home", "calendar-clock", "can_designate_oic"),
         ("CTO Year-end Carry-over", "cto:carry_over", "calendar-days", "approver"),
@@ -81,7 +83,8 @@ MENU = [
 
 # Queue url name -> label used by homepage.kpis.waiting_for_me (for the counts).
 QUEUE_COUNT_URLS = {"leave:leave_queue", "cto:cto_queue", "exchange:exchange_queue",
-                    "attendance:correction_queue", "official_requests:request_queue"}
+                    "attendance:correction_queue", "official_requests:request_queue",
+                    "outonpass:queue"}
 
 
 def _flags(request, acting):

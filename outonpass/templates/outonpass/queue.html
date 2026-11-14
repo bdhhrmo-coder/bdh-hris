@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% load badges %}
+{% block title %}Out-on-Pass approvals — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Out-on-Pass waiting for me</h1>
+<p class="muted">Oldest first. Open a pass to endorse, approve, return or reject it. A pass must be decided before its time out.</p>
+<div class="card"><div class="table-scroll">
+<table>
+  <tr><th>Pass no.</th><th>Employee</th><th>Type</th><th>Date and time</th><th>Reason</th><th>Status</th></tr>
+  {% for p in passes %}
+  <tr>
+    <td><a href="{% url 'outonpass:detail' p.pk %}">{{ p.pass_number }}</a></td>
+    <td>{{ p.employee.full_name }}</td>
+    <td>{% if p.is_special %}<strong>{{ p.get_kind_display }}</strong>{% else %}{{ p.get_kind_display }}{% endif %}</td>
+    <td>{{ p.pass_date|date:"M d, Y" }}<br><small>{{ p.time_out|time:"h:i A" }} – {{ p.time_in|time:"h:i A" }}</small></td>
+    <td>{{ p.get_reason_type_display }}: {{ p.reason|truncatechars:80 }}</td>
+    <td>{% status_badge p.status p.get_status_display %}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="6" class="empty-note">Nothing is waiting for you.</td></tr>
+  {% endfor %}
+</table>
+</div></div>
+{% endblock %}

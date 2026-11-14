@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% load badges outonpass_tags %}
+{% block title %}Pass {{ p.pass_number }} — BDH HRIS{% endblock %}
+{% block content %}
+{% if p.employee.user_id == request.user.pk %}<p><a href="{% url 'outonpass:mine' %}">&larr; My passes</a></p>
+{% else %}<p><a href="{% url 'outonpass:queue' %}">&larr; Out-on-Pass waiting for me</a></p>{% endif %}
+<div class="split-row spread">
+  <h1>Pass {{ p.pass_number }}</h1>
+  {% status_badge p.status p.get_status_display %}
+</div>
+<div class="card form-card">
+  <table class="detail-table">
+    <tr><th>Employee</th><td>{{ p.employee.full_name }} ({{ p.employee.employee_id }}){% if p.employee.position %} &middot; {{ p.employee.position }}{% endif %}</td></tr>
+    <tr><th>Type</th><td>{% if p.is_special %}<strong>{{ p.get_kind_display }}</strong> (the Chief of Hospital decides){% else %}{{ p.get_kind_display }}{% endif %}</td></tr>
+    <tr><th>Date</th><td>{{ p.pass_date|date:"l, M d, Y" }}</td></tr>
+    <tr><th>Time out / expected time in</th><td>{{ p.time_out|time:"h:i A" }} – {{ p.time_in|time:"h:i A" }} ({{ p.planned_minutes|hm }})</td></tr>
+    <tr><th>Reason</th><td>{{ p.get_reason_type_display }}: {{ p.reason|linebreaksbr }}</td></tr>
+    {% if p.kind == "THIRD" %}<tr><th>Proof</th><td>{% if proofs is None %}{% if has_proof %}Attached (confidential){% else %}None{% endif %}{% else %}{% for d in proofs %}<a href="{% url 'documents:document_download' d.pk %}">{{ d.original_filename }}</a>{% if not forloop.last %}, {% endif %}{% empty %}None{% endfor %}{% endif %}</td></tr>
+    {% elif proofs %}<tr><th>Attachment</th><td>{% for d in proofs %}<a href="{% url 'documents:document_download' d.pk %}">{{ d.original_filename }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</td></tr>{% endif %}
+    {% if p.covering_staff %}<tr><th>Staff covering the unit</th><td>{{ p.covering_staff }}</td></tr>{% endif %}
+    {% if p.confirmed_coverage %}<tr><th>Supervisor confirmed</th><td>Unit can be covered; no surge or Code activation{% if p.confirmed_shift_hours %}; not in the first or last hour of the shift{% endif %}</td></tr>{% endif %}
+  </table>
+</div>
+
+<h2>Balance and count</h2>
+<p class="muted">Checked by the system when the pass was filed and again at each step.</p>
+{% include "outonpass/_summary.html" %}
+
+{% if can_edit or can_cancel %}
+<p class="row-actions">
+  {% if can_edit %}<a class="btn" href="{% url 'outonpass:edit' p.pk %}">Correct and resubmit</a>{% endif %}
+  {% if can_cancel %}
+  <form method="post" action="{% url 'outonpass:action' p.pk %}" style="display:inline">{% csrf_token %}
+    <button type="submit" name="action" value="cancel" class="btn-secondary">Cancel this pass</button></form>
+  {% endif %}
+</p>
+{% endif %}
+
+{% if actions %}
+<div class="card form-card">
+  <h2>Your action</h2>
+  <form method="post" action="{% url 'outonpass:action' p.pk %}" x-data="{ remark: '' }">
+    {% csrf_token %}
+    {% if supervisor_step %}
+    <p><label><input type="checkbox" name="confirmed_coverage"> The unit can be covered.</label></p>
+    <p><label><input type="checkbox" name="confirmed_no_surge"> There is no surge or Code activation.</label></p>
+    {% if needs_shift %}<p><label><input type="checkbox" name="confirmed_shift_hours"> The pass is not in the first or last hour of the employee's shift (no approved duty schedule this month, so the system cannot check it).</label></p>{% endif %}
+    {% if p.kind == "THIRD" %}<p><label>Staff covering the unit <input type="text" name="covering_staff" maxlength="255" required></label></p>{% endif %}
+    {% endif %}
+    <p><input type="text" name="notes" maxlength="255" x-model="remark" class="remark-input" placeholder="Remark (required to return or reject)" aria-label="Remark"></p>
+    <button type="submit" name="action" value="{{ forward }}">{{ forward_label }}</button>
+    {% if "return" in actions %}<button type="submit" name="action" value="return" :disabled="!remark.trim()" formnovalidate>Return</button>{% endif %}
+    {% if "reject" in actions %}<button type="submit" name="action" value="reject" :disabled="!remark.trim()" formnovalidate>Reject</button>{% endif %}
+  </form>
+</div>
+{% endif %}
+
+<h2>History</h2>
+<div class="card"><div class="table-scroll">
+<table>
+  <tr><th>When</th><th>Action</th><th>By</th><th>Remarks</th></tr>
+  {% for h in history %}
+  <tr><td>{{ h.acted_at|date:"M d, Y g:i A" }}</td><td>{{ h.action|capfirst }}</td>
+      <td>{{ h.acted_by.employee.full_name|default:h.acted_by.username }}</td><td>{{ h.notes|default:"—" }}</td></tr>
+  {% endfor %}
+</table>
+</div></div>
+{% endblock %}

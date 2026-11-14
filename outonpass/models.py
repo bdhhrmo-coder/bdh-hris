@@ -161,6 +161,10 @@ class OutOnPass(models.Model):
     def is_special(self):
         return self.kind in self.SPECIAL_KINDS
 
+    def may_view_document(self, acting_employee):
+        from .routing import may_view_proof
+        return may_view_proof(acting_employee, self)
+
     @property
     def planned_minutes(self):
         from .rules import planned_minutes

@@ -287,3 +287,24 @@ def needs_shift_confirmation(employee, pass_date):
     """True when the system cannot check the shift-hour rule (no approved
     schedule for the month), so the supervisor confirms it at endorsement."""
     return not has_approved_schedule(employee, pass_date)
+
+
+def summary(employee, on_date):
+    """Balance figures for the filing page, the pass page and (later) the slip."""
+    year = on_date.year
+    allowance = allowance_minutes(employee, year)
+    used = used_minutes(employee, year)
+    held = held_minutes(employee, year)
+    return {
+        "year": year, "allowance": allowance, "used": used, "held": held,
+        "balance": allowance - used - held,
+        "month_count": passes_in_month(employee, year, on_date.month),
+        "month_label": on_date.strftime("%B %Y"),
+        "max_minutes": rule("MAX_MINUTES_PER_PASS"),
+        "passes_per_month": rule("PASSES_PER_MONTH"),
+    }
+
+
+def hm(minutes):
+    """'1 h 05 min' for screens and the slip."""
+    return _hm(minutes)
