@@ -62,6 +62,7 @@ MENU = [
         ("Employees", "employees:employee_list", "user-round", "can_list_employees"),
         ("Duty Schedules", "schedules:list", "calendar-range", "can_view_schedules"),
         ("Approved Exchanges of Duty", "exchange:approved_exchanges", "repeat", "can_view_schedules"),
+        ("Gate: Out-on-Pass", "outonpass:gate", "door-open", "can_view_gate"),
     ]),
     ("reports", "Reports", "chart-column", [
         ("Dashboard", "dashboard:dashboard_home", "chart-column", "can_view_dashboard"),
@@ -109,6 +110,8 @@ def _flags(request, acting):
     f["can_set_separation"] = can_set_separation(acting) and _hr_or_ao_fallback(acting, hr_any)
     # CTO does not apply to the COH (Dec 16, 2025 policy; main hides the homepage CTO card too).
     f["cto_eligible"] = acting is None or is_cto_eligible(acting)
+    from outonpass.gate import can_view_gate
+    f["can_view_gate"] = can_view_gate(acting)
     f["all"] = True
     return f
 

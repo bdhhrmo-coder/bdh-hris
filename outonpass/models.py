@@ -139,7 +139,11 @@ class OutOnPass(models.Model):
     tapped_out_at = models.DateTimeField(null=True, blank=True)
     tapped_in_at = models.DateTimeField(null=True, blank=True)
     minutes_charged = models.PositiveIntegerField(null=True, blank=True)
-    excess_minutes = models.PositiveIntegerField(null=True, blank=True)
+    excess_minutes = models.PositiveIntegerField(null=True, blank=True,
+                                                 help_text="Minutes over 2 hours, beyond the 5-minute grace.")
+    over_balance_minutes = models.PositiveIntegerField(
+        null=True, blank=True, help_text="Charged minutes the balance did not cover when the pass was completed.")
+    completed_at = models.DateTimeField(null=True, blank=True)
 
     filed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     filed_at = models.DateTimeField(auto_now_add=True)
@@ -177,6 +181,70 @@ class OutOnPassAction(models.Model):
     out_on_pass = models.ForeignKey(OutOnPass, on_delete=models.CASCADE, related_name="actions")
     action = models.CharField(max_length=30)
     resulting_status = models.CharField(max_length=10, choices=OutOnPass.STATUS_CHOICES)
+    notes = models.CharField(max_length=255, blank=True)
+    acted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    acted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["acted_at"]
+
+
+class MissedTap(models.Model):
+    """A forgotten Tap Out or Tap In (CLAUDE.md 13B, DICR Rev 1): the employee
+    gives the time; the supervisor confirms it, the guard on duty verifies
+    it (and may correct it), and HRMO reviews it before hours are charged."""
+
+    OUT = "OUT"
+    IN = "IN"
+    WHICH_CHOICES = [(OUT, "Tap Out"), (IN, "Tap In")]
+
+    SUBMITTED = "SUBMITTED"
+    CONFIRMED = "CONFIRMED"
+    VERIFIED = "VERIFIED"
+    REVIEWED = "REVIEWED"
+    RETURNED = "RETURNED"
+    REJECTED = "REJECTED"
+    STATUS_CHOICES = [
+        (SUBMITTED, "Submitted (for supervisor confirmation)"),
+        (CONFIRMED, "Confirmed by supervisor (for the guard on duty)"),
+        (VERIFIED, "Verified by guard (for HRMO review)"),
+        (REVIEWED, "Reviewed by HRMO (time recorded)"),
+        (RETURNED, "Returned"),
+        (REJECTED, "Rejected"),
+    ]
+    PENDING_STATUSES = (SUBMITTED, CONFIRMED, VERIFIED)
+
+    out_on_pass = models.ForeignKey(OutOnPass, on_delete=models.CASCADE, related_name="missed_taps")
+    which = models.CharField(max_length=3, choices=WHICH_CHOICES)
+    claimed_at = models.DateTimeField("Actual time", help_text="When you actually went out / came back.")
+    reason = models.CharField(max_length=255, help_text="Why the tap was missed.")
+    verified_at = models.DateTimeField(null=True, blank=True,
+                                       help_text="The time the guard on duty verified (may differ from the claim).")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=SUBMITTED)
+    filed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    filed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-filed_at"]
+
+    def __str__(self):
+        return f"Missed {self.get_which_display()} on {self.out_on_pass.pass_number}"
+
+    @property
+    def claimed_input(self):
+        """The claimed time for a datetime-local input, in local time."""
+        from django.utils import timezone
+        return f"{timezone.localtime(self.claimed_at):%Y-%m-%dT%H:%M}"
+
+    @property
+    def time_to_record(self):
+        return self.verified_at or self.claimed_at
+
+
+class MissedTapAction(models.Model):
+    missed_tap = models.ForeignKey(MissedTap, on_delete=models.CASCADE, related_name="actions")
+    action = models.CharField(max_length=30)
+    resulting_status = models.CharField(max_length=10, choices=MissedTap.STATUS_CHOICES)
     notes = models.CharField(max_length=255, blank=True)
     acted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     acted_at = models.DateTimeField(auto_now_add=True)

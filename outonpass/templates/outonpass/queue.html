@@ -1,6 +1,21 @@
 {% extends "base.html" %}
 {% load badges %}
-{% block title %}Out-on-Pass approvals — BDH HRIS{% endblock %}
+{% block title %}Out-on-Pass approvals — BDH HRIS
+{% if missed %}
+<h2>Missed taps waiting for me</h2>
+<div class="card"><div class="table-scroll">
+<table>
+  <tr><th>Pass no.</th><th>Employee</th><th>Tap</th><th>Time given</th><th>Reason</th><th>Status</th></tr>
+  {% for m in missed %}
+  <tr><td><a href="{% url 'outonpass:detail' m.out_on_pass.pk %}">{{ m.out_on_pass.pass_number }}</a></td>
+      <td>{{ m.out_on_pass.employee.full_name }}</td><td>{{ m.get_which_display }}</td>
+      <td>{{ m.claimed_at|date:"M d, g:i A" }}</td><td>{{ m.reason }}</td>
+      <td>{% status_badge m.status m.get_status_display %}</td></tr>
+  {% endfor %}
+</table>
+</div></div>
+{% endif %}
+{% endblock %}
 {% block content %}
 <h1>Out-on-Pass waiting for me</h1>
 <p class="muted">Oldest first. Open a pass to endorse, approve, return or reject it. A pass must be decided before its time out.</p>
@@ -21,4 +36,19 @@
   {% endfor %}
 </table>
 </div></div>
+
+{% if missed %}
+<h2>Missed taps waiting for me</h2>
+<div class="card"><div class="table-scroll">
+<table>
+  <tr><th>Pass no.</th><th>Employee</th><th>Tap</th><th>Time given</th><th>Reason</th><th>Status</th></tr>
+  {% for m in missed %}
+  <tr><td><a href="{% url 'outonpass:detail' m.out_on_pass.pk %}">{{ m.out_on_pass.pass_number }}</a></td>
+      <td>{{ m.out_on_pass.employee.full_name }}</td><td>{{ m.get_which_display }}</td>
+      <td>{{ m.claimed_at|date:"M d, g:i A" }}</td><td>{{ m.reason }}</td>
+      <td>{% status_badge m.status m.get_status_display %}</td></tr>
+  {% endfor %}
+</table>
+</div></div>
+{% endif %}
 {% endblock %}

@@ -12,4 +12,8 @@ urlpatterns = [
     path("<int:pk>/guard/", views.guard_card, name="guard_card"),
     path("<int:pk>/edit/", views.edit_pass, name="edit"),
     path("<int:pk>/action/", views.act, name="action"),
+    path("<int:pk>/tap/", views.tap, name="tap"),
+    path("<int:pk>/missed/<str:which>/", views.missed_new, name="missed_new"),
+    path("missed/<int:pk>/action/", views.missed_act, name="missed_act"),
+    path("gate/", views.gate_page, name="gate"),
 ]

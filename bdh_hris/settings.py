@@ -277,6 +277,9 @@ OUT_ON_PASS_RULES = {
     "MAX_PASSES_PER_MONTH": 3,
     "SHIFT_EDGE_MINUTES": 60,
     "MAX_OUT_PER_UNIT": 2,
+    # Tap Out opens this many minutes before the planned time out and closes
+    # at the expected time in (after that the pass was not used).
+    "TAP_OUT_EARLY_MINUTES": 15,
 }
 
 # Announcement attachments (signed Office Orders, policy manuals) may be

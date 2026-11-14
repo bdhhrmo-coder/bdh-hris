@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Missed {{ label }} — BDH HRIS{% endblock %}
+{% block content %}
+<p><a href="{% url 'outonpass:detail' p.pk %}">&larr; Pass {{ p.pass_number }}</a></p>
+<h1>Report a missed {{ label }}</h1>
+<p class="muted">Give the actual time you {% if which == "OUT" %}went out{% else %}came back{% endif %} and why the tap was missed. Your supervisor confirms it, the guard on duty verifies the time against the gate log, and HRMO reviews it. The hours are charged only after that review.</p>
+{% if error %}<div class="msg error" role="alert">{{ error }}</div>{% endif %}
+<div class="card form-card">
+  <form method="post">{% csrf_token %}
+    <p><label for="claimed_at">Actual time {% if which == "OUT" %}out{% else %}in{% endif %}</label>
+       <input type="datetime-local" id="claimed_at" name="claimed_at" value="{{ value }}" required></p>
+    <p><label for="reason">Why the tap was missed</label>
+       <input type="text" id="reason" name="reason" maxlength="255" value="{{ reason }}" required></p>
+    <button type="submit">Report</button>
+  </form>
+</div>
+{% endblock %}

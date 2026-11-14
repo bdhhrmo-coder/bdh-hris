@@ -9,6 +9,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import RoleAssignment
@@ -139,14 +140,18 @@ def my_passes(request):
     acting = _acting(request)
     passes = acting.out_on_passes.all()[:100]
     return render(request, "outonpass/mine.html", {
-        "passes": passes, "bal": rules.balance_panel(rules.summary(acting, timezone.localdate())),
+        "passes": passes, "today_passes": [p for p in passes if p.pass_date == timezone.localdate()
+                                          and p.status in P.CLEARED_STATUSES],
+        "bal": rules.balance_panel(rules.summary(acting, timezone.localdate())),
     })
 
 
 @login_required
 def queue(request):
     acting = _acting(request)
-    return render(request, "outonpass/queue.html", {"passes": routing.waiting_for(acting)})
+    from . import gate as g
+    return render(request, "outonpass/queue.html", {"passes": routing.waiting_for(acting),
+                                                    "missed": g.missed_waiting_for(acting)})
 
 
 @login_required
@@ -168,7 +173,17 @@ def detail(request, pk):
         "bal": rules.balance_panel(rules.summary(p.employee, p.pass_date)),
         "proofs": _proofs(p) if routing.may_view_proof(acting, p) else None,
         "has_proof": _proofs(p).exists(),
+        "tap_out_problem": _tap_problem(acting, p, "out"), "tap_in_problem": _tap_problem(acting, p, "in"),
+        "is_owner": acting.pk == p.employee_id,
+        "missed": [(m, gate.can_act_missed(acting, m), gate.NEXT.get(m.status)) for m in p.missed_taps.all()],
+        "can_miss_out": gate.missed_tap_problem(acting, p, "OUT") is None,
+        "can_miss_in": gate.missed_tap_problem(acting, p, "IN") is None,
     })
+
+
+def _tap_problem(acting, p, which):
+    from . import gate as g
+    return g.tap_out_problem(acting, p) if which == "out" else g.tap_in_problem(acting, p)
 
 
 @login_required
@@ -264,4 +279,139 @@ def guard_card(request, pk):
     return render(request, "outonpass/guard_card.html", {
         "p": p, "cleared": cleared, "approval": approval, "now": timezone.localtime(),
         "area": " / ".join(x for x in (units, sections) if x), "employment": employment,
+    })
+
+
+# -- Stage 3: Tap Out / Tap In, missed taps, the Gate page ------------------
+
+from . import gate  # noqa: E402
+from .models import MissedTap  # noqa: E402
+
+
+@login_required
+def tap(request, pk):
+    if request.method != "POST":
+        return redirect("outonpass:detail", pk)
+    acting = _acting(request)
+    which = request.POST.get("which")
+    with transaction.atomic():
+        p = get_object_or_404(P.objects.select_for_update(), pk=pk)
+        problem = gate.tap_out_problem(acting, p) if which == "out" else gate.tap_in_problem(acting, p)
+        if problem:
+            messages.error(request, problem)
+            return redirect("outonpass:detail", pk)
+        if which == "out":
+            gate.tap_out(p, request.user)
+            messages.success(request, f"Tapped out at {timezone.localtime(p.tapped_out_at):%I:%M %p}. "
+                                      f"Show pass {p.pass_number} to the guard. Tap In when you are back.")
+        else:
+            gate.tap_in(p, request.user)
+            msg = f"Welcome back. Tapped in at {timezone.localtime(p.tapped_in_at):%I:%M %p}; " \
+                  f"{rules.hm(p.minutes_charged)} charged."
+            if p.excess_minutes or p.over_balance_minutes:
+                msg += " Part of this time is not covered by the pass; HR will see it."
+            messages.success(request, msg)
+    return redirect("outonpass:detail", pk)
+
+
+def _parse_local(value):
+    from datetime import datetime
+    try:
+        return timezone.make_aware(datetime.fromisoformat(value))
+    except (TypeError, ValueError):
+        return None
+
+
+@login_required
+def missed_new(request, pk, which):
+    acting = _acting(request)
+    p = get_object_or_404(P, pk=pk)
+    which = MissedTap.OUT if which == "out" else MissedTap.IN
+    problem = gate.missed_tap_problem(acting, p, which)
+    if problem:
+        messages.error(request, problem)
+        return redirect("outonpass:detail", pk)
+    error = None
+    if request.method == "POST":
+        claimed = _parse_local(request.POST.get("claimed_at", ""))
+        reason = request.POST.get("reason", "").strip()
+        if claimed is None:
+            error = "Enter the date and time."
+        elif not reason:
+            error = "Say why the tap was missed."
+        else:
+            error = gate.claimed_time_problem(p, which, claimed)
+        if not error:
+            m = MissedTap.objects.create(out_on_pass=p, which=which, claimed_at=claimed, reason=reason[:255],
+                                         filed_by=request.user)
+            m.actions.create(action="submit", resulting_status=m.status, acted_by=request.user)
+            from notifications.services import notify
+            notify(gate.missed_step_actors(m),
+                   f"{p.employee} reported a missed {m.get_which_display()} on pass {p.pass_number}: "
+                   "please confirm it.", reverse("outonpass:detail", args=[p.pk]))
+            messages.success(request, "Reported. Your supervisor confirms it, the guard on duty verifies the time, "
+                                      "and HRMO reviews it before the hours are charged.")
+            return redirect("outonpass:detail", pk)
+    default = timezone.localtime().replace(second=0, microsecond=0)
+    return render(request, "outonpass/missed_form.html", {
+        "p": p, "which": which, "label": dict(MissedTap.WHICH_CHOICES)[which], "error": error,
+        "value": request.POST.get("claimed_at") or f"{default:%Y-%m-%dT%H:%M}",
+        "reason": request.POST.get("reason", ""),
+    })
+
+
+@login_required
+def missed_act(request, pk):
+    if request.method != "POST":
+        raise PermissionDenied("Invalid action.")
+    acting = _acting(request)
+    with transaction.atomic():
+        m = get_object_or_404(MissedTap.objects.select_for_update().select_related("out_on_pass"), pk=pk)
+        p = m.out_on_pass
+        if not gate.can_act_missed(acting, m):
+            raise PermissionDenied("You are not authorized to act on this missed tap.")
+        action = request.POST.get("action")
+        notes = request.POST.get("notes", "").strip()[:255]
+        if action == "reject" and not notes:
+            messages.error(request, RETURN_NEEDS_REMARK)
+            return redirect(request.POST.get("next") or reverse("outonpass:detail", args=[p.pk]))
+        verified_at = None
+        if m.status == MissedTap.CONFIRMED and action == "verify" and request.POST.get("verified_at"):
+            verified_at = _parse_local(request.POST["verified_at"])
+            problem = "Enter a valid time." if verified_at is None else gate.claimed_time_problem(p, m.which, verified_at)
+            if problem:
+                messages.error(request, problem)
+                return redirect(request.POST.get("next") or reverse("outonpass:detail", args=[p.pk]))
+            if verified_at != m.claimed_at and not notes:
+                messages.error(request, "You changed the time: add a remark saying why.")
+                return redirect(request.POST.get("next") or reverse("outonpass:detail", args=[p.pk]))
+        try:
+            gate.act_on_missed(m, request.user, action, notes, verified_at)
+        except (ValueError, KeyError):
+            raise PermissionDenied("That action is not available at this step.")
+    from notifications.services import notify
+    url = reverse("outonpass:detail", args=[p.pk])
+    if m.status in MissedTap.PENDING_STATUSES:
+        step = {MissedTap.CONFIRMED: "verify the time (Gate page)", MissedTap.VERIFIED: "review it"}[m.status]
+        notify(gate.missed_step_actors(m), f"Missed {m.get_which_display()} on pass {p.pass_number} "
+                                           f"({p.employee}): please {step}.", url)
+    elif m.status == MissedTap.REVIEWED:
+        notify(p.employee, f"Your missed {m.get_which_display()} on pass {p.pass_number} was recorded.", url)
+    else:
+        notify(p.employee, f"Your missed {m.get_which_display()} on pass {p.pass_number} was not accepted. "
+                           f'Remark: "{notes}". You may report a corrected one.', url)
+    messages.success(request, f"Done. The missed tap is now {m.get_status_display().lower()}.")
+    return redirect(request.POST.get("next") or url)
+
+
+@login_required
+def gate_page(request):
+    acting = _acting(request)
+    if not gate.can_view_gate(acting):
+        raise PermissionDenied("The Gate page is for the guards on duty and HR.")
+    to_verify = [m for m in MissedTap.objects.filter(status=MissedTap.CONFIRMED)
+                 .select_related("out_on_pass__employee") if gate.can_act_missed(acting, m)]
+    return render(request, "outonpass/gate.html", {
+        "passes": gate.gate_passes(), "to_verify": to_verify, "now": timezone.localtime(),
+        "not_back": gate.not_back() if not gate.is_guard(acting) else [],
     })

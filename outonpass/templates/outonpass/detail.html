@@ -30,6 +30,60 @@
 <p class="row-actions"><a class="btn" href="{% url 'outonpass:guard_card' p.pk %}">Show to guard</a></p>
 {% endif %}
 
+
+{% if p.status == "APPROVED" or p.status == "RECORDED" or p.status == "COMPLETED" %}
+<h2>Gate times</h2>
+<div class="card form-card">
+  <table class="detail-table">
+    <tr><th>Tap Out</th><td>{% if p.tapped_out_at %}<strong>{{ p.tapped_out_at|date:"M d, g:i A" }}</strong>{% else %}—{% endif %}</td></tr>
+    <tr><th>Tap In</th><td>{% if p.tapped_in_at %}<strong>{{ p.tapped_in_at|date:"M d, g:i A" }}</strong>{% else %}—{% endif %}</td></tr>
+    {% if p.status == "COMPLETED" %}
+    <tr><th>Minutes charged</th><td><strong>{{ p.minutes_charged|hm }}</strong> (actual minutes, no rounding)</td></tr>
+    <tr><th>Excess over 2 hours</th><td>{% if p.excess_minutes %}<span class="text-danger">{{ p.excess_minutes }} min</span>{% else %}None{% endif %}</td></tr>
+    <tr><th>Not covered by the balance</th><td>{% if p.over_balance_minutes %}<span class="text-danger">{{ p.over_balance_minutes }} min</span>{% else %}None{% endif %}</td></tr>
+    {% if p.excess_minutes or p.over_balance_minutes %}<tr><th></th><td class="muted">{% if p.kind == "EXCEPTION" %}Approved as an exception by the Chief of Hospital.{% else %}Time not covered: undertime for permanent employees; hours not rendered for COSP and PGSS.{% endif %}</td></tr>{% endif %}
+    {% endif %}
+  </table>
+  {% if is_owner and p.status != "COMPLETED" %}
+  <form method="post" action="{% url 'outonpass:tap' p.pk %}" class="row-actions">{% csrf_token %}
+    {% if not p.tapped_out_at %}
+      <button type="submit" name="which" value="out" class="btn-tap" {% if tap_out_problem %}disabled{% endif %}>Tap Out</button>
+      {% if tap_out_problem %}<span class="muted">{{ tap_out_problem }}</span>{% endif %}
+    {% elif not p.tapped_in_at %}
+      <button type="submit" name="which" value="in" class="btn-tap" {% if tap_in_problem %}disabled{% endif %}>Tap In</button>
+      {% if tap_in_problem %}<span class="muted">{{ tap_in_problem }}</span>{% endif %}
+    {% endif %}
+  </form>
+  <p class="muted">Forgot to tap?
+    {% if can_miss_out %}<a href="{% url 'outonpass:missed_new' p.pk 'out' %}">Report a missed Tap Out</a>{% endif %}
+    {% if can_miss_in %}<a href="{% url 'outonpass:missed_new' p.pk 'in' %}">Report a missed Tap In</a>{% endif %}
+    {% if not can_miss_out and not can_miss_in %}Not needed now.{% endif %}</p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if missed %}
+<h2>Missed taps</h2>
+<div class="card"><div class="table-scroll">
+<table>
+  <tr><th>Tap</th><th>Time given</th><th>Verified time</th><th>Reason</th><th>Status</th><th></th></tr>
+  {% for m, can, nxt in missed %}
+  <tr>
+    <td>{{ m.get_which_display }}</td><td>{{ m.claimed_at|date:"M d, g:i A" }}</td>
+    <td>{{ m.verified_at|date:"M d, g:i A"|default:"—" }}</td><td>{{ m.reason }}</td>
+    <td>{% status_badge m.status m.get_status_display %}</td>
+    <td>{% if can %}
+      <form method="post" action="{% url 'outonpass:missed_act' m.pk %}" x-data="{ remark: '' }">{% csrf_token %}
+        <input type="text" name="notes" maxlength="255" x-model="remark" class="remark-input" placeholder="Remark (required to reject)">
+        <button type="submit" name="action" value="{{ nxt.1 }}">{{ nxt.2 }}</button>
+        <button type="submit" name="action" value="reject" :disabled="!remark.trim()">Reject</button>
+      </form>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div></div>
+{% endif %}
+
 {% if can_edit or can_cancel %}
 <p class="row-actions">
   {% if can_edit %}<a class="btn" href="{% url 'outonpass:edit' p.pk %}">Correct and resubmit</a>{% endif %}
