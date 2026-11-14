@@ -371,7 +371,7 @@ def balance_panel(s):
         ],
         "limit": {
             "title": f"Passes in {s['month_label']}", "state": state,
-            "value": f"{count} of {std} passes" if count <= std else f"{count} passes (incl. third pass)",
+            "value": f"{count} of {std} passes" if count <= std else f"{count} passes",
             "steps": steps,
             "sub": f"{label}. {left} standard pass{'es' if left != 1 else ''} left; never more than {most} a month.",
             "note": "A third pass is allowed only for an urgent reason, with supporting documentation, "
