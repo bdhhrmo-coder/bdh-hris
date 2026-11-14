@@ -77,6 +77,7 @@ INSTALLED_APPS = [
     "homepage",
     "announcements",
     "schedules",
+    "outonpass",
 ]
 
 # CLAUDE.md §13: RA 10173 personnel-record retention period, in years, for a
@@ -263,6 +264,20 @@ CSRF_FAILURE_VIEW = "accounts.views.csrf_failure"
 # Duty schedules (Batch 5): default Exchange-of-Duty cut-off = this day of
 # the month BEFORE the schedule month; HR can change it per schedule.
 SCHEDULE_CUTOFF_DAY = 20
+
+# Out-on-Pass (CLAUDE.md 13B; BDH-ADM-AO-01 Rev 1, pending). Policy numbers
+# kept here, not in code. Minutes unless the name says hours.
+OUT_ON_PASS_RULES = {
+    "REGULAR_HOURS_PER_YEAR": 12,
+    "COSP_HOURS_PER_MONTH": 1,
+    "COSP_MAX_HOURS_PER_YEAR": 12,
+    "MAX_MINUTES_PER_PASS": 120,
+    "GRACE_MINUTES": 5,
+    "PASSES_PER_MONTH": 2,
+    "MAX_PASSES_PER_MONTH": 3,
+    "SHIFT_EDGE_MINUTES": 60,
+    "MAX_OUT_PER_UNIT": 2,
+}
 
 # Announcement attachments (signed Office Orders, policy manuals) may be
 # larger than the 10 MB limit for other uploads (owner decision 2026-10-09).
