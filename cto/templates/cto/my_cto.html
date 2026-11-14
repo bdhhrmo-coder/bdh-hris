@@ -4,12 +4,7 @@
 {% block content %}
 <h1>My CTO</h1>
 
-<div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 220px));">
-  <div class="kpi-tile accent-teal">
-    <div class="kpi-value">{{ balance }}</div>
-    <div class="kpi-label">Available CTO balance (days)</div>
-  </div>
-</div>
+{% if cto_panel %}{% include "components/balance_summary.html" with bal=cto_panel %}{% endif %}
 
 <p><a href="{% url 'cto:cto_apply' %}" class="btn">+ New CTO application</a></p>
 

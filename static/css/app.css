@@ -1023,6 +1023,7 @@ body .app-sidebar nav a.is-current { background: var(--nav-current); color: #fff
 .bal-steps { display: flex; gap: 6px; margin: 10px 0 6px; }
 .bal-step { flex: 1; height: 10px; border-radius: 999px; background: var(--gray-100); }
 .bal-step-used { background: var(--navy-900); }
+.bal-step-half { background: linear-gradient(90deg, var(--navy-900) 50%, var(--gray-100) 50%); }
 .bal-step-extra { background: var(--gray-100); outline: 1px dashed var(--gray-400); outline-offset: -1px; }
 .bal-step-extra-used { background: var(--red-700); }
 .bal-note { font-size: 0.78rem; color: var(--gray-600); margin: 8px 0 0; line-height: 1.4; }
@@ -1033,3 +1034,15 @@ body .app-sidebar nav a.is-current { background: var(--nav-current); color: #fff
   .bal-cards .bal-card:last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
 @media print { .bal-card { box-shadow: none; } }
+/* Per-type balance cards (Leave), same look as the balance summary. */
+.bal-types { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--space-2);
+             max-width: 1100px; margin: 0 0 var(--space-3); }
+.bal-type { border-top: 4px solid var(--green-700); }
+.bal-type-value { font-size: 1.6rem; font-weight: 800; color: var(--green-700); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.bal-type-low { border-top-color: #e0a526; } .bal-type-low .bal-type-value { color: var(--amber-600); }
+.bal-type-out { border-top-color: var(--red-700); } .bal-type-out .bal-type-value { color: var(--red-700); }
+.bal-type-neutral { border-top-color: var(--gray-400); } .bal-type-neutral .bal-type-value { color: var(--gray-600); font-size: 1.25rem; }
+.bal-type.is-selected { outline: 2px solid var(--gold-500); outline-offset: 2px; }
+.bal-rows { margin: 8px 0 0; font-size: 0.84rem; }
+.bal-rows > div { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-top: 1px solid var(--gray-100); }
+.bal-rows dt { color: var(--gray-600); } .bal-rows dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
