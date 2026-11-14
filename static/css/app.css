@@ -1047,5 +1047,5 @@ body .app-sidebar nav a.is-current { background: var(--nav-current); color: #fff
 .bal-rows > div { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-top: 1px solid var(--gray-100); }
 .bal-rows dt { color: var(--gray-600); } .bal-rows dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 /* Out-on-Pass Tap Out / Tap In button: large, easy to hit on a shared computer. */
-.btn-tap { font-size: 1.15rem; padding: 12px 28px; min-width: 160px; }
-.btn-tap[disabled] { opacity: 0.5; cursor: not-allowed; }
+button.btn-tap, .row-actions button.btn-tap { font-size: 1.15rem; padding: 12px 28px; min-width: 160px; }
+button.btn-tap[disabled] { opacity: 0.5; cursor: not-allowed; }
