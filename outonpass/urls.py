@@ -16,5 +16,8 @@ urlpatterns = [
     path("<int:pk>/missed/<str:which>/", views.missed_new, name="missed_new"),
     path("missed/<int:pk>/action/", views.missed_act, name="missed_act"),
     path("gate/", views.gate_page, name="gate"),
+    path("<int:pk>/print/", views.print_slip, name="print_slip"),
+    path("report/", views.monthly_report, name="report"),
+    path("setup/", views.setup, name="setup"),
     path("<int:pk>/hr-close/", views.hr_close, name="hr_close"),
 ]

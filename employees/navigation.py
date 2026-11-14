@@ -66,6 +66,7 @@ MENU = [
     ]),
     ("reports", "Reports", "chart-column", [
         ("Dashboard", "dashboard:dashboard_home", "chart-column", "can_view_dashboard"),
+        ("Out-on-Pass Monthly Report", "outonpass:report", "door-open", "can_view_oop_report"),
         ("Audit Log", "auditlog:audit_log", "shield-check", "can_view_audit_log"),
     ]),
     ("admin", "HR Administration", "settings", [
@@ -76,6 +77,7 @@ MENU = [
         ("Exception CTO Claim", "cto:exception_claim_new", "clock-3", "can_file_exception"),
         ("CTO Separation Status", "cto:separation", "user-round", "can_set_separation"),
         ("Manage Announcements", "announcements:manage", "megaphone", "can_manage_announcements"),
+        ("Out-on-Pass Setup", "outonpass:setup", "door-open", "is_hr_admin"),
         ("Shift Codes", "schedules:shift_codes", "list", "can_manage_announcements"),
         ("Schedule Cut-off Dates", "schedules:cutoff_dates", "calendar-clock", "is_hr"),
         ("User Accounts and Roles", "admin:index", "user-cog", "is_system_admin"),
@@ -112,6 +114,9 @@ def _flags(request, acting):
     f["cto_eligible"] = acting is None or is_cto_eligible(acting)
     from outonpass.gate import can_view_gate
     f["can_view_gate"] = can_view_gate(acting)
+    from outonpass.views import _can_view_report
+    f["can_view_oop_report"] = _can_view_report(acting)
+    f["is_hr_admin"] = acting is not None and acting.has_role(RoleAssignment.HR_ADMINISTRATOR)
     f["all"] = True
     return f
 

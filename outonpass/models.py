@@ -25,6 +25,11 @@ class CospContractPeriod(models.Model):
     end_date = models.DateField()
     entered_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     entered_at = models.DateTimeField(auto_now_add=True)
+    # A wrong entry is voided with a reason, never deleted or edited (like CTO opening lines).
+    voided_at = models.DateTimeField(null=True, blank=True)
+    voided_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True,
+                                  related_name="+")
+    void_reason = models.CharField(max_length=255, blank=True)
 
     class Meta:
         ordering = ["employee", "start_date"]
@@ -51,9 +56,14 @@ class PassOpeningUsage(models.Model):
     reason = models.CharField(max_length=255, help_text="e.g. 'Google Sheets tracker, Jan 1-10, 2027'.")
     entered_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     entered_at = models.DateTimeField(auto_now_add=True)
+    voided_at = models.DateTimeField(null=True, blank=True)
+    voided_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True,
+                                  related_name="+")
+    void_reason = models.CharField(max_length=255, blank=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["employee", "year"], name="one_opening_usage_per_year")]
+        constraints = [models.UniqueConstraint(fields=["employee", "year"], condition=models.Q(voided_at__isnull=True),
+                                               name="one_opening_usage_per_year")]
 
     def __str__(self):
         return f"{self.employee}: {self.minutes_used} min used before the HRIS ({self.year})"
@@ -229,6 +239,14 @@ class MissedTap(models.Model):
 
     def __str__(self):
         return f"Missed {self.get_which_display()} on {self.out_on_pass.pass_number}"
+
+    @property
+    def employee(self):
+        return self.out_on_pass.employee
+
+    @property
+    def employee_id(self):
+        return self.out_on_pass.employee_id
 
     @property
     def claimed_input(self):

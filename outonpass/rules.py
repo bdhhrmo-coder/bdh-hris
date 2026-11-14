@@ -76,7 +76,8 @@ def allowance_minutes(employee, year):
         return rule("REGULAR_HOURS_PER_YEAR") * 60
     first, last = date(year, 1, 1), date(year, 12, 31)
     months = 0
-    for period in employee.cosp_contract_periods.filter(start_date__lte=last, end_date__gte=first):
+    for period in employee.cosp_contract_periods.filter(start_date__lte=last, end_date__gte=first,
+                                                         voided_at__isnull=True):
         months += _full_months(max(period.start_date, first), min(period.end_date, last))
     hours = min(months * rule("COSP_HOURS_PER_MONTH"), rule("COSP_MAX_HOURS_PER_YEAR"))
     return hours * 60
@@ -93,7 +94,7 @@ def used_minutes(employee, year, exclude_pk=None):
     """Minutes already charged: the Jan 1-10 opening line plus completed passes."""
     from .models import OutOnPass
 
-    opening = employee.pass_opening_usage.filter(year=year).aggregate(s=Sum("minutes_used"))["s"] or 0
+    opening = employee.pass_opening_usage.filter(year=year, voided_at__isnull=True).aggregate(s=Sum("minutes_used"))["s"] or 0
     charged = (_year_passes(employee, year, exclude_pk).filter(status=OutOnPass.COMPLETED)
                .aggregate(s=Sum("minutes_charged"))["s"] or 0)
     return opening + charged
@@ -124,7 +125,7 @@ def passes_in_month(employee, year, month, exclude_pk=None):
              .filter(pass_date__month=month,
                      status__in=OutOnPass.LIVE_STATUSES + (OutOnPass.COMPLETED,)).count())
     if month == 1:
-        count += sum(employee.pass_opening_usage.filter(year=year).values_list("passes_used_in_month", flat=True))
+        count += sum(employee.pass_opening_usage.filter(year=year, voided_at__isnull=True).values_list("passes_used_in_month", flat=True))
     return count
 
 

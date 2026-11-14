@@ -280,6 +280,8 @@ OUT_ON_PASS_RULES = {
     # Tap Out opens this many minutes before the planned time out and closes
     # at the expected time in (after that the pass was not used).
     "TAP_OUT_EARLY_MINUTES": 15,
+    # The monthly report lists balances at or below this as "low".
+    "LOW_BALANCE_MINUTES": 60,
 }
 
 # Announcement attachments (signed Office Orders, policy manuals) may be

@@ -496,6 +496,11 @@ Rule set: BDH-ADM-AO-01 Rev 0 (effective 2027-01-01) **as revised by the pending
 - **No Tap In and no accepted missed Tap In** (Option B): the pass stays open on HR's "out, not back" list; another HR Processor/Administrator closes it by entering the time in with a required remark (`gate.hr_close`, logged as `hr_close`), and it is charged then. Nothing is assumed. An approved pass never tapped out after its expected time in can be marked **not used** by HR with a remark (`hr_not_used`, CANCELLED) so it stops holding the balance.
 - **Guards = PGSS security personnel** (confirmed): any active employee recorded as COSP under PGSS may verify a missed tap.
 
+**Stage 4 (built 2026-11-14)**
+- **Slip printout** (`outonpass/slip.py`, `printouts/assets/f16_base.docx` = the Rev 1 draft layout): BDH-ADM-AO-01F16 filled from the pass, boxes ticked, digital stamps for Filed / Endorsed / Approved (or Recorded by HR), gate times, missed-tap review, minutes charged and excess. "Print slip (01F16)" on every pass page. Swap the base file when the COH signs Rev 1 if the layout changes.
+- **Monthly report** (`outonpass/report.py`, Reports menu; HR, AO, COH; Excel and PDF): hours per unit, third passes / exceptions / emergency passes, time not covered (HR's list for minor attendance corrections), open passes (out not back, never tapped out), low balances (`LOW_BALANCE_MINUTES`, 60), staff with third passes in 3+ months.
+- **Setup** (HR Administration -> Out-on-Pass Setup; HR Administrator only, never their own records): COSP/PGSS contract periods (no overlaps) and the one-off Jan 1-10, 2027 hours (one line per employee per year). Wrong lines are voided with a reason, never edited or deleted. All of it, and every pass and missed-tap action, appears in the Audit Log (module "Out-on-Pass").
+
 ---
 
 ## 13A. Future Expansion — Integrated HR and Administrative System (owner decisions 2026-10-17)

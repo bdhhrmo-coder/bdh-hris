@@ -3,7 +3,7 @@ from django.core.exceptions import ValidationError
 
 from documents.validators import validate_upload
 
-from .models import OutOnPass
+from .models import CospContractPeriod, OutOnPass, PassOpeningUsage
 
 
 class PassForm(forms.ModelForm):
@@ -58,3 +58,61 @@ class ActionForm(forms.Form):
     confirmed_no_surge = forms.BooleanField(required=False)
     confirmed_shift_hours = forms.BooleanField(required=False)
     covering_staff = forms.CharField(required=False, max_length=255)
+
+
+class ContractForm(forms.ModelForm):
+    class Meta:
+        model = CospContractPeriod
+        fields = ["employee", "start_date", "end_date"]
+        widgets = {"start_date": forms.DateInput(attrs={"type": "date"}),
+                   "end_date": forms.DateInput(attrs={"type": "date"})}
+
+    def __init__(self, *args, acting=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        from employees.models import Employee
+        self.acting = acting
+        self.fields["employee"].queryset = Employee.objects.filter(
+            employment_status=Employee.EMPLOYMENT_STATUS_COSP, archived_at__isnull=True).exclude(pk=getattr(acting, "pk", None))
+        self.fields["employee"].help_text = "COSP and PGSS personnel. Your own record is entered by another HR Administrator."
+
+    def clean(self):
+        data = super().clean()
+        e, start, end = data.get("employee"), data.get("start_date"), data.get("end_date")
+        if start and end and end < start:
+            raise ValidationError("The end date is before the start date.")
+        if e and start and end and e.cosp_contract_periods.filter(
+                voided_at__isnull=True, start_date__lte=end, end_date__gte=start).exists():
+            raise ValidationError("This overlaps a contract period already entered for this employee.")
+        return data
+
+
+class OpeningForm(forms.ModelForm):
+    hours = forms.IntegerField(min_value=0, max_value=24, initial=0)
+    minutes = forms.IntegerField(min_value=0, max_value=59, initial=0)
+
+    class Meta:
+        model = PassOpeningUsage
+        fields = ["employee", "year", "passes_used_in_month", "reason"]
+        labels = {"passes_used_in_month": "Passes already taken in January"}
+
+    def __init__(self, *args, acting=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        from employees.models import Employee
+        self.fields["employee"].queryset = Employee.objects.filter(archived_at__isnull=True).exclude(
+            pk=getattr(acting, "pk", None))
+        self.fields["year"].initial = 2027
+        self.fields["reason"].initial = "Google Sheets tracker, Jan 1-10, 2027"
+
+    def clean(self):
+        data = super().clean()
+        e, year = data.get("employee"), data.get("year")
+        if e and year and e.pass_opening_usage.filter(year=year, voided_at__isnull=True).exists():
+            raise ValidationError("This employee already has a line for that year. Void it first to correct it.")
+        return data
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        obj.minutes_used = self.cleaned_data["hours"] * 60 + self.cleaned_data["minutes"]
+        if commit:
+            obj.save()
+        return obj

@@ -450,3 +450,108 @@ def hr_close(request, pk):
     notify(p.employee, f"HR closed your pass {p.pass_number}. Remark: \"{remark}\"",
            reverse("outonpass:detail", args=[p.pk]))
     return redirect("outonpass:detail", pk)
+
+
+# -- Stage 4: slip printout, monthly report, HR setup ------------------------
+
+@login_required
+def print_slip(request, pk):
+    """BDH-ADM-AO-01F16 Rev 1 filled in from the pass (digital stamps)."""
+    from printouts.http import pdf_response
+    from .slip import render_pdf
+
+    acting = _acting(request)
+    p = get_object_or_404(P.objects.select_related("employee"), pk=pk)
+    if not can_view_transaction(acting, p):
+        raise PermissionDenied("You are not authorized to view this pass.")
+    return pdf_response(request, lambda: render_pdf(p), f"OutOnPass_{p.pass_number}.pdf", "outonpass:mine")
+
+
+def _can_view_report(acting):
+    return acting is not None and any(acting.has_role(r, viewing=True) for r in (
+        RoleAssignment.HR_PROCESSOR, RoleAssignment.HR_ADMINISTRATOR,
+        RoleAssignment.ADMINISTRATIVE_OFFICER, RoleAssignment.CHIEF_OF_HOSPITAL))
+
+
+@login_required
+def monthly_report(request):
+    from dashboard.exports import _pdf_response, _xlsx_response
+    from . import report
+
+    acting = _acting(request)
+    if not _can_view_report(acting):
+        raise PermissionDenied("The Out-on-Pass report is for HR, the AO and the Chief of Hospital.")
+    today = timezone.localdate()
+    try:
+        year, month = (int(x) for x in request.GET.get("month", f"{today:%Y-%m}").split("-"))
+        date(year, month, 1)
+    except (ValueError, TypeError):
+        year, month = today.year, today.month
+    r = report.monthly(year, month)
+    fmt = request.GET.get("format")
+    if fmt in ("xlsx", "pdf"):
+        tables = report.export_tables(r)
+        name = f"out_on_pass_report_{year}-{month:02d}"
+        if fmt == "xlsx":
+            short = ["By unit", "Special passes", "Time not covered", "Out not back", "Never tapped out",
+                     "Low balances", "Repeated third passes"]
+            return _xlsx_response(name, [(s, hdr, rows) for s, (h, hdr, rows) in zip(short, tables)])
+        return _pdf_response(name, f"BDH HRIS &mdash; Out-on-Pass Report, {r['label']}", tables)
+    return render(request, "outonpass/report.html", {"r": r, "month_value": f"{year}-{month:02d}"})
+
+
+def _is_hr_admin(acting):
+    return acting is not None and acting.has_role(RoleAssignment.HR_ADMINISTRATOR)
+
+
+@login_required
+def setup(request):
+    """HR Administrator: COSP contract periods (the COSP allowance) and the one-off
+    hours already used Jan 1-10, 2027 (Google Sheets tracker). Nobody enters their
+    own; a wrong line is voided with a reason, never edited or deleted."""
+    from .forms import ContractForm, OpeningForm
+    from .models import CospContractPeriod, PassOpeningUsage
+
+    acting = _acting(request)
+    if not _is_hr_admin(acting):
+        raise PermissionDenied("Out-on-Pass setup is for the HR Administrator.")
+    contract_form = ContractForm(acting=acting)
+    opening_form = OpeningForm(acting=acting)
+    if request.method == "POST":
+        what = request.POST.get("what")
+        if what == "contract":
+            contract_form = ContractForm(request.POST, acting=acting)
+            if contract_form.is_valid():
+                c = contract_form.save(commit=False)
+                c.entered_by = request.user
+                c.save()
+                messages.success(request, f"Contract period saved for {c.employee}.")
+                return redirect("outonpass:setup")
+        elif what == "opening":
+            opening_form = OpeningForm(request.POST, acting=acting)
+            if opening_form.is_valid():
+                o = opening_form.save(commit=False)
+                o.entered_by = request.user
+                o.save()
+                messages.success(request, f"Hours already used saved for {o.employee}.")
+                return redirect("outonpass:setup")
+        elif what in ("void_contract", "void_opening"):
+            model = CospContractPeriod if what == "void_contract" else PassOpeningUsage
+            line = get_object_or_404(model, pk=request.POST.get("pk"), voided_at__isnull=True)
+            reason = request.POST.get("reason", "").strip()
+            if line.employee_id == acting.pk:
+                raise PermissionDenied("Another HR Administrator must change your own records.")
+            if not reason:
+                messages.error(request, "Type the reason for voiding. Nothing was changed.")
+            else:
+                line.voided_at, line.voided_by, line.void_reason = timezone.now(), request.user, reason[:255]
+                line.save()
+                messages.success(request, "Voided. Enter the correct line if needed.")
+            return redirect("outonpass:setup")
+    return render(request, "outonpass/setup.html", {
+        "contract_form": contract_form, "opening_form": opening_form,
+        "contracts": CospContractPeriod.objects.select_related("employee", "entered_by__employee", "voided_by__employee")
+                                                .order_by("employee__surname", "start_date"),
+        "openings": PassOpeningUsage.objects.select_related("employee", "entered_by__employee", "voided_by__employee")
+                                            .order_by("employee__surname"),
+    })

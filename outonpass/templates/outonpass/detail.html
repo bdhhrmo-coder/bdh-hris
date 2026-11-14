@@ -26,9 +26,10 @@
 <p class="muted">As of the pass date. Checked by the system when the pass was filed and again at each step.</p>
 {% include "outonpass/_summary.html" %}
 
-{% if p.status == "APPROVED" or p.status == "RECORDED" or p.status == "COMPLETED" %}
-<p class="row-actions"><a class="btn" href="{% url 'outonpass:guard_card' p.pk %}">Show to guard</a></p>
-{% endif %}
+<p class="row-actions">
+  {% if p.status == "APPROVED" or p.status == "RECORDED" or p.status == "COMPLETED" %}<a class="btn" href="{% url 'outonpass:guard_card' p.pk %}">Show to guard</a>{% endif %}
+  <a class="btn btn-secondary" href="{% url 'outonpass:print_slip' p.pk %}" target="_blank">Print slip (01F16)</a>
+</p>
 
 
 {% if p.status == "APPROVED" or p.status == "RECORDED" or p.status == "COMPLETED" %}
