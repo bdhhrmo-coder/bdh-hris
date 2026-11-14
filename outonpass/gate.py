@@ -262,3 +262,68 @@ def not_back(today=None):
     out = P.objects.filter(status__in=P.CLEARED_STATUSES, tapped_out_at__isnull=False, tapped_in_at__isnull=True)
     return [p for p in out.select_related("employee")
             if rules.window(p.pass_date, p.time_out, p.time_in)[1] < now and not _pending_missed(p, M.IN)]
+
+
+# -- HR closes a pass that has no Tap In (owner decision 2026-11-14, Option B) --
+
+def _is_hr(acting):
+    return acting is not None and (acting.has_role(RoleAssignment.HR_PROCESSOR)
+                                   or acting.has_role(RoleAssignment.HR_ADMINISTRATOR))
+
+
+def hr_close_problem(acting, p, now=None):
+    """Why HR can't close this pass now, or None. Only a pass that was tapped
+    out, never tapped in, past its expected time in, with no missed Tap In
+    under review. Never one's own pass."""
+    now = now or current_time()
+    if not _is_hr(acting) or acting.pk == p.employee_id:
+        return "Only another HR Processor or HR Administrator can close this pass."
+    if p.status not in P.CLEARED_STATUSES or not p.tapped_out_at or p.tapped_in_at:
+        return "Only a pass that is out and not back can be closed."
+    if rules.window(p.pass_date, p.time_out, p.time_in)[1] > now:
+        return "The expected time in has not passed yet."
+    if _pending_missed(p, M.IN):
+        return "A missed Tap In is being reviewed; finish that instead."
+    return None
+
+
+@transaction.atomic
+def hr_close(p, user, time_in, remark):
+    """HR enters the time in, with a remark; logged on the pass, then charged."""
+    p.tapped_in_at = time_in
+    p.save(update_fields=["tapped_in_at"])
+    OutOnPassAction.objects.create(
+        out_on_pass=p, action="hr_close", resulting_status=p.status, acted_by=user,
+        notes=f"Time in {timezone.localtime(time_in):%b %d %I:%M %p} entered by HR: {remark}"[:255])
+    complete(p, user, note="Charged after HR closed the pass")
+
+
+def hr_unused_problem(acting, p, now=None):
+    """HR may mark a pass 'not used' when it was never tapped out and its
+    expected time in has passed, so it stops holding the balance."""
+    now = now or current_time()
+    if not _is_hr(acting) or acting.pk == p.employee_id:
+        return "Only another HR Processor or HR Administrator can do this."
+    if p.status not in P.CLEARED_STATUSES or p.tapped_out_at:
+        return "Only an approved pass that was never tapped out."
+    if rules.window(p.pass_date, p.time_out, p.time_in)[1] > now:
+        return "The expected time in has not passed yet."
+    if _pending_missed(p, M.OUT):
+        return "A missed Tap Out is being reviewed; finish that instead."
+    return None
+
+
+@transaction.atomic
+def hr_mark_unused(p, user, remark):
+    p.status = P.CANCELLED
+    p.save(update_fields=["status"])
+    OutOnPassAction.objects.create(out_on_pass=p, action="hr_not_used", resulting_status=P.CANCELLED,
+                                   acted_by=user, notes=f"Not used (never tapped out): {remark}"[:255])
+
+
+def unused(today=None):
+    """Approved passes never tapped out whose expected time in has passed."""
+    now = current_time()
+    qs = P.objects.filter(status__in=P.CLEARED_STATUSES, tapped_out_at__isnull=True).select_related("employee")
+    return [p for p in qs if rules.window(p.pass_date, p.time_out, p.time_in)[1] < now
+            and not _pending_missed(p, M.OUT)]

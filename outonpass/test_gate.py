@@ -193,3 +193,37 @@ class GateTests(TestCase):
         self.tap("out", at(10))
         with mock.patch("outonpass.gate.current_time", return_value=at(12)):
             self.assertEqual([p.pk for p in gate.not_back()], [self.p.pk])
+
+    # -- HR closes a pass with no Tap In (owner decision 2026-11-14, Option B) --
+    def close(self, who, now, **data):
+        return self.post(who, reverse("outonpass:hr_close", args=[self.p.pk]), data, now)
+
+    def test_hr_closes_out_not_back_with_remark(self):
+        self.tap("out", at(10))
+        self.assertEqual(self.close(self.hr, at(10, 30), what="close", time_in="2027-02-03T10:20",
+                                    remark="x").status_code, 403)  # expected time in not passed
+        self.close(self.hr, at(15), what="close", time_in="2027-02-03T12:40", remark="")
+        self.assertIsNone(self.p.tapped_in_at)  # remark required
+        self.close(self.hr, at(15), what="close", time_in="2027-02-03T12:40", remark="Gate logbook: 12:40 PM")
+        self.assertEqual((self.p.status, self.p.minutes_charged, self.p.excess_minutes), (P.COMPLETED, 160, 40))
+        self.assertTrue(self.p.actions.filter(action="hr_close").exists())
+
+    def test_staff_and_supervisor_cannot_close(self):
+        self.tap("out", at(10))
+        for who in (self.staff, self.head):
+            self.assertEqual(self.close(who, at(15), what="close", time_in="2027-02-03T12:00",
+                                        remark="x").status_code, 403)
+
+    def test_hr_marks_never_used_pass(self):
+        self.close(self.hr, at(15), what="unused", remark="Did not go out, per supervisor")
+        self.assertEqual(self.p.status, P.CANCELLED)
+        from . import rules
+        self.assertEqual(rules.summary(self.staff, DAY)["committed"], 0)
+
+    def test_hr_cannot_close_own_pass(self):
+        mine = self.make(self.hr)
+        self.p = mine
+        self.tap("out", at(10))  # staff tap: not theirs, ignored
+        P.objects.filter(pk=mine.pk).update(tapped_out_at=at(10))
+        self.assertEqual(self.close(self.hr, at(15), what="close", time_in="2027-02-03T11:00",
+                                    remark="x").status_code, 403)

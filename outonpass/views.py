@@ -178,6 +178,8 @@ def detail(request, pk):
         "missed": [(m, gate.can_act_missed(acting, m), gate.NEXT.get(m.status)) for m in p.missed_taps.all()],
         "can_miss_out": gate.missed_tap_problem(acting, p, "OUT") is None,
         "can_miss_in": gate.missed_tap_problem(acting, p, "IN") is None,
+        "hr_can_close": gate.hr_close_problem(acting, p) is None,
+        "hr_can_mark_unused": gate.hr_unused_problem(acting, p) is None,
     })
 
 
@@ -414,4 +416,37 @@ def gate_page(request):
     return render(request, "outonpass/gate.html", {
         "passes": gate.gate_passes(), "to_verify": to_verify, "now": timezone.localtime(),
         "not_back": gate.not_back() if not gate.is_guard(acting) else [],
+        "unused": gate.unused() if not gate.is_guard(acting) else [],
     })
+
+
+@login_required
+def hr_close(request, pk):
+    """HR closes a pass with no Tap In (enters the time in), or marks a never-used pass. Remark required."""
+    if request.method != "POST":
+        return redirect("outonpass:detail", pk)
+    acting = _acting(request)
+    what = request.POST.get("what")
+    remark = request.POST.get("remark", "").strip()
+    with transaction.atomic():
+        p = get_object_or_404(P.objects.select_for_update(), pk=pk)
+        problem = gate.hr_close_problem(acting, p) if what == "close" else gate.hr_unused_problem(acting, p)
+        if problem:
+            raise PermissionDenied(problem)
+        if not remark:
+            messages.error(request, "Type a remark saying how the time was established. Nothing was changed.")
+            return redirect("outonpass:detail", pk)
+        if what == "close":
+            time_in = _parse_local(request.POST.get("time_in", ""))
+            if time_in is None or time_in <= p.tapped_out_at or time_in > gate.current_time():
+                messages.error(request, "Enter a time in after the Tap Out and not in the future. Nothing was changed.")
+                return redirect("outonpass:detail", pk)
+            gate.hr_close(p, request.user, time_in, remark)
+            messages.success(request, f"Pass closed: {rules.hm(p.minutes_charged)} charged.")
+        else:
+            gate.hr_mark_unused(p, request.user, remark)
+            messages.success(request, "Pass marked not used. It no longer holds the balance.")
+    from notifications.services import notify
+    notify(p.employee, f"HR closed your pass {p.pass_number}. Remark: \"{remark}\"",
+           reverse("outonpass:detail", args=[p.pk]))
+    return redirect("outonpass:detail", pk)

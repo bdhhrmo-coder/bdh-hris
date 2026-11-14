@@ -50,13 +50,26 @@
 </div></div>
 
 {% if not_back %}
-<h2>Out, not back after the expected time (HR follow-up)</h2>
+<h2>Out, not back after the expected time (HR: open the pass to close it)</h2>
 <div class="card"><div class="table-scroll">
 <table>
   <tr><th>Pass no.</th><th>Employee</th><th>Date</th><th>Expected in</th><th>Tapped out</th></tr>
   {% for p in not_back %}
   <tr><td><a href="{% url 'outonpass:detail' p.pk %}">{{ p.pass_number }}</a></td><td>{{ p.employee.full_name }}</td>
       <td>{{ p.pass_date|date:"M d, Y" }}</td><td>{{ p.time_in|time:"g:i A" }}</td><td>{{ p.tapped_out_at|date:"g:i A" }}</td></tr>
+  {% endfor %}
+</table>
+</div></div>
+{% endif %}
+
+{% if unused %}
+<h2>Approved but never tapped out (HR: mark not used)</h2>
+<div class="card"><div class="table-scroll">
+<table>
+  <tr><th>Pass no.</th><th>Employee</th><th>Date</th><th>Planned</th></tr>
+  {% for p in unused %}
+  <tr><td><a href="{% url 'outonpass:detail' p.pk %}">{{ p.pass_number }}</a></td><td>{{ p.employee.full_name }}</td>
+      <td>{{ p.pass_date|date:"M d, Y" }}</td><td>{{ p.time_out|time:"g:i A" }} – {{ p.time_in|time:"g:i A" }}</td></tr>
   {% endfor %}
 </table>
 </div></div>
