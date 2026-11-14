@@ -488,7 +488,7 @@ Rule set: BDH-ADM-AO-01 Rev 0 (effective 2027-01-01) **as revised by the pending
 - Slip Part I reasons: Medical appointment, Legal matter, Government or bank transaction, Family emergency, Personal errand, Other (+ details).
 
 **How it is built (`outonpass/`)**
-- `rules.py`: allowance, balance (opening line + charged minutes + minutes held by live passes) and `check_pass`; numbers in `settings.OUT_ON_PASS_RULES`. `routing.py`: who acts. When the person at the Supervisor step may also approve the pass (AO for a section head's ordinary pass; COH for the AO's own), their action approves it in one step. Rules are re-checked at every step. Proof uses the documents app but its own access rule (`OutOnPass.may_view_document`).
+- `rules.py`: allowance, balance (opening line + charged minutes + minutes held by live passes) and `check_pass`; numbers in `settings.OUT_ON_PASS_RULES`. `routing.py`: who acts. When the person at the Supervisor step may also approve the pass (AO for a section head's ordinary pass; COH for the AO's own), their action approves it in one step (confirmed by the owner 2026-11-14, Option A). An approved pass has a "Show to guard" card (`/out-on-pass/<id>/guard/`). Rules are re-checked at every step. Proof uses the documents app but its own access rule (`OutOnPass.may_view_document`).
 
 ---
 
