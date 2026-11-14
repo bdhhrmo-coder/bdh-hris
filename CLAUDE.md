@@ -480,6 +480,16 @@ Rule set: BDH-ADM-AO-01 Rev 0 (effective 2027-01-01) **as revised by the pending
 - Proof documents are confidential: visible only to the filer, supervisor and approver (see section 10).
 - Monthly report to the COH from the HRIS (hours per unit, third passes, exceptions, unapproved absences, low balances).
 
+**Owner decisions 2026-11-14 (after stage 1)**
+- COSP allowance: HR enters each contract period (`CospContractPeriod`); the contract's hours are usable from its first day (Option A).
+- PGSS security personnel are recorded as COSP with "COSP under" = **PGSS (Security)** (Option A); they follow the COSP allowance.
+- Each special type lifts only its own rule (Option A): third pass = the 2-a-month limit; exception = balance and 2-hour limits; emergency = may be filed after the fact. Every other rule still applies.
+- The COH's own pass is **recorded by HR** (`recorded_only`, SUBMITTED -> RECORDED), with Tap Out / Tap In (Option B).
+- Slip Part I reasons: Medical appointment, Legal matter, Government or bank transaction, Family emergency, Personal errand, Other (+ details).
+
+**How it is built (`outonpass/`)**
+- `rules.py`: allowance, balance (opening line + charged minutes + minutes held by live passes) and `check_pass`; numbers in `settings.OUT_ON_PASS_RULES`. `routing.py`: who acts. When the person at the Supervisor step may also approve the pass (AO for a section head's ordinary pass; COH for the AO's own), their action approves it in one step. Rules are re-checked at every step. Proof uses the documents app but its own access rule (`OutOnPass.may_view_document`).
+
 ---
 
 ## 13A. Future Expansion — Integrated HR and Administrative System (owner decisions 2026-10-17)
