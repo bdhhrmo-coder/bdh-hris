@@ -290,18 +290,95 @@ def needs_shift_confirmation(employee, pass_date):
 
 
 def summary(employee, on_date):
-    """Balance figures for the filing page, the pass page and (later) the slip."""
+    """Balance figures for the filing page, the pass page and (later) the slip.
+
+    Same accounting as the filing check (balance_minutes), only broken down:
+      used      = charged minutes of completed passes + the Jan 1-10 opening line
+      pending   = planned minutes of passes waiting for endorsement/approval
+      committed = planned minutes of approved (or recorded) passes not yet back
+      available = allowance - used - pending - committed  (what can still be filed)
+    Cancelled, rejected and returned passes hold nothing.
+    """
+    from .models import OutOnPass
+
     year = on_date.year
     allowance = allowance_minutes(employee, year)
     used = used_minutes(employee, year)
-    held = held_minutes(employee, year)
+    live = list(_year_passes(employee, year).filter(status__in=OutOnPass.LIVE_STATUSES))
+    pending = sum(p.planned_minutes for p in live if p.status in OutOnPass.PENDING_STATUSES)
+    committed = sum(p.planned_minutes for p in live if p.status in OutOnPass.CLEARED_STATUSES)
     return {
-        "year": year, "allowance": allowance, "used": used, "held": held,
-        "balance": allowance - used - held,
+        "year": year, "allowance": allowance, "used": used,
+        "pending": pending, "committed": committed, "held": pending + committed,
+        "before_holds": allowance - used,
+        "balance": allowance - used - pending - committed,
         "month_count": passes_in_month(employee, year, on_date.month),
         "month_label": on_date.strftime("%B %Y"),
         "max_minutes": rule("MAX_MINUTES_PER_PASS"),
         "passes_per_month": rule("PASSES_PER_MONTH"),
+        "max_passes_per_month": rule("MAX_PASSES_PER_MONTH"),
+    }
+
+
+def _pct(part, whole):
+    return max(0, min(100, round(part * 100 / whole))) if whole > 0 else 0
+
+
+def balance_panel(s):
+    """The standard balance summary (templates/components/balance_summary.html)
+    for Out-on-Pass, from summary()."""
+    allowance, used, pending, committed = s["allowance"], s["used"], s["pending"], s["committed"]
+    available = s["balance"]
+    used_pct, pend_pct, comm_pct = _pct(used, allowance), _pct(pending, allowance), _pct(committed, allowance)
+    free_pct = max(0, 100 - used_pct - pend_pct - comm_pct) if available > 0 else 0
+    spent_pct = 100 - free_pct if allowance else 0
+    if allowance <= 0:
+        sub = f"No allowance yet for {s['year']}. COSP: HR enters your contract period."
+    else:
+        sub = f"Entitlement year {s['year']}  ·  {spent_pct}% used or on hold  ·  {free_pct}% remaining"
+    count, std, most = s["month_count"], s["passes_per_month"], s["max_passes_per_month"]
+    if count < std:
+        state, label = "ok", "Within the monthly limit"
+    elif count == std:
+        state, label = "full", "Monthly limit used"
+    else:
+        state, label = "over", "Third pass used: no more passes this month"
+    steps = [{"state": "used" if i < count else "free"} for i in range(std)]
+    steps.append({"state": "extra-used" if count > std else "extra"})
+    left = max(0, std - count)
+    return {
+        "primary": {
+            "label": "Available balance", "value": hm(max(available, 0)) if available >= 0 else hm(available),
+            "sub": sub, "state": "ok" if available > 0 else "out",
+            "segments": [
+                {"kind": "used", "pct": used_pct, "label": "Used"},
+                {"kind": "pending", "pct": pend_pct, "label": "Pending approval"},
+                {"kind": "committed", "pct": comm_pct, "label": "Approved, not yet used"},
+                {"kind": "free", "pct": free_pct, "label": "Available"},
+            ],
+            "legend": [
+                {"kind": "used", "label": "Used", "value": hm(used)},
+                {"kind": "pending", "label": "Pending approval", "value": hm(pending)},
+                {"kind": "committed", "label": "Approved, not yet used", "value": hm(committed)},
+            ],
+        },
+        "cards": [
+            {"label": "Total allowance", "value": hm(allowance), "tone": "navy", "note": f"Year {s['year']}"},
+            {"label": "Used", "value": hm(used), "tone": "neutral",
+             "note": "Actual minutes from Tap Out to Tap In"},
+            {"label": "On hold / committed", "value": hm(pending + committed), "tone": "amber",
+             "note": f"Pending {hm(pending)}  ·  Approved {hm(committed)}"},
+        ],
+        "limit": {
+            "title": f"Passes in {s['month_label']}", "state": state,
+            "value": f"{count} of {std} passes" if count <= std else f"{count} passes (incl. third pass)",
+            "steps": steps,
+            "sub": f"{label}. {left} standard pass{'es' if left != 1 else ''} left; never more than {most} a month.",
+            "note": "A third pass is allowed only for an urgent reason, with supporting documentation, "
+                    "decided by the Chief of Hospital.",
+        },
+        "footnote": f"Balance before pending and approved passes: {hm(s['before_holds'])}. Cancelled, rejected and "
+                    "returned passes are not deducted.",
     }
 
 

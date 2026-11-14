@@ -1,10 +1,1 @@
-{% load outonpass_tags %}
-<div class="card form-card">
-  <table class="detail-table">
-    <tr><th>Allowance {{ summary.year }}</th><td>{{ summary.allowance|hm }}</td></tr>
-    <tr><th>Used</th><td>{{ summary.used|hm }}</td></tr>
-    <tr><th>Held for pending or approved passes</th><td>{{ summary.held|hm }}</td></tr>
-    <tr><th>Balance</th><td><strong>{{ summary.balance|hm }}</strong></td></tr>
-    <tr><th>Passes in {{ summary.month_label }}</th><td>{{ summary.month_count }} (limit {{ summary.passes_per_month }}; a third only for an urgent reason, with proof)</td></tr>
-  </table>
-</div>
+{% include "components/balance_summary.html" with bal=bal %}

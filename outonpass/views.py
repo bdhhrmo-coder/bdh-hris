@@ -66,7 +66,7 @@ def _form_page(request, acting, form, violations, p=None):
         on_date = timezone.localdate()
     return render(request, "outonpass/form.html", {
         "form": form, "violations": violations, "p": p,
-        "summary": rules.summary(acting, on_date),
+        "bal": rules.balance_panel(rules.summary(acting, on_date)),
         "is_coh": acting.has_role(RoleAssignment.CHIEF_OF_HOSPITAL),
     })
 
@@ -139,7 +139,7 @@ def my_passes(request):
     acting = _acting(request)
     passes = acting.out_on_passes.all()[:100]
     return render(request, "outonpass/mine.html", {
-        "passes": passes, "summary": rules.summary(acting, timezone.localdate()),
+        "passes": passes, "bal": rules.balance_panel(rules.summary(acting, timezone.localdate())),
     })
 
 
@@ -165,7 +165,7 @@ def detail(request, pk):
         "needs_shift": rules.needs_shift_confirmation(p.employee, p.pass_date),
         "can_cancel": routing.can_cancel(acting, p),
         "can_edit": routing.can_edit(acting, p),
-        "summary": rules.summary(p.employee, p.pass_date),
+        "bal": rules.balance_panel(rules.summary(p.employee, p.pass_date)),
         "proofs": _proofs(p) if routing.may_view_proof(acting, p) else None,
         "has_proof": _proofs(p).exists(),
     })

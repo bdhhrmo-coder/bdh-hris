@@ -185,3 +185,50 @@ class CheckTests(Base):
         coh = emp("coh", roles=[RoleAssignment.CHIEF_OF_HOSPITAL])
         self.assertEqual(self.check(coh, FEB, time(10), time(11)), set())
         self.assertIn("over_2_hours", self.check(coh, FEB, time(9), time(12)))
+
+
+class BalancePanelTests(Base):
+    """The balance summary shows the same accounting as the filing check (owner request 2026-11-14)."""
+
+    def test_breakdown_matches_the_filing_check(self):
+        PassOpeningUsage.objects.create(employee=self.a, year=2027, minutes_used=30, reason="tracker",
+                                        entered_by=self.hr_user)
+        self.make(self.a, date(2027, 2, 2), time(9), time(10), status=P.COMPLETED, charged=58)   # used
+        self.make(self.a, date(2027, 2, 4), time(9), time(10, 30), status=P.SUBMITTED)          # pending 90
+        self.make(self.a, date(2027, 2, 5), time(9), time(9, 45), status=P.ENDORSED)            # pending 45
+        self.make(self.a, date(2027, 2, 8), time(9), time(10), status=P.APPROVED)               # committed 60
+        self.make(self.a, date(2027, 2, 9), time(9), time(11), status=P.CANCELLED)              # nothing
+        self.make(self.a, date(2027, 2, 10), time(9), time(11), status=P.REJECTED)              # nothing
+        self.make(self.a, date(2027, 2, 11), time(9), time(11), status=P.RETURNED)              # nothing
+        s = rules.summary(self.a, FEB)
+        self.assertEqual((s["used"], s["pending"], s["committed"]), (88, 135, 60))
+        self.assertEqual(s["balance"], 720 - 88 - 135 - 60)
+        self.assertEqual(s["balance"], rules.balance_minutes(self.a, 2027))  # one accounting, no double deduction
+        self.assertEqual(s["before_holds"], 720 - 88)
+        panel = rules.balance_panel(s)
+        self.assertEqual(panel["primary"]["value"], rules.hm(720 - 88 - 135 - 60))
+        self.assertEqual(sum(seg["pct"] for seg in panel["primary"]["segments"]), 100)
+
+    def test_completed_pass_moves_from_committed_to_used(self):
+        p = self.make(self.a, FEB, time(9), time(10), status=P.APPROVED)
+        self.assertEqual(rules.summary(self.a, FEB)["committed"], 60)
+        p.status, p.minutes_charged = P.COMPLETED, 47
+        p.save()
+        s = rules.summary(self.a, FEB)
+        self.assertEqual((s["committed"], s["used"], s["balance"]), (0, 47, 673))
+
+    def test_monthly_limit_states(self):
+        state = lambda: rules.balance_panel(rules.summary(self.a, FEB))["limit"]["state"]
+        self.assertEqual(state(), "ok")
+        self.make(self.a, date(2027, 2, 2), time(9), time(10))
+        self.assertEqual(state(), "ok")
+        self.make(self.a, date(2027, 2, 4), time(9), time(10))
+        self.assertEqual(state(), "full")
+        self.make(self.a, date(2027, 2, 8), time(9), time(10), kind=P.THIRD)
+        self.assertEqual(state(), "over")
+
+    def test_no_allowance_shows_red(self):
+        c = emp("cosp", self.lab, status="COSP")
+        panel = rules.balance_panel(rules.summary(c, FEB))
+        self.assertEqual(panel["primary"]["state"], "out")
+        self.assertIn("HR enters your contract period", panel["primary"]["sub"])
