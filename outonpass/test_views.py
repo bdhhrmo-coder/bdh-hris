@@ -241,3 +241,17 @@ class FlowTests(TestCase):
         self.file(self.staff)
         self.client.force_login(other.user)
         self.assertEqual(self.client.get(reverse("outonpass:detail", args=[self.last(self.staff).pk])).status_code, 403)
+
+    def test_guard_card_shows_approved_and_not_approved(self):
+        self.file(self.staff)
+        p = self.last(self.staff)
+        self.client.force_login(self.staff.user)
+        url = reverse("outonpass:guard_card", args=[p.pk])
+        self.assertContains(self.client.get(url), "NOT APPROVED")
+        self.act(self.head, p, "endorse")
+        self.act(self.ao, p, "approve")
+        self.client.force_login(self.staff.user)
+        r = self.client.get(url)
+        self.assertContains(r, "APPROVED PASS")
+        self.assertContains(r, p.pass_number)
+        self.assertContains(r, "Approved by")

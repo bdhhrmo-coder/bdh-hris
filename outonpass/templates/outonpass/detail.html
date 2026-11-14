@@ -26,6 +26,10 @@
 <p class="muted">Checked by the system when the pass was filed and again at each step.</p>
 {% include "outonpass/_summary.html" %}
 
+{% if p.status == "APPROVED" or p.status == "RECORDED" or p.status == "COMPLETED" %}
+<p class="row-actions"><a class="btn" href="{% url 'outonpass:guard_card' p.pk %}">Show to guard</a></p>
+{% endif %}
+
 {% if can_edit or can_cancel %}
 <p class="row-actions">
   {% if can_edit %}<a class="btn" href="{% url 'outonpass:edit' p.pk %}">Correct and resubmit</a>{% endif %}

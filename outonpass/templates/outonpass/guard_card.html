@@ -1,0 +1,63 @@
+{% load static outonpass_tags %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pass {{ p.pass_number }} — BDH HRIS</title>
+<style>
+  :root { --blue:#173D72; --gold:#E5B83F; --green:#1E7B45; --green-bg:#E7F4EC; --red:#C9363E; --red-bg:#FBEAEA; --ink:#1d2433; --muted:#5b6476; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#eef1f6; font-family: "Segoe UI", Roboto, Arial, sans-serif; color:var(--ink); }
+  .card { max-width:420px; margin:16px auto; background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 2px 10px rgba(0,0,0,.08); }
+  .top { background:var(--blue); color:#fff; display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:4px solid var(--gold); }
+  .top img { width:40px; height:40px; }
+  .top .h { font-weight:700; letter-spacing:.3px; } .top .s { font-size:.8rem; opacity:.85; }
+  .status { text-align:center; padding:14px 12px; font-size:1.35rem; font-weight:800; letter-spacing:.5px; }
+  .ok { background:var(--green-bg); color:var(--green); } .no { background:var(--red-bg); color:var(--red); }
+  .status small { display:block; font-size:.85rem; font-weight:600; letter-spacing:0; margin-top:2px; }
+  .num { text-align:center; font-size:1.6rem; font-weight:800; color:var(--blue); padding:10px 0 2px; letter-spacing:1px; }
+  .date { text-align:center; font-size:1.05rem; font-weight:700; padding-bottom:10px; }
+  dl { margin:0; padding:4px 18px 12px; display:grid; grid-template-columns: 9.5em 1fr; row-gap:9px; column-gap:10px; }
+  dt { color:var(--muted); font-size:.82rem; text-transform:uppercase; letter-spacing:.4px; padding-top:2px; }
+  dd { margin:0; font-weight:600; }
+  .times { display:flex; margin:4px 16px 14px; border:2px solid var(--blue); border-radius:10px; overflow:hidden; text-align:center; }
+  .times div { flex:1; padding:8px 4px; } .times div + div { border-left:2px solid var(--blue); }
+  .times b { display:block; font-size:1.25rem; color:var(--blue); } .times span { font-size:.75rem; color:var(--muted); text-transform:uppercase; }
+  .special { margin:0 16px 12px; padding:8px 10px; border-left:4px solid var(--gold); background:#fff8e6; font-size:.9rem; font-weight:600; }
+  .foot { font-size:.78rem; color:var(--muted); padding:10px 16px 14px; border-top:1px solid #e3e7ee; line-height:1.4; }
+  .test { background:var(--red); color:#fff; text-align:center; font-weight:700; font-size:.8rem; padding:3px; }
+  .back { display:block; text-align:center; margin:4px auto 20px; color:var(--blue); }
+  @media print { body { background:#fff; } .back { display:none; } .card { box-shadow:none; border:1px solid #ccc; } }
+</style>
+</head>
+<body>
+<div class="card">
+  {% if test_system %}<div class="test">TEST SYSTEM — not a real pass</div>{% endif %}
+  <div class="top"><img src="{% static 'images/bdh-logo.png' %}" alt="">
+    <div><div class="h">Bataraza District Hospital</div><div class="s">Personal Out-on-Pass &middot; HRIS</div></div></div>
+  {% if cleared %}
+  <div class="status ok">APPROVED PASS<small>{% if p.status == "COMPLETED" %}Used — back in{% elif p.tapped_out_at %}Out now{% else %}Cleared to leave on the date below{% endif %}</small></div>
+  {% else %}
+  <div class="status no">NOT APPROVED<small>{{ p.get_status_display }} — the employee may not leave on this pass</small></div>
+  {% endif %}
+  <div class="num">{{ p.pass_number }}</div>
+  <div class="date">{{ p.pass_date|date:"l, F j, Y" }}</div>
+  <div class="times">
+    <div><span>Time out</span><b>{{ p.time_out|time:"g:i A" }}</b></div>
+    <div><span>Expected in</span><b>{{ p.time_in|time:"g:i A" }}</b></div>
+    <div><span>Length</span><b>{{ p.planned_minutes|hm }}</b></div>
+  </div>
+  {% if p.is_special %}<div class="special">{{ p.get_kind_display }} — decided by the Chief of Hospital</div>{% endif %}
+  <dl>
+    <dt>Employee</dt><dd>{{ p.employee.full_name }}</dd>
+    <dt>Position</dt><dd>{{ p.employee.position|default:"—" }}</dd>
+    <dt>Unit / Section</dt><dd>{{ area|default:"—" }}</dd>
+    <dt>Employment</dt><dd>{{ employment }}</dd>
+    {% if approval %}<dt>{% if p.recorded_only %}Recorded by{% else %}Approved by{% endif %}</dt><dd>{{ approval.name }}<br><small>{{ approval.position }} &middot; {{ approval.when|date:"M j, g:i A" }}</small></dd>{% endif %}
+    {% if p.tapped_out_at %}<dt>Tapped out</dt><dd>{{ p.tapped_out_at|date:"g:i A" }}</dd>{% endif %}
+    {% if p.tapped_in_at %}<dt>Tapped in</dt><dd>{{ p.tapped_in_at|date:"g:i A" }}</dd>{% endif %}
+  </dl>
+  <div class="foot">Guard on duty: check the name, date and pass number, and log them. The official time out and time in are the employee's Tap Out and Tap In in the HRIS. Valid only on the date shown. Shown {{ now|date:"M j, Y g:i A" }}.</div>
+</div>
+<a class="back" href="{% url 'outonpass:detail' p.pk %}">&larr; Back to the pass</a>
+</body>
+</html>

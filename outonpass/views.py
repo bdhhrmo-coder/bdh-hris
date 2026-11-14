@@ -236,3 +236,32 @@ def act(request, pk):
     messages.success(request, f"{routing.ACTION_LABELS[action]}: done. The pass is now "
                               f"{p.get_status_display().lower()}.")
     return redirect("outonpass:queue")
+
+
+@login_required
+def guard_card(request, pk):
+    """The approved pass as the employee shows it to the guard on duty (a
+    photo or the screen itself). Read-only; the official gate times are the
+    HRIS Tap Out / Tap In (stage 3)."""
+    acting = _acting(request)
+    p = get_object_or_404(P.objects.select_related("employee"), pk=pk)
+    if not can_view_transaction(acting, p):
+        raise PermissionDenied("You are not authorized to view this pass.")
+    cleared = p.status in P.CLEARED_STATUSES + (P.COMPLETED,)
+    decided = p.actions.filter(action__in=["approve", "record"]).select_related("acted_by__employee").last()
+    approval = None
+    if decided:
+        who = getattr(decided.acted_by, "employee", None)
+        approval = {"name": who.full_name if who else decided.acted_by.username,
+                    "position": (who.position if who else "") or "", "when": decided.acted_at}
+    e = p.employee
+    units = ", ".join(u.name for u in e.units.all())
+    sections = ", ".join(s.name for s in e.sections.all())
+    if e.employment_status == Employee.EMPLOYMENT_STATUS_COSP:
+        employment = "PGSS (Security)" if e.cosp_under == Employee.COSP_UNDER_PGSS else "COSP"
+    else:
+        employment = "Permanent"
+    return render(request, "outonpass/guard_card.html", {
+        "p": p, "cleared": cleared, "approval": approval, "now": timezone.localtime(),
+        "area": " / ".join(x for x in (units, sections) if x), "employment": employment,
+    })

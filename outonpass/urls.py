@@ -9,6 +9,7 @@ urlpatterns = [
     path("new/", views.file_pass, name="new"),
     path("queue/", views.queue, name="queue"),
     path("<int:pk>/", views.detail, name="detail"),
+    path("<int:pk>/guard/", views.guard_card, name="guard_card"),
     path("<int:pk>/edit/", views.edit_pass, name="edit"),
     path("<int:pk>/action/", views.act, name="action"),
 ]
