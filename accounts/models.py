@@ -2,6 +2,12 @@ from django.conf import settings
 from django.db import models
 
 
+def _instruction_path(instance, filename):
+    from documents.models import secure_upload_path
+
+    return secure_upload_path(instance, filename).replace("secure_documents/", "oic_instructions/", 1)
+
+
 class RoleAssignment(models.Model):
     """
     Ties an Employee to a Role. An employee can hold more than one role at
@@ -86,6 +92,18 @@ class RoleAssignment(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
     ended_at = models.DateTimeField(null=True, blank=True)
+
+    # Owner decision 2026-11-16 (Option B): the HR Administrator may designate
+    # an OIC for an approver who cannot do it themself. A reason and the
+    # written instruction (PDF/JPG/PNG) are required; blank on every
+    # designation the approver made on their own.
+    designated_by_hr = models.ForeignKey(
+        "employees.Employee", on_delete=models.PROTECT, null=True, blank=True, related_name="+",
+        help_text="HR Administrator who designated this OIC on the approver's behalf.",
+    )
+    designation_reason = models.TextField(blank=True)
+    instruction = models.FileField(upload_to=_instruction_path, max_length=300, blank=True)
+    instruction_name = models.CharField(max_length=255, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
