@@ -986,3 +986,10 @@ body .app-sidebar nav a.is-current { background: var(--nav-current); color: #fff
 .app-sidebar { scrollbar-color: rgba(255, 255, 255, 0.25) transparent; }
 @media print { .app-sidebar { display: none !important; } }
 .print-wait { font-size: 0.85rem; color: var(--gray-600); font-style: italic; }
+
+/* Notifications: the whole row opens the request (pilot issue 3). */
+.notification-table tr.notif-row { cursor: pointer; }
+.notification-table tr.notif-row:hover td { background: var(--navy-100); }
+.notification-table a.notif-link { color: inherit; text-decoration: none; }
+.notification-table tr.is-unread a.notif-link { color: var(--navy-900); }
+.notification-table a.notif-link:focus-visible { outline: 3px solid var(--gold-500); outline-offset: 2px; }
