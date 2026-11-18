@@ -70,19 +70,29 @@
            the one holding the current page opens itself. Batch 6, owner decisions 2026-10-13.{% endcomment %}
         <nav>
           {% for g in nav_groups %}
+          {% if g.items|length == 1 and g.items.0.label == g.label %}
+          {# A group that is only one page of the same name is a plain link: no arrow, nothing to open. #}
+          <a class="nav-top-link{% if g.items.0.current %} is-current{% endif %}" href="{{ g.items.0.url }}"{% if g.items.0.current %} aria-current="page"{% endif %}>
+            {% icon g.icon %}<span>{{ g.label }}</span>
+            {% if g.items.0.count %}<span class="count">{{ g.items.0.count }}</span>{% endif %}
+          </a>
+          {% else %}
           <details class="nav-group" data-group="{{ g.key }}"{% if g.open %} open data-has-current{% endif %}>
             <summary>
               {% icon g.icon %}<span class="nav-group-label">{{ g.label }}</span>
               {% if g.count %}<span class="count" title="Waiting for your action">{{ g.count }}</span>{% endif %}
               {% icon "chevron-down" "nav-chev" %}
             </summary>
+            <div class="nav-sub">
             {% for item in g.items %}
             <a href="{{ item.url }}"{% if item.current %} class="is-current" aria-current="page"{% endif %}>
-              {% icon item.icon %}<span>{{ item.label }}</span>
+              <span>{{ item.label }}</span>
               {% if item.count %}<span class="count">{{ item.count }}</span>{% endif %}
             </a>
             {% endfor %}
+            </div>
           </details>
+          {% endif %}
           {% endfor %}
         </nav>
       </aside>

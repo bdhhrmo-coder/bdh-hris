@@ -242,19 +242,11 @@
     if (link) {
       link.classList.add("is-current");
       link.setAttribute("aria-current", "page");
-      var prev = null;
-      try { prev = JSON.parse(sessionStorage.getItem("bdh-nav") || "null"); } catch (e) { prev = null; }
-      pos = placeIndicator(nav, link, prev);
-      try { sessionStorage.setItem("bdh-nav", JSON.stringify(pos)); } catch (e) { /* not available: no slide */ }
+      // The gold marker is now drawn by CSS on the current link (pilot issue 1); no sliding bar.
     }
     nav.querySelectorAll("details.nav-group").forEach(function (d) {
       d.addEventListener("toggle", function () {
         if (d.open) closeOthers(d);
-        if (link) {  // groups above may have opened/closed: keep the bar on the current link
-          var ind = nav.querySelector(".nav-indicator");
-          if (ind) ind.style.display = link.offsetParent ? "" : "none";
-          if (link.offsetParent) placeIndicator(nav, link, null);
-        }
       });
     });
   });

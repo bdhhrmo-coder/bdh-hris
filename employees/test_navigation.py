@@ -132,3 +132,23 @@ class DirectUrlStillDeniedTests(TestCase):
         for name in ("dashboard:dashboard_home", "auditlog:audit_log", "dataimport:home", "announcements:manage",
                      "schedules:shift_codes", "employees:employee_list", "schedules:new"):
             self.assertIn(self.client.get(reverse(name)).status_code, (302, 403, 404), name)
+
+
+class MenuLookTests(TestCase):
+    """Pilot issue 1 (2026-11-18): group headers vs indented sub-items, one current marker."""
+
+    def page(self, path):
+        self.client.force_login(person("looksup", R.HR_ADMINISTRATOR).user)
+        return self.client.get(path).content.decode()
+
+    def test_sub_items_sit_in_an_indented_block_and_only_one_link_is_current(self):
+        html = self.page(reverse("leave:leave_queue"))
+        self.assertIn('class="nav-sub"', html)
+        self.assertEqual(html.count('aria-current="page"'), 1)
+        # the group header (summary) never carries the current-page marker
+        summary = html.split("<summary>")[1].split("</summary>")[0]
+        self.assertNotIn("is-current", summary)
+
+    def test_home_with_announcements_stays_a_group_but_a_lone_page_is_a_plain_link(self):
+        html = self.page(reverse("homepage:home"))
+        self.assertIn('data-group="home"', html)  # Home + Announcements: a real group, order unchanged
