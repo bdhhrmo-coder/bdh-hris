@@ -985,3 +985,4 @@ body .app-sidebar nav a.is-current { background: var(--nav-current); color: #fff
 .app-sidebar nav .nav-section-label { color: var(--nav-muted); }
 .app-sidebar { scrollbar-color: rgba(255, 255, 255, 0.25) transparent; }
 @media print { .app-sidebar { display: none !important; } }
+.print-wait { font-size: 0.85rem; color: var(--gray-600); font-style: italic; }

@@ -341,6 +341,35 @@ def can_view_application(acting_employee, application):
     return is_supervisor_of(acting_employee, application.employee, viewing=True)
 
 
+# Owner decision 2026-11-18 (pilot issue 2): the person who filed a leave
+# application can print its form only when every INTERNAL step is complete.
+# COSP route: the COH has approved. Regular route: the COH has recommended
+# approval (status "For Capitol approval"); the Capitol's own decision happens
+# outside the HRIS and is not needed to print. RECORDED is the older regular
+# path (filed before 2026-11-03), kept printable so old records are untouched.
+PRINT_READY_STATUSES = {
+    LeaveApplication.APPROVED,
+    LeaveApplication.RECORDED,
+    LeaveApplication.FOR_CAPITOL_APPROVAL,
+}
+PRINT_WAIT_MESSAGE = "Available once all internal approvals are complete."
+
+
+def print_wait_reason(acting_employee, application):
+    """Why this person cannot print this application yet, or None if they can.
+
+    Applies only to the applicant printing their own application, whatever
+    other roles they hold. HR, AO, COH and Supervisors printing other
+    people's applications are unchanged (can_view_application decides)."""
+    if acting_employee is None or acting_employee.pk != application.employee_id:
+        return None
+    if application.status in PRINT_READY_STATUSES:
+        return None
+    if application.status in (LeaveApplication.RETURNED, LeaveApplication.REJECTED, LeaveApplication.CANCELLED):
+        return "A returned, rejected or cancelled application cannot be printed."
+    return PRINT_WAIT_MESSAGE
+
+
 def coh_filed_regular(application):
     """The COH's own regular leave has no level above for the Supervisor,
     AO and COH steps: HR records and verifies it and it goes straight to

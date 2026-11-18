@@ -193,12 +193,12 @@ Implemented as a **custom `Role` model tied to Employee** (not Django's built-in
 - **Credits:** taken when HR records and verifies (regular) or when the COH approves (COSP). **Given back automatically** (a ledger adjustment, nothing deleted) on any return or rejection after they were taken, inside BDH or by the Capitol (`_restore_credits`). A resubmission takes them again at the HR step.
 - Absences, balances and Dashboard "used" figures count leave whose days are taken: `LeaveApplication.counted_q()` (approved, older recorded, for Capitol approval, or regular leave from the HR step on).
 - **COH's own regular leave** (no level above): HR records and verifies it and it goes straight to For Capitol approval (assumption, matching the COH's other requests; confirm with the owner if needed).
-- Printing: regular leave prints CSC Form No. 6 at any time from submission (no BDH code, no digital stamps); COSP route prints 01F04-A (title and credits follow the leave type).
+- Printing: regular leave prints CSC Form No. 6 (no BDH code, no digital stamps); COSP route prints 01F04-A (title and credits follow the leave type). **Print timing (owner decision 2026-11-18, pilot issue 2; replaces "printable once the internal chain is complete (2026-11-18)", Nursing included):** the person who filed the application (whatever other roles they hold) can print only when every internal step is complete: COSP route = COH approved; Regular route = COH recommended ("For Capitol approval"; the Capitol's decision is not needed). Older RECORDED records stay printable. Before that, the button shows "Available once all internal approvals are complete."; returned, rejected or cancelled requests cannot be printed; a resubmission starts over. Enforced in the print views (`leave/permissions.py print_wait_reason`), so the direct link is blocked too. HR, AO, COH and Supervisors printing other people's applications are unchanged. Only these two leave print views are affected (CTO, Exchange, Attendance, Travel/OB and Schedule forms have their own views).
 - `RECORDED` (HR only) is the old regular path, kept for records filed before 2026-11-03.
 
 ### 6.3 Output Forms
 - COSP employees' leave (COSP Leave, Wellness, Emergency): custom BDH-branded form, **Form No. BDH-ADM-HR-01F04-A**
-- Regular employees' leave: CSC Form No. 6 layout — official CSC form, left as is (no BDH code, no digital stamp, because regular leave is approved at the Capitol); printable from submission
+- Regular employees' leave: CSC Form No. 6 layout — official CSC form, left as is (no BDH code, no digital stamp, because regular leave is approved at the Capitol); printable once the internal chain is complete (2026-11-18)
 - CTO application: **BDH-ADM-HR-01F04-B**
 - Exchange of Duty application: **BDH-ADM-HR-01F04-C**
 - Attendance Correction (formal): Missed Log Justification Form **BDH-ADM-AO-01F10, Revision 2**

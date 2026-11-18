@@ -403,6 +403,9 @@ class PrintCscForm6Tests(TestCase):
         )
 
     def test_applicant_can_print_their_own_application(self):
+        # Pilot issue 2: only once the internal chain is complete.
+        self.application.status = LeaveApplication.FOR_CAPITOL_APPROVAL
+        self.application.save()
         self.client.login(username="printemp1", password="testpass123")
         response = self.client.get(reverse("leave:print_csc_form6", args=[self.application.pk]))
         self.assertEqual(response.status_code, 200)
@@ -450,6 +453,8 @@ class PrintCospLeaveFormTests(TestCase):
         )
 
     def test_applicant_can_print_their_own_application(self):
+        self.application.status = LeaveApplication.APPROVED
+        self.application.save()
         self.client.login(username="cospformemp1", password="testpass123")
         response = self.client.get(reverse("leave:print_cosp_leave_form", args=[self.application.pk]))
         self.assertEqual(response.status_code, 200)
@@ -572,3 +577,72 @@ class BalanceCardTests(TestCase):
         self.assertIn("My balances", page)
         self.assertEqual(page.count('class="balance-card '), 5)
         self.assertIn("No fixed limit", page)
+
+
+class PrintOnlyWhenChainCompleteTests(TestCase):
+    """Pilot issue 2 (owner, 2026-11-18): the applicant prints the leave form
+    only when every internal step is complete; enforced on the server."""
+
+    def setUp(self):
+        self.vl = LeaveType.objects.get(code="VL")
+        self.cosp_leave = LeaveType.objects.get(code="COSP_LEAVE")
+        self.emp = make_employee("pwemp", "EMP-PW1", date_hired=date(2020, 1, 1))
+        self.cosp = make_employee("pwcosp", "EMP-PW2", date_hired=date(2024, 1, 1), employment_status="COSP")
+
+    def app(self, emp, leave_type, status):
+        return LeaveApplication.objects.create(
+            employee=emp, leave_type=leave_type, status=status,
+            start_date=date(2026, 12, 7), end_date=date(2026, 12, 8), number_of_days=Decimal("2"))
+
+    def url(self, a):
+        return reverse("leave:print_cosp_leave_form" if a.is_cosp_route else "leave:print_csc_form6", args=[a.pk])
+
+    def get(self, user, a):
+        self.client.login(username=user, password="testpass123")
+        return self.client.get(self.url(a))
+
+    def test_blocked_at_every_pending_step_by_direct_url(self):
+        for st in (LeaveApplication.SUBMITTED, LeaveApplication.ENDORSED_BY_UNIT_HEAD,
+                   LeaveApplication.ENDORSED_BY_SUPERVISOR, LeaveApplication.PROCESSED_BY_HR,
+                   LeaveApplication.RECOMMENDED_BY_AO):
+            a = self.app(self.emp, self.vl, st)
+            r = self.get("pwemp", a)
+            self.assertEqual(r.status_code, 302, st)
+            self.assertNotEqual(r.get("Content-Type"), "application/pdf")
+
+    def test_blocked_when_returned_rejected_or_cancelled(self):
+        for st in (LeaveApplication.RETURNED, LeaveApplication.REJECTED, LeaveApplication.CANCELLED):
+            r = self.get("pwemp", self.app(self.emp, self.vl, st))
+            self.assertEqual(r.status_code, 302, st)
+
+    def test_regular_allowed_once_coh_recommended(self):
+        r = self.get("pwemp", self.app(self.emp, self.vl, LeaveApplication.FOR_CAPITOL_APPROVAL))
+        self.assertEqual(r.status_code, 200)
+
+    def test_cosp_blocked_until_coh_approves(self):
+        self.assertEqual(self.get("pwcosp", self.app(self.cosp, self.cosp_leave, LeaveApplication.RECOMMENDED_BY_AO)).status_code, 302)
+        self.assertEqual(self.get("pwcosp", self.app(self.cosp, self.cosp_leave, LeaveApplication.APPROVED)).status_code, 200)
+
+    def test_resubmitted_request_is_blocked_again(self):
+        a = self.app(self.emp, self.vl, LeaveApplication.SUBMITTED)  # resubmission restarts at Submitted
+        self.assertEqual(self.get("pwemp", a).status_code, 302)
+
+    def test_supervisor_printing_own_pending_request_is_blocked(self):
+        sup = make_employee("pwsup", "EMP-PW3", date_hired=date(2020, 1, 1), role=RoleAssignment.SUPERVISOR)
+        self.assertEqual(self.get("pwsup", self.app(sup, self.vl, LeaveApplication.SUBMITTED)).status_code, 302)
+
+    def test_hr_printing_own_pending_request_is_blocked(self):
+        hr = make_employee("pwhr", "EMP-PW4", date_hired=date(2020, 1, 1), role=RoleAssignment.HR_PROCESSOR)
+        self.assertEqual(self.get("pwhr", self.app(hr, self.vl, LeaveApplication.SUBMITTED)).status_code, 302)
+
+    def test_hr_printing_someone_elses_pending_request_unchanged(self):
+        make_employee("pwhr2", "EMP-PW5", date_hired=date(2020, 1, 1), role=RoleAssignment.HR_PROCESSOR)
+        self.assertEqual(self.get("pwhr2", self.app(self.emp, self.vl, LeaveApplication.SUBMITTED)).status_code, 200)
+
+    def test_screen_shows_message_not_link(self):
+        a = self.app(self.emp, self.vl, LeaveApplication.SUBMITTED)
+        self.client.login(username="pwemp", password="testpass123")
+        for name in ("leave:my_applications", "leave:leave_detail"):
+            page = self.client.get(reverse(name, args=[a.pk]) if name.endswith("detail") else reverse(name))
+            self.assertContains(page, "Available once all internal approvals are complete.")
+            self.assertNotContains(page, self.url(a))

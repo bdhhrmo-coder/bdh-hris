@@ -26,6 +26,7 @@ from .permissions import (
     supervisor_step_result,
     can_record_capitol_decision,
     can_view_application,
+    print_wait_reason,
     capitol_applications_for,
     coh_filed_regular,
     visible_applications_for,
@@ -350,6 +351,11 @@ def print_csc_form6(request, pk):
     if application.is_cosp_route:
         raise PermissionDenied("COSP employees' leave prints on the COSP leave form (01F04-A), not CSC Form 6.")
 
+    wait = print_wait_reason(acting_employee, application)
+    if wait:
+        messages.error(request, wait)
+        return redirect("leave:leave_detail", pk=application.pk)
+
     try:
         pdf_bytes = render_csc_form6_pdf(application)
     except RuntimeError as exc:
@@ -375,6 +381,11 @@ def print_cosp_leave_form(request, pk):
 
     if not application.is_cosp_route:
         raise PermissionDenied("Regular employees' leave prints on CSC Form 6, not the COSP leave form.")
+
+    wait = print_wait_reason(acting_employee, application)
+    if wait:
+        messages.error(request, wait)
+        return redirect("leave:leave_detail", pk=application.pk)
 
     try:
         pdf_bytes = render_cosp_leave_form_pdf(application, printed_by=request.user)
