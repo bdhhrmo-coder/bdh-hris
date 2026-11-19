@@ -20,6 +20,7 @@ from auditlog.permissions import can_view_audit_log
 from dashboard.permissions import can_view_dashboard
 
 from accounts.oic import can_designate_oic
+from accounts.oic_hr import can_hr_designate_oic
 from cto.claims import can_file_exception
 from cto.opening import can_enter_opening
 from cto.permissions import is_cto_eligible
@@ -67,6 +68,7 @@ MENU = [
     ]),
     ("admin", "HR Administration", "settings", [
         ("Data Import", "dataimport:home", "upload", "can_import_data"),
+        ("OIC for an Approver", "oic_hr_home", "calendar-clock", "can_hr_designate_oic"),
         ("Import Biometric Attendance", "attendance:biometric_import", "fingerprint", "is_hr"),
         ("Minor Attendance Correction", "attendance:minor_correction_create", "clipboard-check", "is_hr"),
         ("CTO Opening Balances", "cto:opening_balances", "clock-3", "can_enter_opening"),
@@ -97,6 +99,7 @@ def _flags(request, acting):
                                          or acting.has_role(RoleAssignment.HR_ADMINISTRATOR))
     f["can_review_profile_requests"] = can_review_profile_requests(acting)
     f["can_designate_oic"] = can_designate_oic(acting)
+    f["can_hr_designate_oic"] = can_hr_designate_oic(acting)
     # OT/CTO pages (2026-11-02): the pages' own checks, but the AO sees them
     # only while the D3 fallback can apply (at most one other HR holder).
     hr_admin = [RoleAssignment.HR_ADMINISTRATOR]

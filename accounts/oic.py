@@ -17,6 +17,9 @@ Django admin. Rules (Phase 1 decisions, unchanged):
   - The OIC acts only between the start and end dates; while it is in
     force the delegator cannot act in that area (Employee.active_role_assignments).
   - "End now" stops it early; nothing is ever deleted.
+  - HR Administrator may designate on an approver's behalf (accounts/oic_hr.py,
+    owner decision 2026-11-16, Option B): reason and written instruction
+    required, shown in the Audit Log. The System Administrator cannot.
 
 The system records and enforces the designation; choosing the OIC stays the
 approver's decision.
@@ -205,7 +208,10 @@ def oic_home(request):
 def oic_end(request, pk):
     acting = get_acting_employee(request.user)
     ra = get_object_or_404(R, pk=pk, is_oic=True)
-    if acting is None or ra.delegated_by_id != acting.pk:
+    # The approver ends their own OIC. An HR Administrator may also end one that
+    # HR designated on the approver's behalf (owner decision 2026-11-16).
+    hr_made = ra.designated_by_hr_id is not None and acting is not None and acting.is_hr_administrator()
+    if acting is None or (ra.delegated_by_id != acting.pk and not hr_made):
         raise PermissionDenied("Only the person who designated this OIC can end it.")
     today = timezone.localdate()
     status = _status(ra, today)
@@ -219,7 +225,12 @@ def oic_end(request, pk):
     ra.ended_by = request.user
     ra.ended_at = timezone.now()
     ra.save(update_fields=["is_active", "end_date", "ended_by", "ended_at", "updated_at"])
-    notify(ra.employee, f"Your OIC designation ({ra.scope_label}) from {acting.full_name} has ended.",
+    notify(ra.employee, f"Your OIC designation ({ra.scope_label}) from {ra.delegated_by.full_name} has ended.",
            url="/hris/home/")
+    if hr_made and ra.delegated_by_id != acting.pk:
+        notify(ra.delegated_by, f"HR ({acting.full_name}) ended the OIC for your area ({ra.scope_label}). "
+                                "You can act on it again.", url="/oic/")
+        messages.success(request, "OIC ended. The approver can act on this area again.")
+        return redirect("oic_hr_home")
     messages.success(request, "OIC ended. You can act on this area again.")
     return redirect("oic_home")

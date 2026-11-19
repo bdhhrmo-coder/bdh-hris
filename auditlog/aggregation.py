@@ -152,13 +152,16 @@ def _rows_from_oic_designations():
 
     rows = []
     for ra in RoleAssignment.objects.filter(is_oic=True).select_related(
-        "employee", "delegated_by__user", "section", "unit", "created_by", "ended_by"
+        "employee", "designated_by_hr", "delegated_by__user", "section", "unit", "created_by", "ended_by"
     ):
         detail = (f"{ra.employee.full_name} as OIC, {ra.scope_label}, "
                   f"{ra.start_date or '—'} to {ra.end_date or 'open'}, for {ra.delegated_by.full_name if ra.delegated_by else '—'}")
+        if ra.designated_by_hr_id:
+            detail += (f". Designated by HR Administrator {ra.designated_by_hr.full_name} on the approver's behalf. "
+                       f"Reason: {ra.designation_reason}. Written instruction attached")
         actor = ra.created_by or (ra.delegated_by.user if ra.delegated_by else None)
         rows.append({
-            "timestamp": ra.created_at, "module": "OIC Designation", "action": "designate", "detail": detail,
+            "timestamp": ra.created_at, "module": "OIC Designation", "action": "designate (by HR)" if ra.designated_by_hr_id else "designate", "detail": detail,
             "actor": actor, "employee_ids": {ra.employee_id}, "employee_display": ra.employee.full_name,
         })
         if ra.ended_at:
