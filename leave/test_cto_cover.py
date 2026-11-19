@@ -86,6 +86,16 @@ class SplitTests(Base):
         self.assertEqual(self.leave_balance(), before_leave - 2)
         self.assertEqual(self.cto_balance(), Decimal("2"))
 
+    def test_printed_form_shows_the_split_on_the_days_line(self):
+        from .cosp_leave_form import days_label
+
+        self.credit("3")
+        self.apply("2026-12-01", "2026-12-03", "3", cto=("1", "2026-12-02", "2026-12-02"))
+        app = L.objects.get()
+        self.assertEqual(days_label(app), "3 (2 from COSP Leave credits; 1 charged to CTO: Dec 02, 2026)")
+        app.cto_cover.delete()
+        self.assertEqual(days_label(app), "3")
+
     def test_all_days_on_cto_takes_no_leave_credits(self):
         self.credit("3")
         before_leave = self.leave_balance()

@@ -229,7 +229,7 @@ Implemented as a **custom `Role` model tied to Employee** (not Django's built-in
 - **Balances:** CTO held at filing; leave credits deducted at COH approval for the **rest only** (`leave_credit_days`). Both are checked at filing; at COH approval the CTO credit held is checked again (`error_at_approval`) and, if it is no longer good, the leave is **returned automatically** with the reason.
 - **Date change (Part 2) keeps the split:** the CTO days move by the same number of days as the leave's start, must stay inside the new dates, and are checked again against the CTO rules and the held credit's deadline.
 - **Records:** the leave's log (and so the Audit Log) records the split on filing/resubmission ("N day(s) charged to CTO (dates); M day(s) to leave credits"); the leave page shows "Charged to"; the leave queue shows "(N charged to CTO)".
-- **Printed 01F04-A unchanged.** Wording to show the split is proposed to the owner and waiting for an answer.
+- **Printed 01F04-A (owner decision 2026-11-19, Option B):** layout unchanged; only the value on the existing "No. of Days" line shows the split, e.g. "3 (2 from COSP Leave credits; 1 charged to CTO: Dec 02, 2026)" (`cosp_leave_form.days_label`). A leave with no CTO prints as before.
 
 ### 6.4 Self-Service Restrictions
 Employee profile edits are self-service only for: contact information, address, civil status — and all such edits require Administrator approval before taking effect.

@@ -24,6 +24,26 @@ ROUTING = [
 ]
 
 
+def days_label(application):
+    """'3', or with CTO covering part of it (Part 3, owner chose Option B on
+    2026-11-19: the value only, same line, no layout change):
+    '3 (2 from COSP Leave credits; 1 charged to CTO: Dec 02, 2026)'."""
+    from .cto_cover import cover_of
+
+    total = f"{application.number_of_days.normalize():f}"
+    cover = cover_of(application)
+    if cover is None:
+        return total
+    rest = application.number_of_days - cover.number_of_days
+    dates = (f"{cover.start_date:%b %d, %Y}" if cover.start_date == cover.end_date
+             else f"{cover.start_date:%b %d} to {cover.end_date:%b %d, %Y}")
+    parts = []
+    if rest > 0:
+        parts.append(f"{rest.normalize():f} from {application.leave_type.name} credits")
+    parts.append(f"{cover.number_of_days.normalize():f} charged to CTO: {dates}")
+    return f"{total} ({'; '.join(parts)})"
+
+
 def reference_no(application):
     return f"LV-{application.pk:06d}"
 
@@ -50,7 +70,7 @@ def fill_cosp_leave_form(application, printed_by=None):
     f.field("Type of Leave:", leave_type.name + (f" - {application.get_wellness_reason_display()}"
                                                  if application.wellness_reason else ""))
     f.field("Inclusive Dates:", f"{application.start_date:%B %d, %Y} to {application.end_date:%B %d, %Y}")
-    f.field("No. of Days:", str(application.number_of_days))
+    f.field("No. of Days:", days_label(application))
     f.field("Justification:" if leave_type.requires_justification else "Purpose (optional):",
             application.justification)
     f.gap()
