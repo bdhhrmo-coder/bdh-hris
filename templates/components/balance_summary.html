@@ -1,0 +1,46 @@
+{% comment %}
+Standard balance summary (owner request 2026-11-14): one look for every
+request module's balances. Display only - the view passes figures that come
+from the module's own balance logic; nothing is computed here.
+
+`bal` keys:
+  primary  {label, value, sub, state: ok|out, segments [{kind: used|pending|committed|free, pct, label}],
+            legend [{kind, label, value}]}
+  cards    [{label, value, note, tone: navy|neutral|amber}]
+  limit    (optional) {title, value, sub, state: ok|full|over, steps [{state: used|free|extra}], note}
+  footnote (optional)
+{% endcomment %}
+<section class="bal" aria-label="{{ bal.primary.label }}">
+  <div class="bal-top{% if not bal.limit %} bal-top-single{% endif %}">
+    <div class="bal-card bal-primary bal-{{ bal.primary.state }}">
+      <div class="bal-label">{{ bal.primary.label }}</div>
+      <div class="bal-value">{{ bal.primary.value }}</div>
+      {% if bal.primary.sub %}<div class="bal-sub">{{ bal.primary.sub }}</div>{% endif %}
+      <div class="bal-bar" role="img" aria-label="{% for s in bal.primary.segments %}{{ s.label }} {{ s.pct }}%{% if not forloop.last %}, {% endif %}{% endfor %}">
+        {% for s in bal.primary.segments %}{% if s.pct %}<span class="bal-seg bal-seg-{{ s.kind }}" style="width: {{ s.pct }}%"></span>{% endif %}{% endfor %}
+      </div>
+      <ul class="bal-legend">
+        {% for l in bal.primary.legend %}<li><span class="bal-dot bal-seg-{{ l.kind }}"></span>{{ l.label }} <strong>{{ l.value }}</strong></li>{% endfor %}
+      </ul>
+    </div>
+    {% if bal.limit %}
+    <div class="bal-card bal-limit bal-limit-{{ bal.limit.state }}">
+      <div class="bal-label">{{ bal.limit.title }}</div>
+      <div class="bal-limit-value">{{ bal.limit.value }}</div>
+      <div class="bal-steps" aria-hidden="true">{% for s in bal.limit.steps %}<span class="bal-step bal-step-{{ s.state }}"></span>{% endfor %}</div>
+      <div class="bal-sub">{{ bal.limit.sub }}</div>
+      {% if bal.limit.note %}<p class="bal-note">{{ bal.limit.note }}</p>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+  <div class="bal-cards">
+    {% for c in bal.cards %}
+    <div class="bal-card bal-small bal-tone-{{ c.tone }}">
+      <div class="bal-label">{{ c.label }}</div>
+      <div class="bal-small-value">{{ c.value }}</div>
+      {% if c.note %}<div class="bal-sub">{{ c.note }}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% if bal.footnote %}<p class="bal-foot">{{ bal.footnote }}</p>{% endif %}
+</section>

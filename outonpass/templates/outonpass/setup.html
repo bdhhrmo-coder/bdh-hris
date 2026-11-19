@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% load outonpass_tags %}
+{% block title %}Out-on-Pass Setup — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Out-on-Pass Setup</h1>
+<p class="muted">Permanent staff get 12 hours a year automatically. COSP and PGSS personnel get 1 hour per full month of contract (up to 12), from the contract periods below. A wrong line is voided with a reason and entered again; nothing is edited or deleted. Your own records are entered by another HR Administrator.</p>
+
+<div class="card form-card">
+  <h2 class="mt-0">COSP / PGSS contract periods</h2>
+  <form method="post" class="form-2col">{% csrf_token %}<input type="hidden" name="what" value="contract">
+    {{ contract_form.non_field_errors }}
+    {% include "official_requests/_field.html" with field=contract_form.employee %}
+    {% include "official_requests/_field.html" with field=contract_form.start_date %}
+    {% include "official_requests/_field.html" with field=contract_form.end_date %}
+    <button type="submit">Add contract period</button>
+  </form>
+</div>
+<div class="card"><div class="table-scroll"><table>
+  <tr><th>Employee</th><th>Contract</th><th>Entered</th><th>Status</th><th></th></tr>
+  {% for c in contracts %}
+  <tr><td>{{ c.employee.full_name }}</td><td>{{ c.start_date|date:"M d, Y" }} – {{ c.end_date|date:"M d, Y" }}</td>
+      <td>{{ c.entered_at|date:"M d, Y" }} by {{ c.entered_by.employee.full_name|default:c.entered_by.username }}</td>
+      <td>{% if c.voided_at %}Voided {{ c.voided_at|date:"M d, Y" }}: {{ c.void_reason }}{% else %}In effect{% endif %}</td>
+      <td>{% if not c.voided_at %}<form method="post" x-data="{ r: '' }">{% csrf_token %}<input type="hidden" name="what" value="void_contract"><input type="hidden" name="pk" value="{{ c.pk }}">
+        <input type="text" name="reason" x-model="r" maxlength="255" class="remark-input" placeholder="Reason to void"><button type="submit" :disabled="!r.trim()">Void</button></form>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="5" class="empty-note">No contract periods yet.</td></tr>{% endfor %}
+</table></div></div>
+
+<div class="card form-card">
+  <h2 class="mt-0">Hours already used, Jan 1-10, 2027 (from the Google Sheets tracker)</h2>
+  <p class="muted">One line per employee. The HRIS takes over on Jan 11, 2027.</p>
+  <form method="post" class="form-2col">{% csrf_token %}<input type="hidden" name="what" value="opening">
+    {{ opening_form.non_field_errors }}
+    {% include "official_requests/_field.html" with field=opening_form.employee %}
+    {% include "official_requests/_field.html" with field=opening_form.year %}
+    {% include "official_requests/_field.html" with field=opening_form.hours %}
+    {% include "official_requests/_field.html" with field=opening_form.minutes %}
+    {% include "official_requests/_field.html" with field=opening_form.passes_used_in_month %}
+    {% include "official_requests/_field.html" with field=opening_form.reason %}
+    <button type="submit">Save</button>
+  </form>
+</div>
+<div class="card"><div class="table-scroll"><table>
+  <tr><th>Employee</th><th>Year</th><th>Used</th><th>Passes in January</th><th>Reason</th><th>Status</th><th></th></tr>
+  {% for o in openings %}
+  <tr><td>{{ o.employee.full_name }}</td><td>{{ o.year }}</td><td>{{ o.minutes_used|hm }}</td><td>{{ o.passes_used_in_month }}</td><td>{{ o.reason }}</td>
+      <td>{% if o.voided_at %}Voided: {{ o.void_reason }}{% else %}In effect{% endif %}</td>
+      <td>{% if not o.voided_at %}<form method="post" x-data="{ r: '' }">{% csrf_token %}<input type="hidden" name="what" value="void_opening"><input type="hidden" name="pk" value="{{ o.pk }}">
+        <input type="text" name="reason" x-model="r" maxlength="255" class="remark-input" placeholder="Reason to void"><button type="submit" :disabled="!r.trim()">Void</button></form>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="7" class="empty-note">None entered yet.</td></tr>{% endfor %}
+</table></div></div>
+{% endblock %}

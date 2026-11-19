@@ -575,7 +575,7 @@ class BalanceCardTests(TestCase):
         self.client.force_login(emp.user)
         page = self.client.get(reverse("leave:leave_apply")).content.decode()
         self.assertIn("My balances", page)
-        self.assertEqual(page.count('class="balance-card '), 5)
+        self.assertEqual(page.count('class="bal-card bal-type '), 5)  # standard look (2026-11-14)
         self.assertIn("No fixed limit", page)
 
 

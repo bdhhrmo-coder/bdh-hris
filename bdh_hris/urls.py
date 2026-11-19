@@ -68,4 +68,5 @@ urlpatterns = [
     path("data-import/", include("dataimport.urls")),
     path("announcements/", include("announcements.urls")),
     path("schedules/", include("schedules.urls")),
+    path("out-on-pass/", include("outonpass.urls")),
 ]

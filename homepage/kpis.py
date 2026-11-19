@@ -270,6 +270,8 @@ def waiting_for_me(acting_employee, user):
     from leave.permissions import visible_applications_for
     from official_requests.batch import batches_awaiting
     from official_requests.permissions import visible_requests_for
+    from outonpass.gate import missed_waiting_for as missed_waiting
+    from outonpass.routing import waiting_for as waiting_passes
     from schedules.rules import schedules_waiting_for
 
     if acting_employee is None:
@@ -288,5 +290,7 @@ def waiting_for_me(acting_employee, user):
          visible_requests_for(acting_employee).count() + len(batches_awaiting(acting_employee, user)),
          "official_requests:request_queue"),
         ("Duty schedule", len(schedules_waiting_for(acting_employee, user)), "schedules:list"),
+        ("Out-on-Pass", len(waiting_passes(acting_employee)) + len(missed_waiting(acting_employee)),
+         "outonpass:queue"),
     ]
     return [i for i in items if i[1]]

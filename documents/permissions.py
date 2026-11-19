@@ -91,6 +91,11 @@ def can_view_document(acting_employee, document):
     obj = document.content_object
     if obj is None:
         return False
+    # A transaction may set its own narrower rule (Out-on-Pass proof: the
+    # filer, the Supervisor step and the approver only, CLAUDE.md 13B).
+    own_rule = getattr(obj, "may_view_document", None)
+    if callable(own_rule):
+        return own_rule(acting_employee)
     if document.is_confidential:
         return is_owner(acting_employee, obj) or _is_hr(acting_employee) or (
             acting_employee is not None and acting_employee.is_system_administrator()

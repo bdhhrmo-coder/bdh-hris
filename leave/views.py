@@ -12,6 +12,7 @@ from employees.permissions import get_acting_employee
 
 from . import cto_cover
 from .balance_cards import balance_cards
+from .balance_panels import leave_panels
 from .balances import compute_available_balance
 from .csc_form6 import render_pdf as render_csc_form6_pdf
 from .cosp_leave_form import render_pdf as render_cosp_leave_form_pdf
@@ -40,7 +41,7 @@ def _render_form(request, form, acting_employee, application=None):
 
     selected = form["leave_type"].value() or ""
     return render(request, "leave/leave_apply.html", {
-        "form": form, "cards": balance_cards(acting_employee), "selected_type": str(selected),
+        "form": form, "panels": leave_panels(acting_employee), "selected_type": str(selected),
         "type_codes": json.dumps(form.type_codes()), "application": application,
         "is_cosp": acting_employee.employment_status == "COSP",
     })

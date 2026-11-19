@@ -476,6 +476,57 @@ Must include:
 
 ---
 
+## 13B. Out-on-Pass module (owner decisions 2026-11-14; BRANCH `feature/out-on-pass`, merge only after the pilot Go/No-Go)
+
+Rule set: BDH-ADM-AO-01 Rev 0 (effective 2027-01-01) **as revised by the pending DICR (Rev 1)**, slip form BDH-ADM-AO-01F16. The COH must sign Rev 1 before the Dec 18 test. Do not merge to main, and do not change leave, CTO or approval logic, without the owner's say-so.
+
+**Scope**
+- Personal pass only. "Local Official Errand" and F59 stay as they are.
+- 2026 passes are not charged. The Google Sheets tracker covers Jan 1-10, 2027; the HRIS takes over Jan 11, 2027, with a one-off "hours already used Jan 1-10" line per employee.
+- PGSS security personnel get HRIS accounts. Excludes official business and approved leave.
+
+**Gate time and hours**
+- The employee taps **Out** and **In** on a hospital computer; the HRIS time is the official gate time. The guard keeps a name / pass number cross-check log.
+- Hours charged = actual minutes, whole minutes, seconds ignored. **No rounding.**
+- Over 2 hours by not more than 5 minutes: not counted as excess, but the minutes are still charged to the balance.
+- A missed Tap Out/In: confirmed by the supervisor, time verified by the guard on duty, reviewed by HRMO before hours are charged.
+
+**Allowance and limits (the system checks all of them at filing)**
+- Per policy year (Jan 1-Dec 31): permanent 12 h; COSP 1 h per full month of contract, up to 12 h (contracts started before 2027 count from Jan 1, 2027). Non-cumulative, forfeited at year/contract end.
+- Max 2 h per pass; 2 passes a month; never more than 3 a month; 1 pass a day; none in the first or last hour of the shift; max 2 employees of a unit out at once; none during a surge or Code activation.
+- Violation: the system **flags it, does not process the pass and tells the user why**. No filing after the fact.
+- Shift-hour rule: refuse when the duty schedule shows the shift; with no schedule, the supervisor confirms. Surge/Code and coverage: the supervisor confirms.
+
+**Routing**
+- Ordinary pass: Employee -> Supervisor (unit head, else section head; single level) -> AO or COH approves. **No HRMO step.** The AO's own pass goes to the COH. Nobody acts on their own pass. A return needs a remark.
+- Third pass, exception (beyond balance or 2 h) and documented emergency pass: separate request types with a reason; Supervisor endorses, **COH alone decides**; the system marks the type. A third pass needs its proof **attached at filing**; no proof, not processed. HRMO sees these only in the monthly list. No COH, no approval.
+- Time not covered (over 2 h, over balance, unapproved): permanent staff = undertime; COSP and PGSS = hours not rendered, unpaid.
+- Proof documents are confidential: visible only to the filer, supervisor and approver (see section 10).
+- Monthly report to the COH from the HRIS (hours per unit, third passes, exceptions, unapproved absences, low balances).
+
+**Owner decisions 2026-11-14 (after stage 1)**
+- COSP allowance: HR enters each contract period (`CospContractPeriod`); the contract's hours are usable from its first day (Option A).
+- PGSS security personnel are recorded as COSP with "COSP under" = **PGSS (Security)** (Option A); they follow the COSP allowance.
+- Each special type lifts only its own rule (Option A): third pass = the 2-a-month limit; exception = balance and 2-hour limits; emergency = may be filed after the fact. Every other rule still applies.
+- The COH's own pass is **recorded by HR** (`recorded_only`, SUBMITTED -> RECORDED), with Tap Out / Tap In (Option B).
+- Slip Part I reasons: Medical appointment, Legal matter, Government or bank transaction, Family emergency, Personal errand, Other (+ details).
+
+**How it is built (`outonpass/`)**
+- `rules.py`: allowance, balance (opening line + charged minutes + minutes held by live passes) and `check_pass`; numbers in `settings.OUT_ON_PASS_RULES`. `routing.py`: who acts. When the person at the Supervisor step may also approve the pass (AO for a section head's ordinary pass; COH for the AO's own), their action approves it in one step (confirmed by the owner 2026-11-14, Option A). An approved pass has a "Show to guard" card (`/out-on-pass/<id>/guard/`). Rules are re-checked at every step. Proof uses the documents app but its own access rule (`OutOnPass.may_view_document`).
+- Stage 3 (`gate.py`): Tap Out opens `TAP_OUT_EARLY_MINUTES` (15) before the planned time out and closes at the expected time in; an emergency pass records its time out as a missed tap. Tap In charges the pass (`minutes_charged`, `excess_minutes`, `over_balance_minutes`) and sets COMPLETED. Excess / over-balance minutes are recorded and listed, **not** deducted from leave credits (no leave logic changed). Missed tap (`MissedTap`): employee -> Supervisor step (`endorsers_for`; the AO for the COH) confirms -> a guard (PGSS employee) verifies, may correct the time with a remark -> HR reviews; only then is the time recorded and the pass charged. Gate page `/out-on-pass/gate/` (guards, HR, AO, COH): today's passes, missed taps to verify, passes out but not back.
+
+**Owner decisions 2026-11-14 (after stage 3)**
+- **Time not covered** (excess over 2 h beyond the grace, minutes over the balance): recorded on the pass and listed for HR; HR enters it as a **minor attendance correction** (existing path, deducts on HR Administrator approval). No automatic leave deduction (Option A).
+- **No Tap In and no accepted missed Tap In** (Option B): the pass stays open on HR's "out, not back" list; another HR Processor/Administrator closes it by entering the time in with a required remark (`gate.hr_close`, logged as `hr_close`), and it is charged then. Nothing is assumed. An approved pass never tapped out after its expected time in can be marked **not used** by HR with a remark (`hr_not_used`, CANCELLED) so it stops holding the balance.
+- **Guards = PGSS security personnel** (confirmed): any active employee recorded as COSP under PGSS may verify a missed tap.
+
+**Stage 4 (built 2026-11-14)**
+- **Slip printout** (`outonpass/slip.py`, `printouts/assets/f16_base.docx` = the Rev 1 draft layout): BDH-ADM-AO-01F16 filled from the pass, boxes ticked, digital stamps for Filed / Endorsed / Approved (or Recorded by HR), gate times, missed-tap review, minutes charged and excess. "Print slip (01F16)" on every pass page. Swap the base file when the COH signs Rev 1 if the layout changes.
+- **Monthly report** (`outonpass/report.py`, Reports menu; HR, AO, COH; Excel and PDF): hours per unit, third passes / exceptions / emergency passes, time not covered (HR's list for minor attendance corrections), open passes (out not back, never tapped out), low balances (`LOW_BALANCE_MINUTES`, 60), staff with third passes in 3+ months.
+- **Setup** (HR Administration -> Out-on-Pass Setup; HR Administrator only, never their own records): COSP/PGSS contract periods (no overlaps) and the one-off Jan 1-10, 2027 hours (one line per employee per year). Wrong lines are voided with a reason, never edited or deleted. All of it, and every pass and missed-tap action, appears in the Audit Log (module "Out-on-Pass").
+
+---
+
 ## 13A. Future Expansion — Integrated HR and Administrative System (owner decisions 2026-10-17)
 
 Planned after HRIS go-live and a stable period; not in scope yet. One system, one database, one employee list; each module its own Django app reusing roles/OIC, routing, digital stamps, documents, notifications, Audit Log and the menu.

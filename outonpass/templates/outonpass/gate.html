@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% load badges outonpass_tags %}
+{% block title %}Gate — Out-on-Pass — BDH HRIS{% endblock %}
+{% block extra_head %}<meta http-equiv="refresh" content="60">{% endblock %}
+{% block content %}
+<h1>Gate: today's passes</h1>
+<p class="muted">{{ now|date:"l, F j, Y g:i A" }} &middot; refreshes every minute. The official times are the employee's Tap Out and Tap In. Log each name and pass number in the gate logbook.</p>
+
+{% if to_verify %}
+<h2>Missed taps to verify</h2>
+<div class="card"><div class="table-scroll">
+<table>
+  <tr><th>Pass no.</th><th>Employee</th><th>Tap</th><th>Time given</th><th>Reason</th><th>Verify against the gate log</th></tr>
+  {% for m in to_verify %}
+  <tr>
+    <td>{{ m.out_on_pass.pass_number }}</td><td>{{ m.out_on_pass.employee.full_name }}</td>
+    <td>{{ m.get_which_display }}</td><td>{{ m.claimed_at|date:"M d, g:i A" }}</td><td>{{ m.reason }}</td>
+    <td>
+      <form method="post" action="{% url 'outonpass:missed_act' m.pk %}" x-data="{ remark: '' }">{% csrf_token %}
+        <input type="hidden" name="next" value="{% url 'outonpass:gate' %}">
+        <input type="datetime-local" name="verified_at" value="{{ m.claimed_input }}" aria-label="Verified time">
+        <input type="text" name="notes" maxlength="255" x-model="remark" class="remark-input" placeholder="Remark (required if you change the time or reject)">
+        <button type="submit" name="action" value="verify">Verify</button>
+        <button type="submit" name="action" value="reject" :disabled="!remark.trim()">Not in the log</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+</div></div>
+{% endif %}
+
+<div class="card"><div class="table-scroll">
+<table>
+  <tr><th>Pass no.</th><th>Employee</th><th>Unit / Section</th><th>Planned</th><th>Tapped out</th><th>Tapped in</th><th>Now</th></tr>
+  {% for p in passes %}
+  <tr>
+    <td><strong>{{ p.pass_number }}</strong>{% if p.is_special %}<br><small>{{ p.get_kind_display }}</small>{% endif %}</td>
+    <td>{{ p.employee.full_name }}</td>
+    <td>{% for u in p.employee.units.all %}{{ u.name }}{% if not forloop.last %}, {% endif %}{% empty %}{% for s in p.employee.sections.all %}{{ s.name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endfor %}</td>
+    <td>{{ p.time_out|time:"g:i A" }} – {{ p.time_in|time:"g:i A" }}</td>
+    <td>{{ p.tapped_out_at|date:"g:i A"|default:"—" }}</td>
+    <td>{{ p.tapped_in_at|date:"g:i A"|default:"—" }}</td>
+    <td>{% if p.tapped_in_at %}<span class="badge badge-approved">Back</span>{% elif p.tapped_out_at %}<span class="badge badge-pending">Out</span>{% else %}<span class="badge">Not out yet</span>{% endif %}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="7" class="empty-note">No approved passes today.</td></tr>
+  {% endfor %}
+</table>
+</div></div>
+
+{% if not_back %}
+<h2>Out, not back after the expected time (HR: open the pass to close it)</h2>
+<div class="card"><div class="table-scroll">
+<table>
+  <tr><th>Pass no.</th><th>Employee</th><th>Date</th><th>Expected in</th><th>Tapped out</th></tr>
+  {% for p in not_back %}
+  <tr><td><a href="{% url 'outonpass:detail' p.pk %}">{{ p.pass_number }}</a></td><td>{{ p.employee.full_name }}</td>
+      <td>{{ p.pass_date|date:"M d, Y" }}</td><td>{{ p.time_in|time:"g:i A" }}</td><td>{{ p.tapped_out_at|date:"g:i A" }}</td></tr>
+  {% endfor %}
+</table>
+</div></div>
+{% endif %}
+
+{% if unused %}
+<h2>Approved but never tapped out (HR: mark not used)</h2>
+<div class="card"><div class="table-scroll">
+<table>
+  <tr><th>Pass no.</th><th>Employee</th><th>Date</th><th>Planned</th></tr>
+  {% for p in unused %}
+  <tr><td><a href="{% url 'outonpass:detail' p.pk %}">{{ p.pass_number }}</a></td><td>{{ p.employee.full_name }}</td>
+      <td>{{ p.pass_date|date:"M d, Y" }}</td><td>{{ p.time_out|time:"g:i A" }} – {{ p.time_in|time:"g:i A" }}</td></tr>
+  {% endfor %}
+</table>
+</div></div>
+{% endif %}
+{% endblock %}

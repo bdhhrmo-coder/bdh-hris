@@ -33,7 +33,37 @@ ACTION_LABELS = {
     "correct_day_type": "Day type corrected",
     "skip": "Step skipped",
     "cancel": "Cancelled by the filer",
+    "hr_close": "Closed by HR (time in entered)",
+    "hr_not_used": "Marked not used by HR",
+    "tap_out": "Tap Out", "tap_in": "Tap In", "complete": "Charged",
 }
+
+
+def _rows_from_out_on_pass_setup():
+    """Out-on-Pass contract periods and Jan 1-10 opening lines: entered and voided."""
+    from outonpass.models import CospContractPeriod, PassOpeningUsage
+    from outonpass.rules import hm
+
+    rows = []
+    for line in CospContractPeriod.objects.select_related("employee", "entered_by", "voided_by"):
+        what = f"COSP contract {line.start_date:%b %d, %Y} - {line.end_date:%b %d, %Y}"
+        rows.append({"timestamp": line.entered_at, "module": "Out-on-Pass", "action": "Contract period added",
+                     "detail": what, "actor": line.entered_by, "employee_ids": {line.employee_id},
+                     "employee_display": str(line.employee)})
+        if line.voided_at:
+            rows.append({"timestamp": line.voided_at, "module": "Out-on-Pass", "action": "Contract period voided",
+                         "detail": f"{what}: {line.void_reason}", "actor": line.voided_by,
+                         "employee_ids": {line.employee_id}, "employee_display": str(line.employee)})
+    for line in PassOpeningUsage.objects.select_related("employee", "entered_by", "voided_by"):
+        what = f"{hm(line.minutes_used)} used before the HRIS ({line.year}): {line.reason}"
+        rows.append({"timestamp": line.entered_at, "module": "Out-on-Pass", "action": "Opening hours added",
+                     "detail": what, "actor": line.entered_by, "employee_ids": {line.employee_id},
+                     "employee_display": str(line.employee)})
+        if line.voided_at:
+            rows.append({"timestamp": line.voided_at, "module": "Out-on-Pass", "action": "Opening hours voided",
+                         "detail": f"{what} - {line.void_reason}", "actor": line.voided_by,
+                         "employee_ids": {line.employee_id}, "employee_display": str(line.employee)})
+    return rows
 
 
 def _employees_for_object(obj):
@@ -212,6 +242,11 @@ def audit_rows(employee_id=None, module=None, date_from=None, date_to=None):
     rows += _rows_from_announcement_actions()
     rows += _rows_from_schedule_events()
     rows += _rows_from_oic_designations()
+    from outonpass.models import MissedTapAction, OutOnPassAction
+    rows += _rows_from_request_actions(OutOnPassAction.objects.all(), "Out-on-Pass", "out_on_pass")
+    rows += _rows_from_request_actions(MissedTapAction.objects.select_related("missed_tap__out_on_pass__employee"),
+                                       "Out-on-Pass", "missed_tap")
+    rows += _rows_from_out_on_pass_setup()
 
     if employee_id:
         rows = [r for r in rows if employee_id in r["employee_ids"]]
@@ -239,4 +274,5 @@ MODULE_CHOICES = [
     "Announcements",
     "Duty Schedule",
     "OIC Designation",
+    "Out-on-Pass",
 ]

@@ -82,7 +82,7 @@ def build_template():
     _header(ws, cols, {k for k, _, req in employee_import.COLUMNS if req})
     letters = {k: openpyxl.utils.get_column_letter(i) for i, (k, _) in enumerate(cols, start=1)}
     _list_validation(ws, letters["employment_status"], ["Regular", "COSP"])
-    _list_validation(ws, letters["cosp_under"], ["PGP", "LGU"])
+    _list_validation(ws, letters["cosp_under"], ["PGP", "LGU", "PGSS"])
     _list_validation(ws, letters["sex_at_birth"], ["Male", "Female"])
     _list_validation(ws, letters["civil_status"], [label for _, label in Employee.CIVIL_STATUS_CHOICES])
     _list_validation(ws, letters["shift_hours"], ["8", "12"])

@@ -335,9 +335,12 @@ def separation(request):
 
 @login_required
 def my_cto(request):
+    from leave.balance_panels import cto_panel
+
     employee = _employee_or_403(request)
     return render(request, "cto/my_cto.html", {
         "balance": compute_available_cto_balance(employee),
+        "cto_panel": cto_panel(employee),
         "applications": employee.cto_usage_applications.all(),
         "claims": employee.cto_claims.filter(is_opening=False),
         "credit_lines": CTOClaimLine.objects.filter(claim__employee=employee, state=CTOClaimLine.CREDITED),

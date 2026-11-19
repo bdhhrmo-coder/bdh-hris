@@ -79,6 +79,7 @@ def workforce_counts(start_date, end_date, section=None):
         "cosp": cosp.count(),
         "cosp_pgp": cosp.filter(cosp_under=Employee.COSP_UNDER_PGP).count(),
         "cosp_lgu": cosp.filter(cosp_under=Employee.COSP_UNDER_LGU).count(),
+        "cosp_pgss": cosp.filter(cosp_under=Employee.COSP_UNDER_PGSS).count(),
         "cosp_unassigned": cosp.filter(cosp_under="").count(),
     }
 
