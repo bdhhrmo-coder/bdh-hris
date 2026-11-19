@@ -77,6 +77,7 @@ INSTALLED_APPS = [
     "homepage",
     "announcements",
     "schedules",
+    "datechange",
 ]
 
 # CLAUDE.md §13: RA 10173 personnel-record retention period, in years, for a

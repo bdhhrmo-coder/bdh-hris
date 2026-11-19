@@ -193,3 +193,24 @@ def forms_illegal_consecutive_run(employee, start_date, end_date, exclude_applic
         else:
             run = 1
     return False
+
+
+def usage_rule_error(employee, start_date, end_date, number_of_days, exclude_application=None):
+    """The CTO usage rules every use of CTO must pass (one copy, shared by a
+    new CTO application and a date change, Part 2 2026-11-19). Returns
+    (field or None, message) for the first rule broken, or None. The credit
+    itself (effective date, use deadline) is checked by the caller, because a
+    new application picks credit lines while a date change keeps its own.
+    Separating employees: only the last day of service applies."""
+    from .separation import is_separating
+
+    if is_separating(employee):
+        if end_date > employee.last_day_of_service:
+            return ("end_date", f"CTO can only be used up to your last day of service "
+                                f"({employee.last_day_of_service:%B %d, %Y}).")
+        return None
+    if exceeds_monthly_cap(employee, start_date, number_of_days, exclude_application):
+        return (None, "This would exceed the 5-CTO-day-per-month usage cap.")
+    if forms_illegal_consecutive_run(employee, start_date, end_date, exclude_application):
+        return (None, "CTO cannot be taken for 3 or more consecutive days.")
+    return None

@@ -330,6 +330,14 @@ class CTOUsageApplication(models.Model):
     def __str__(self):
         return f"{self.employee} — CTO {self.start_date} to {self.end_date} ({self.status})"
 
+    CANCELLABLE_STATUSES = (SUBMITTED, ENDORSED_BY_UNIT_HEAD, ENDORSED_BY_SUPERVISOR, PROCESSED_BY_HR,
+                            RECOMMENDED_BY_AO, RETURNED)
+
+    def is_cancellable_by_filer(self):
+        """Pending (or returned) only (Part 2, owner 2026-11-19); approved CTO
+        is moved with a date change request, never cancelled."""
+        return self.status in self.CANCELLABLE_STATUSES
+
     def clean(self):
         if self.employee_id and self.employee.has_role("CHIEF_OF_HOSPITAL"):
             raise ValidationError("CTO is not applicable to the Chief of Hospital (CLAUDE.md §7).")

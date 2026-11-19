@@ -17,6 +17,7 @@ Row shape (a plain dict, not a model — nothing here is ever saved):
 """
 
 from cto.models import CTOClaimAction, CTOUsageApplicationAction
+from datechange.models import DateChangeAction
 from documents.models import UploadedDocumentEvent
 from employees.models import EmployeeEditHistory
 from exchange.models import DutyExchangeRequestAction
@@ -31,6 +32,7 @@ ACTION_LABELS = {
     "opening_line_voided": "Opening CTO line voided",
     "correct_day_type": "Day type corrected",
     "skip": "Step skipped",
+    "cancel": "Cancelled by the filer",
 }
 
 
@@ -167,6 +169,24 @@ def _rows_from_oic_designations():
     return rows
 
 
+def _rows_from_date_changes():
+    """Date changes of approved leave/CTO (Part 2, 2026-11-19): every step,
+    with the old and new dates and the justification or remark."""
+    rows = []
+    for row in DateChangeAction.objects.select_related("request__employee", "acted_by"):
+        r = row.request
+        detail = f"#{r.pk} {r.what}: {r.old_dates_label} -> {r.new_dates_label}"
+        if row.action == "submit":
+            detail += f" - justification: {r.justification}"
+        elif row.notes:
+            detail += f" - {row.notes}"
+        rows.append({
+            "timestamp": row.acted_at, "module": "Date Change", "action": row.label, "detail": detail,
+            "actor": row.acted_by, "employee_ids": {r.employee_id}, "employee_display": str(r.employee),
+        })
+    return rows
+
+
 def audit_rows(employee_id=None, module=None, date_from=None, date_to=None):
     """
     Merged, filtered, newest-first list of audit rows across all
@@ -178,6 +198,7 @@ def audit_rows(employee_id=None, module=None, date_from=None, date_to=None):
     rows += _rows_from_employee_edit_history(EmployeeEditHistory.objects.all())
     rows += _rows_from_request_actions(LeaveApplicationAction.objects.all(), "Leave", "application")
     rows += _rows_from_request_actions(CTOUsageApplicationAction.objects.all(), "CTO", "application")
+    rows += _rows_from_date_changes()
     rows += _rows_from_request_actions(CTOClaimAction.objects.all(), "CTO Claim", "claim")
     rows += _rows_from_request_actions(DutyExchangeRequestAction.objects.all(), "Exchange of Duty", "request")
     rows += _rows_from_request_actions(

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Request date change — BDH HRIS{% endblock %}
+{% block content %}
+<p><a href="{% if kind == 'leave' %}{% url 'leave:leave_detail' target.pk %}{% else %}{% url 'cto:cto_detail' target.pk %}{% endif %}">&larr; Back to the request</a></p>
+<h1>Request date change</h1>
+<p class="help">Your approved dates stay in force until this change is approved. The number of days does not change,
+and your balance does not change. If the change is returned or rejected, the approved dates stay.</p>
+<div class="card form-card">
+  <form method="post">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="msg error" role="alert">{% for e in form.non_field_errors %}{{ e }}<br>{% endfor %}</div>{% endif %}
+    <table class="detail-table compare-dates">
+      <tr><th></th><th>Approved dates (now)</th><th>New dates</th></tr>
+      <tr><th>Request</th><td colspan="2">{% if kind == 'leave' %}{{ target.leave_type.name }}{% else %}CTO{% endif %} &middot; {{ target.number_of_days|floatformat:"-2" }} day(s)</td></tr>
+      <tr><th>Start</th><td>{{ target.start_date|date:"D, M d, Y" }}</td>
+          <td>{{ form.new_start_date }}{{ form.new_start_date.errors }}</td></tr>
+      <tr><th>End</th><td>{{ target.end_date|date:"D, M d, Y" }}</td>
+          <td>{{ form.new_end_date }}{{ form.new_end_date.errors }}</td></tr>
+    </table>
+    <p><label for="{{ form.justification.id_for_label }}">{{ form.justification.label }} (required)</label>
+      {{ form.justification }}{{ form.justification.errors }}</p>
+    <p class="help">It follows the same approval route as the original request.</p>
+    <button type="submit">Submit date change</button>
+  </form>
+</div>
+{% endblock %}

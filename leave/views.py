@@ -106,13 +106,48 @@ def leave_edit(request, pk):
 
 
 @login_required
+def leave_cancel(request, pk):
+    """The filer cancels their own application while it is still pending
+    (Part 2, owner 2026-11-19). Days already taken (regular leave after HR
+    recorded it) are given back; logged as "cancel"."""
+    acting_employee = get_acting_employee(request.user)
+    application = get_object_or_404(LeaveApplication, pk=pk)
+    if request.method != "POST":
+        return redirect("leave:leave_detail", pk=pk)
+    if acting_employee is None or application.employee_id != acting_employee.pk:
+        raise PermissionDenied("Only the employee who filed this application can cancel it.")
+    if not application.is_cancellable_by_filer():
+        messages.error(request, "Only a pending application can be cancelled. To move an approved leave, "
+                                "use Request date change.")
+        return redirect("leave:leave_detail", pk=pk)
+    notes = request.POST.get("notes", "").strip()[:255]
+    application.status = LeaveApplication.CANCELLED
+    application.save(update_fields=["status", "updated_at"])
+    _restore_credits(application, request.user, "cancelled by the employee")
+    LeaveApplicationAction.objects.create(application=application, action="cancel",
+                                          resulting_status=application.status, notes=notes, acted_by=request.user)
+    messages.success(request, "Leave application cancelled.")
+    return redirect("leave:leave_detail", pk=pk)
+
+
+@login_required
 def leave_detail(request, pk):
     acting_employee = get_acting_employee(request.user)
     application = get_object_or_404(LeaveApplication.objects.select_related("employee", "leave_type"), pk=pk)
     if not can_view_application(acting_employee, application):
         raise PermissionDenied("You are not authorized to view this application.")
+    from datechange.rules import change_requests_for, date_change_block
+    from django.utils import timezone
+
+    own = acting_employee is not None and application.employee_id == acting_employee.pk
+    changes = change_requests_for(application)
+    applied = next((c for c in changes if c.status == "APPLIED"), None)
     return render(request, "leave/leave_detail.html", {
         "a": application,
+        "can_cancel": own and application.is_cancellable_by_filer(),
+        "change_block": date_change_block(acting_employee, application, timezone.localdate()) if own else "-",
+        "changes": changes,
+        "show_capitol_note": own and applied is not None and not application.is_cosp_route,
         "history": application.actions.select_related("acted_by__employee"),
         "can_edit": acting_employee is not None and application.employee_id == acting_employee.pk
         and application.is_editable_by_filer(),
@@ -137,7 +172,10 @@ def leave_queue(request):
     )  # oldest first: first filed, first acted on (owner, 2026-10-06)
     at_capitol = capitol_applications_for(acting_employee).select_related("employee", "leave_type").order_by(
         "submitted_at", "pk")
-    return render(request, "leave/leave_queue.html", {"applications": applications, "at_capitol": at_capitol})
+    from datechange.rules import waiting_for
+
+    return render(request, "leave/leave_queue.html", {"applications": applications, "at_capitol": at_capitol,
+                                                      "date_changes": waiting_for(acting_employee, "LEAVE")})
 
 
 def _finalize_success(application, actor_user):

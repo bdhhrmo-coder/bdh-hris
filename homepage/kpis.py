@@ -274,9 +274,13 @@ def waiting_for_me(acting_employee, user):
 
     if acting_employee is None:
         return []
+    from datechange.rules import waiting_for as date_changes_waiting
+
     items = [
-        ("Leave", visible_applications_for(acting_employee).count(), "leave:leave_queue"),
-        ("CTO", visible_cto_applications_for(acting_employee).count(), "cto:cto_queue"),
+        ("Leave", visible_applications_for(acting_employee).count()
+         + len(date_changes_waiting(acting_employee, "LEAVE")), "leave:leave_queue"),
+        ("CTO", visible_cto_applications_for(acting_employee).count()
+         + len(date_changes_waiting(acting_employee, "CTO")), "cto:cto_queue"),
         ("Exchange of Duty", visible_exchange_requests_for(acting_employee).count(), "exchange:exchange_queue"),
         ("Attendance correction", visible_correction_requests_for(acting_employee).count(),
          "attendance:correction_queue"),

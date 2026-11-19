@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% load badges %}
+{% block title %}Date change request — BDH HRIS{% endblock %}
+{% block content %}
+<p><a href="{% url target_url c.target.pk %}">&larr; Open the original request</a></p>
+<div class="split-row spread">
+  <h1>Date change: {{ c.what }}</h1>
+  {% status_badge c.status c.status_label %}
+</div>
+<div class="card form-card">
+  <table class="detail-table compare-dates">
+    <tr><th>Employee</th><td colspan="2">{{ c.employee.full_name }} ({{ c.employee.employee_id }})</td></tr>
+    <tr><th></th><th>Approved dates</th><th>Requested new dates</th></tr>
+    <tr><th>Dates</th><td>{{ c.old_dates_label }}</td><td><strong>{{ c.new_dates_label }}</strong></td></tr>
+    <tr><th>Number of days</th><td colspan="2">{{ c.number_of_days|floatformat:"-2" }} (unchanged)</td></tr>
+    <tr><th>Justification</th><td colspan="2">{{ c.justification|linebreaksbr }}</td></tr>
+    <tr><th>Filed</th><td colspan="2">{{ c.submitted_at|date:"M d, Y g:i A" }}</td></tr>
+  </table>
+  {% if c.is_open %}<p class="help">While this is pending, the approved dates stay in force.
+    Check the new dates against the duty schedule: the number of days must still fit.</p>{% endif %}
+  {% if c.status == "APPLIED" and c.regular_leave %}
+  <p class="msg info">The new dates are in force inside BDH. Print the updated CSC Form No. 6 and send it to the Provincial Capitol as usual.</p>
+  {% endif %}
+  {% if step %}
+  <form method="post" action="{% url 'datechange:action' c.pk %}" x-data="{ remark: '' }">
+    {% csrf_token %}
+    <input type="text" name="notes" maxlength="255" x-model="remark" class="remark-input" placeholder="Remark (required to return or reject)" aria-label="Remark">
+    <button type="submit" name="action" value="{{ step.0 }}">{% if step.0 == "endorse" or step.0 == "endorse_unit" %}Endorse{% elif step.0 == "process" %}Process (HR){% elif step.0 == "recommend" %}Recommend{% elif step.0 == "recommend_capitol" %}Recommend (new dates take effect){% else %}Approve (new dates take effect){% endif %}</button>
+    <button type="submit" name="action" value="return" class="btn-secondary" :disabled="!remark.trim()">Return</button>
+    {% if can_reject %}<button type="submit" name="action" value="reject" :disabled="!remark.trim()">Reject</button>{% endif %}
+  </form>
+  {% endif %}
+</div>
+<h2>History</h2>
+<div class="card"><div class="table-scroll">
+<table>
+  <tr><th>When</th><th>Action</th><th>By</th><th>Remarks</th></tr>
+  {% for h in history %}
+  <tr><td>{{ h.acted_at|date:"M d, Y g:i A" }}</td><td>{{ h.label }}</td>
+      <td>{{ h.acted_by.employee.full_name|default:h.acted_by.username }}</td><td>{{ h.notes|default:"—" }}</td></tr>
+  {% endfor %}
+</table>
+</div></div>
+{% endblock %}

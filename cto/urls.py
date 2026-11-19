@@ -15,6 +15,8 @@ urlpatterns = [
     path("mine/", views.my_cto, name="my_cto"),
     path("apply/", views.cto_apply, name="cto_apply"),
     path("queue/", views.cto_queue, name="cto_queue"),
+    path("<int:pk>/", views.cto_detail, name="cto_detail"),
+    path("<int:pk>/cancel/", views.cto_cancel, name="cto_cancel"),
     path("<int:pk>/action/", views.cto_action, name="cto_action"),
     path("<int:pk>/print/", views.print_cto_form, name="print_cto_form"),
 ]

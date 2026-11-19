@@ -18,7 +18,7 @@
   <tr><th>Dates</th><th>Days</th><th>Reason</th><th>Status</th><th>Submitted</th><th>Form</th></tr>
   {% for a in applications %}
   <tr>
-    <td>{{ a.start_date }} to {{ a.end_date }}</td>
+    <td><a href="{% url 'cto:cto_detail' a.pk %}">{{ a.start_date }} to {{ a.end_date }}</a></td>
     <td>{{ a.number_of_days }}</td>
     <td>{{ a.reason }}</td>
     <td>{% status_badge a.status a.get_status_display %}</td>

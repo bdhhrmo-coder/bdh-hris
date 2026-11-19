@@ -53,6 +53,7 @@ urlpatterns = [
     path("employees/", include("employees.urls")),
     path("leave/", include("leave.urls")),
     path("cto/", include("cto.urls")),
+    path("date-changes/", include("datechange.urls")),
     path("exchange/", include("exchange.urls")),
     path("attendance/", include("attendance.urls")),
     path("official-requests/", include("official_requests.urls")),

@@ -355,6 +355,16 @@ class LeaveApplication(models.Model):
         return "; ".join(f"{label}: {value}" for label, value in self.details_6b()
                          if label not in ("Sick Leave", "Special Leave Benefits for Women"))
 
+    # Still inside BDH's chain: the filer may cancel it (Part 2, owner
+    # 2026-11-19). Once the chain is complete (approved / for Capitol
+    # approval / recorded) the dates are changed through a date change
+    # request instead; it is never cancelled.
+    CANCELLABLE_STATUSES = (SUBMITTED, ENDORSED_BY_UNIT_HEAD, ENDORSED_BY_SUPERVISOR, PROCESSED_BY_HR,
+                            RECOMMENDED_BY_AO, RETURNED)
+
+    def is_cancellable_by_filer(self):
+        return self.status in self.CANCELLABLE_STATUSES
+
     def is_editable_by_filer(self):
         """The filer may correct the application before anyone acts on it,
         or after it is returned (Batch 8)."""
@@ -387,7 +397,7 @@ class LeaveApplicationAction(models.Model):
         "process": "Processed by HR", "record": "Recorded and verified by HR (credits deducted)",
         "recommend": "Recommended by AO", "review": "Reviewed and endorsed by AO",
         "approve": "Approved by COH", "recommend_capitol": "Recommended for approval by COH (for Capitol approval)",
-        "return": "Returned", "reject": "Rejected",
+        "return": "Returned", "reject": "Rejected", "cancel": "Cancelled by the employee",
         "capitol_return": "Returned by the Capitol (recorded by HR)",
         "capitol_reject": "Rejected by the Capitol (recorded by HR)",
     }

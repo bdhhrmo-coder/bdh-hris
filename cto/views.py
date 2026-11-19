@@ -15,10 +15,9 @@ from printouts.http import pdf_response
 from . import routing
 from .balances import (
     compute_available_cto_balance,
-    exceeds_monthly_cap,
     filing_deadline_for,
-    forms_illegal_consecutive_run,
     plan_allocation,
+    usage_rule_error,
 )
 from .claims import (
     add_line,
@@ -367,15 +366,10 @@ def cto_apply(request):
                 # both pass the balance/cap checks and hold the same credit.
                 Employee.objects.select_for_update().get(pk=employee.pk)
                 employee.refresh_from_db()  # separation status as of now
-                separating = is_separating(employee)
                 plan = plan_allocation(employee, days, today, end)
-                if separating and end > employee.last_day_of_service:
-                    form.add_error("end_date", f"CTO can only be used up to your last day of service "
-                                               f"({employee.last_day_of_service:%B %d, %Y}).")
-                elif not separating and exceeds_monthly_cap(employee, start, days):
-                    form.add_error(None, "This would exceed the 5-CTO-day-per-month usage cap.")
-                elif not separating and forms_illegal_consecutive_run(employee, start, end):
-                    form.add_error(None, "CTO cannot be taken for 3 or more consecutive days.")
+                rule_error = usage_rule_error(employee, start, end, days)
+                if rule_error:
+                    form.add_error(*rule_error)
                 elif plan is None:
                     form.add_error(None, "Not enough CTO credit can be used on these dates. Credit counts from its "
                                          "effective date and must be used by its use deadline (normally Dec 15).")
@@ -403,6 +397,8 @@ def cto_apply(request):
 
 @login_required
 def cto_queue(request):
+    from datechange.rules import waiting_for as date_changes_waiting
+
     employee = get_acting_employee(request.user)
     pending_claims = [
         c for c in CTOClaim.objects.filter(status=RoutedRecord.PENDING).select_related("employee")
@@ -415,6 +411,7 @@ def cto_queue(request):
         "can_file_exception": can_file_exception(employee),
         "can_enter_opening": can_enter_opening(employee),
         "can_set_separation": can_set_separation(employee),
+        "date_changes": date_changes_waiting(employee, "CTO"),
     })
 
 
@@ -478,6 +475,53 @@ def cto_action(request, pk):
     notify_status_change(application)
     messages.success(request, "Action recorded.")
     return redirect("cto:cto_queue")
+
+
+@login_required
+def cto_detail(request, pk):
+    """One CTO application: details, history, print, cancel (pending) or
+    request a date change (approved) - Part 2, owner 2026-11-19."""
+    from datechange.rules import change_requests_for, date_change_block
+
+    acting_employee = get_acting_employee(request.user)
+    application = get_object_or_404(CTOUsageApplication.objects.select_related("employee"), pk=pk)
+    if not can_view_cto_application(acting_employee, application):
+        raise PermissionDenied("You are not authorized to view this CTO application.")
+    own = acting_employee is not None and acting_employee.pk == application.employee_id
+    return render(request, "cto/cto_detail.html", {
+        "a": application,
+        "history": application.actions.select_related("acted_by__employee"),
+        "allocations": application.allocations.select_related("line"),
+        "own": own,
+        "can_cancel": own and application.is_cancellable_by_filer(),
+        "change_block": date_change_block(acting_employee, application, timezone.localdate()) if own else "-",
+        "changes": change_requests_for(application),
+    })
+
+
+@login_required
+def cto_cancel(request, pk):
+    """The filer cancels their own pending CTO application; the credit held
+    for it is released (Part 2, owner 2026-11-19)."""
+    employee = _employee_or_403(request)
+    application = get_object_or_404(CTOUsageApplication, pk=pk)
+    if request.method != "POST":
+        return redirect("cto:cto_detail", pk=pk)
+    if application.employee_id != employee.pk:
+        raise PermissionDenied("Only the employee who filed this application can cancel it.")
+    if not application.is_cancellable_by_filer():
+        messages.error(request, "Only a pending CTO application can be cancelled. To move approved CTO, "
+                                "use Request date change.")
+        return redirect("cto:cto_detail", pk=pk)
+    with transaction.atomic():
+        application.allocations.all().delete()  # release the held credit
+        application.status = CTOUsageApplication.CANCELLED
+        application.save(update_fields=["status", "updated_at"])
+        CTOUsageApplicationAction.objects.create(
+            application=application, action="cancel", resulting_status=application.status,
+            notes=request.POST.get("notes", "").strip()[:255], acted_by=request.user)
+    messages.success(request, "CTO application cancelled. The CTO days are back in your balance.")
+    return redirect("cto:cto_detail", pk=pk)
 
 
 @login_required
