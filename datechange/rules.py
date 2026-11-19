@@ -69,6 +69,8 @@ def date_change_block(acting_employee, target, today):
     None if they can. Used for the button and checked again on filing."""
     if acting_employee is None or acting_employee.pk != target.employee_id:
         return "Only the employee who filed it can ask to change its dates."
+    if isinstance(target, CTOUsageApplication) and target.cosp_leave_id:
+        return "These CTO days are part of a COSP leave. Ask to change the dates of the leave instead."
     if not is_approved(target):
         return ("Only an approved request can have its dates changed. A pending request is cancelled and "
                 "filed again instead.")
@@ -124,6 +126,7 @@ def new_dates_error(target, new_start, new_end, today, exclude_change=None):
     cto_qs = employee.cto_usage_applications.exclude(status__in=_DEAD_CTO)
     if isinstance(target, LeaveApplication):
         leave_qs = leave_qs.exclude(pk=target.pk)
+        cto_qs = cto_qs.exclude(cosp_leave=target)  # its own CTO days (Part 3)
     else:
         cto_qs = cto_qs.exclude(pk=target.pk)
     for other in leave_qs:
@@ -141,7 +144,29 @@ def new_dates_error(target, new_start, new_end, today, exclude_change=None):
 
     if isinstance(target, CTOUsageApplication):
         return _cto_error(target, new_start, new_end)
+    cover = cover_for(target)
+    if cover is not None:  # Part 3: the CTO days move with the leave and keep the same split
+        cto_start, cto_end = shifted_cover(target, cover, new_start)
+        if cto_start < new_start or cto_end > new_end:
+            return ("The days charged to CTO would fall outside the new dates. Choose dates that keep the same "
+                    "pattern, or cancel and file a new application.")
+        error = _cto_error(cover, cto_start, cto_end)
+        if error:
+            return f"CTO days ({cto_start:%b %d} to {cto_end:%b %d, %Y}): {error}"
     return None
+
+
+def cover_for(leave):
+    from leave.cto_cover import cover_of
+
+    return cover_of(leave)
+
+
+def shifted_cover(leave, cover, new_start):
+    """The CTO days keep their place within the leave: moved by the same
+    number of days as the leave's start (Part 3)."""
+    offset = new_start - leave.start_date
+    return cover.start_date + offset, cover.end_date + offset
 
 
 def _cto_error(application, new_start, new_end):

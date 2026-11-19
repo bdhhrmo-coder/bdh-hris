@@ -17,6 +17,7 @@
     <tr><th>{% if forloop.first %}6.B {% endif %}{{ label }}</th><td>{{ value }}</td></tr>
     {% endfor %}
     <tr><th>6.C Working days</th><td>{{ a.number_of_days|floatformat:"-2" }}</td></tr>
+    {% if cto_split %}<tr><th>Charged to</th><td>{{ cto_split }}</td></tr>{% endif %}
     <tr><th>Inclusive dates</th><td>{{ a.dates_label }}</td></tr>
     {% if not a.is_cosp_route %}<tr><th>6.D Commutation</th><td>{{ a.get_commutation_display }}</td></tr>{% endif %}
     {% if a.justification %}<tr><th>Justification</th><td>{{ a.justification|linebreaksbr }}</td></tr>{% endif %}

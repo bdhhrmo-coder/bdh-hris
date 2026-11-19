@@ -422,6 +422,8 @@ def cto_action(request, pk):
     Returning, rejecting or cancelling releases the hold."""
     acting_employee = _employee_or_403(request)
     application = get_object_or_404(CTOUsageApplication, pk=pk)
+    if application.cosp_leave_id:  # Part 3: follows its COSP leave, never routed on its own
+        raise PermissionDenied("These CTO days are part of a COSP leave; act on the leave application.")
     action = request.POST.get("action")
     notes = request.POST.get("notes", "").strip()
 
@@ -487,6 +489,8 @@ def cto_detail(request, pk):
     application = get_object_or_404(CTOUsageApplication.objects.select_related("employee"), pk=pk)
     if not can_view_cto_application(acting_employee, application):
         raise PermissionDenied("You are not authorized to view this CTO application.")
+    if application.cosp_leave_id:  # Part 3: these CTO days belong to a COSP leave
+        return redirect("leave:leave_detail", pk=application.cosp_leave_id)
     own = acting_employee is not None and acting_employee.pk == application.employee_id
     return render(request, "cto/cto_detail.html", {
         "a": application,
@@ -533,6 +537,8 @@ def print_cto_form(request, pk):
     application = get_object_or_404(CTOUsageApplication, pk=pk)
     if not can_view_cto_application(acting_employee, application):
         raise PermissionDenied("You are not authorized to view this CTO application.")
+    if application.cosp_leave_id:  # printed as part of the COSP leave form
+        return redirect("leave:leave_detail", pk=application.cosp_leave_id)
     return pdf_response(
         request, lambda: render_pdf(application, printed_by=request.user),
         f"CTO-Application_{application.employee.surname}_{application.pk}.pdf", "cto:my_cto",

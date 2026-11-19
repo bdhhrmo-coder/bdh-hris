@@ -365,6 +365,16 @@ class LeaveApplication(models.Model):
     def is_cancellable_by_filer(self):
         return self.status in self.CANCELLABLE_STATUSES
 
+    @property
+    def cto_days_charged(self):
+        """Days of this COSP leave charged to CTO (Part 3), or None."""
+        from django.core.exceptions import ObjectDoesNotExist
+
+        try:
+            return self.cto_cover.number_of_days
+        except ObjectDoesNotExist:
+            return None
+
     def is_editable_by_filer(self):
         """The filer may correct the application before anyone acts on it,
         or after it is returned (Batch 8)."""

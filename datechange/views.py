@@ -14,7 +14,8 @@ from leave.permissions import RETURN_NEEDS_REMARK, can_view_application
 from .forms import DateChangeForm
 from .models import DateChangeAction, DateChangeRequest as DC
 from .notifications import notify_change
-from .rules import date_change_block, final_check, kind_of, may_reject, new_dates_error, next_step
+from .rules import (cover_for, date_change_block, final_check, kind_of, may_reject, new_dates_error, next_step,
+                    shifted_cover)
 
 
 def _target(kind, pk):
@@ -131,6 +132,10 @@ def change_action(request, pk):
                 messages.error(request, error)
                 return redirect("datechange:detail", pk=pk)
             # Same record, new dates: days, credits taken and CTO credit held stay as they are.
+            cover = cover_for(target) if change.kind == DC.KIND_LEAVE else None
+            if cover is not None:  # Part 3: the CTO days move with the leave, same split, same credit held
+                cover.start_date, cover.end_date = shifted_cover(target, cover, change.new_start_date)
+                cover.save(update_fields=["start_date", "end_date", "updated_at"])
             target.start_date, target.end_date = change.new_start_date, change.new_end_date
             target.save(update_fields=["start_date", "end_date", "updated_at"])
         change.status = new_status

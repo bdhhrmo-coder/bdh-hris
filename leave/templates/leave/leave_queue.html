@@ -11,7 +11,7 @@
     <td><a href="{% url 'leave:leave_detail' a.pk %}">{{ a.employee.full_name }}</a></td>
     <td><strong>{{ a.leave_type.name }}</strong>{% with d=a.queue_details %}{% if d %}<br><small>{{ d }}</small>{% endif %}{% endwith %}</td>
     <td>{{ a.dates_label }}</td>
-    <td>{{ a.number_of_days }}</td>
+    <td>{{ a.number_of_days }}{% if a.cto_days_charged %} <span class="muted">({{ a.cto_days_charged|floatformat:"-2" }} charged to CTO)</span>{% endif %}</td>
     <td>{% status_badge a.status a.status_label %}</td>
     <td>
       {% print_wait a as wait %}

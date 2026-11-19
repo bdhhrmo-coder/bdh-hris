@@ -5,10 +5,12 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
+from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 
 from employees.permissions import get_acting_employee
 
+from . import cto_cover
 from .balance_cards import balance_cards
 from .balances import compute_available_balance
 from .csc_form6 import render_pdf as render_csc_form6_pdf
@@ -55,20 +57,43 @@ def leave_apply(request):
         if form.is_valid():
             application = form.save(commit=False)
             application.employee = acting_employee
-            application.save()
-            LeaveApplicationAction.objects.create(
-                application=application,
-                action="submit",
-                resulting_status=application.status,
-                acted_by=request.user,
-            )
-            notify_status_change(application)
-            messages.success(request, "Leave application submitted.")
-            return redirect("leave:my_applications")
+            if _save_with_cto(request, form, application, "submit"):
+                notify_status_change(application)
+                messages.success(request, "Leave application submitted.")
+                return redirect("leave:my_applications")
     else:
         form = LeaveApplicationForm(employee=acting_employee)
 
     return _render_form(request, form, acting_employee)
+
+
+def _save_with_cto(request, form, application, action):
+    """Saves the application and, for a COSP employee, the days charged to
+    CTO (Part 3, leave/cto_cover.py) in one transaction. Returns False (and
+    saves nothing) when the CTO days or a balance fail; the error is on the form."""
+    employee = application.employee
+    from employees.models import Employee
+
+    with transaction.atomic():
+        Employee.objects.select_for_update().get(pk=employee.pk)  # one filing at a time per employee
+        application.save()
+        if form.cleaned_data.get("use_cto"):
+            d = form.cleaned_data
+            error, plan = cto_cover.check_and_plan(
+                employee, application, application.leave_type, application.number_of_days,
+                application.start_date, d["cto_days"], d["cto_start_date"], d["cto_end_date"])
+            if error:
+                form.add_error("cto_days", error)
+                transaction.set_rollback(True)
+                return False
+            cto_cover.attach(application, d["cto_days"], d["cto_start_date"], d["cto_end_date"], plan)
+        else:
+            cto_cover.detach(application)
+        LeaveApplicationAction.objects.create(
+            application=application, action=action, resulting_status=application.status, acted_by=request.user,
+            notes=cto_cover.split_note(application) if form.offers_cto else "",
+        )
+    return True
 
 
 @login_required
@@ -91,15 +116,12 @@ def leave_edit(request, pk):
             was_returned = application.status == LeaveApplication.RETURNED
             application = form.save(commit=False)
             application.status = LeaveApplication.SUBMITTED
-            application.save()
-            LeaveApplicationAction.objects.create(
-                application=application, action="resubmit" if was_returned else "edit",
-                resulting_status=application.status, acted_by=request.user,
-            )
-            if was_returned:
-                notify_status_change(application)
-            messages.success(request, "Leave application resubmitted." if was_returned else "Leave application updated.")
-            return redirect("leave:leave_detail", pk=application.pk)
+            if _save_with_cto(request, form, application, "resubmit" if was_returned else "edit"):
+                if was_returned:
+                    notify_status_change(application)
+                messages.success(request, "Leave application resubmitted." if was_returned else "Leave application updated.")
+                return redirect("leave:leave_detail", pk=application.pk)
+            application.refresh_from_db()
     else:
         form = LeaveApplicationForm(instance=application, employee=acting_employee)
     return _render_form(request, form, acting_employee, application)
@@ -124,6 +146,7 @@ def leave_cancel(request, pk):
     application.status = LeaveApplication.CANCELLED
     application.save(update_fields=["status", "updated_at"])
     _restore_credits(application, request.user, "cancelled by the employee")
+    cto_cover.follow_leave(application)  # CTO days back to the balance (Part 3)
     LeaveApplicationAction.objects.create(application=application, action="cancel",
                                           resulting_status=application.status, notes=notes, acted_by=request.user)
     messages.success(request, "Leave application cancelled.")
@@ -147,6 +170,7 @@ def leave_detail(request, pk):
         "can_cancel": own and application.is_cancellable_by_filer(),
         "change_block": date_change_block(acting_employee, application, timezone.localdate()) if own else "-",
         "changes": changes,
+        "cto_split": cto_cover.split_note(application) if cto_cover.cover_of(application) else "",
         "show_capitol_note": own and applied is not None and not application.is_cosp_route,
         "history": application.actions.select_related("acted_by__employee"),
         "can_edit": acting_employee is not None and application.employee_id == acting_employee.pk
@@ -188,20 +212,21 @@ def _finalize_success(application, actor_user):
     Returns an error string if the balance check fails, else None.
     """
     leave_type = application.leave_type
-    if leave_type.balance_tracking != LeaveType.TRACKING_UNTRACKED:
+    days = cto_cover.leave_credit_days(application)  # days charged to CTO are not leave credits (Part 3)
+    if leave_type.balance_tracking != LeaveType.TRACKING_UNTRACKED and days > 0:
         # Monetization / terminal leave has no inclusive dates: use the filing date.
         as_of = application.start_date or application.submitted_at.date()
         available = compute_available_balance(application.employee, leave_type, as_of_date=as_of)
-        if available is not None and application.number_of_days > available:
+        if available is not None and days > available:
             return (
                 f"Insufficient {leave_type.name} balance: {available} day(s) available, "
-                f"{application.number_of_days} requested."
+                f"{days} requested."
             )
         LeaveCreditTransaction.objects.create(
             employee=application.employee,
             leave_type=leave_type,
             transaction_type=LeaveCreditTransaction.USED,
-            days=-application.number_of_days,
+            days=-days,
             transaction_date=as_of,
             leave_application=application,
             created_by=actor_user,
@@ -267,6 +292,7 @@ def leave_action(request, pk):
         )
         if new_status in (A.RETURNED, A.REJECTED):
             _restore_credits(application, request.user, f"{action_name.replace('_', ' ')} - {notes}")
+        cto_cover.follow_leave(application)  # CTO days approved with the leave, or released (Part 3)
         notify_status_change(application)
 
     def stop(action_name):
@@ -330,6 +356,15 @@ def leave_action(request, pk):
             allowed = True
             apply_transition(A.FOR_CAPITOL_APPROVAL, "recommend_capitol")
         elif not regular and action == "approve":
+            cto_problem = cto_cover.error_at_approval(application)
+            if cto_problem:
+                # Part 3: the CTO credit is no longer good - returned with the reason.
+                allowed = True
+                notes = (f"Returned automatically at approval: {cto_problem}. Correct the CTO days "
+                         f"(or charge them to leave credits) and resubmit.")[:255]
+                apply_transition(A.RETURNED, "return")
+                messages.warning(request, f"Not approved: {cto_problem}. The application was returned to the employee.")
+                return done()
             error = _finalize_success(application, request.user)
             if error is None:
                 allowed = True

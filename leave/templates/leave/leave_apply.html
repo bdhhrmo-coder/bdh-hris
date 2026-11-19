@@ -76,6 +76,21 @@
       {% include "leave/_field.html" with f=form.end_date %}
     </div>
     {% include "leave/_field.html" with f=form.number_of_days required=True %}
+    {% if form.offers_cto %}{# Part 3: COSP employees may charge some days to CTO #}
+    <div class="field-block" x-data="{ useCto: {{ form.use_cto.value|yesno:'true,false' }} }">
+      <label class="field-title"><input type="checkbox" name="use_cto" x-model="useCto" {% if form.use_cto.value %}checked{% endif %}> {{ form.use_cto.label }}</label>
+      <p class="field-help">Optional. By default every day is charged to your leave credits.
+        The CTO rules apply to the CTO days only: at most 5 CTO days a month, not 3 or more days in a row, and only
+        credit that is already usable (see your CTO balance above).</p>
+      {% for e in form.use_cto.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+      <div class="form-2col m-0" x-show="useCto" x-cloak>
+        {% include "leave/_field.html" with f=form.cto_days %}
+        <div></div>
+        {% include "leave/_field.html" with f=form.cto_start_date help="First date charged to CTO (inside the leave dates)." %}
+        {% include "leave/_field.html" with f=form.cto_end_date help="Last date charged to CTO." %}
+      </div>
+    </div>
+    {% endif %}
     {% if not is_cosp %}{# COSP employees' leave is not on CSC Form 6: no commutation #}
     <div x-show="code && code !== 'COSP_LEAVE'" x-cloak>
       {% include "leave/_field.html" with f=form.commutation radios=True %}

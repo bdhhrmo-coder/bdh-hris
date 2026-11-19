@@ -53,31 +53,31 @@ def visible_cto_applications_for(acting_employee):
     qs = CTOUsageApplication.objects.none()
 
     if is_hr(acting_employee):
-        qs = qs | CTOUsageApplication.objects.filter(status=CTOUsageApplication.ENDORSED_BY_SUPERVISOR)
+        qs = qs | CTOUsageApplication.standalone().filter(status=CTOUsageApplication.ENDORSED_BY_SUPERVISOR)
 
     ao_ids = [
-        app.pk for app in CTOUsageApplication.objects.filter(status=CTOUsageApplication.PROCESSED_BY_HR)
+        app.pk for app in CTOUsageApplication.standalone().filter(status=CTOUsageApplication.PROCESSED_BY_HR)
         .select_related("employee") if can_act_ao_step(acting_employee, [app.employee])
     ]
-    qs = qs | CTOUsageApplication.objects.filter(pk__in=ao_ids)
+    qs = qs | CTOUsageApplication.standalone().filter(pk__in=ao_ids)
 
     if is_chief_of_hospital(acting_employee):
-        qs = qs | CTOUsageApplication.objects.filter(status=CTOUsageApplication.RECOMMENDED_BY_AO)
+        qs = qs | CTOUsageApplication.standalone().filter(status=CTOUsageApplication.RECOMMENDED_BY_AO)
 
-    supervisor_candidates = CTOUsageApplication.objects.filter(
+    supervisor_candidates = CTOUsageApplication.standalone().filter(
         status=CTOUsageApplication.SUBMITTED
     ).select_related("employee")
     supervisor_ids = [
         app.pk for app in supervisor_candidates if can_endorse(acting_employee, [app.employee])
     ]
-    qs = qs | CTOUsageApplication.objects.filter(pk__in=supervisor_ids)
+    qs = qs | CTOUsageApplication.standalone().filter(pk__in=supervisor_ids)
 
     # Second endorsement (section head), after the unit head - 2026-10-27.
     second_ids = [
-        app.pk for app in CTOUsageApplication.objects.filter(status=CTOUsageApplication.ENDORSED_BY_UNIT_HEAD)
+        app.pk for app in CTOUsageApplication.standalone().filter(status=CTOUsageApplication.ENDORSED_BY_UNIT_HEAD)
         .select_related("employee") if can_endorse_second(acting_employee, [app.employee])
     ]
-    qs = qs | CTOUsageApplication.objects.filter(pk__in=second_ids)
+    qs = qs | CTOUsageApplication.standalone().filter(pk__in=second_ids)
 
     # Never one's own application, at any step (owner decision 2026-10-26),
     # and never at the HR step after endorsing it (2026-11-03).
