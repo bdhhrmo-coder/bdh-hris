@@ -29,6 +29,7 @@ from leave.pdf_convert import docx_to_pdf
 from printouts.stamps import actor_name, actor_position
 
 from .models import OfficialRequest
+from .vehicles import AMBULANCE, SERVICE_VEHICLE, VEHICLE_CHOICES  # noqa: F401 (used by the printout and older imports)
 
 BASE = Path(settings.BASE_DIR) / "printouts" / "assets" / "f59_base.docx"
 FONT = "Arial Narrow"
@@ -37,9 +38,6 @@ STAMP = Pt(7)
 BLUE = RGBColor(0x17, 0x3D, 0x72)
 W14 = "http://schemas.microsoft.com/office/word/2010/wordml"
 
-AMBULANCE = "Ambulance"
-SERVICE_VEHICLE = "Service Vehicle"
-VEHICLE_CHOICES = [("", "None (walking / own means)"), (AMBULANCE, AMBULANCE), (SERVICE_VEHICLE, SERVICE_VEHICLE)]
 
 
 def printable(status):
