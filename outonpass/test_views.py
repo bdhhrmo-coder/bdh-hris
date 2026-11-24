@@ -18,6 +18,20 @@ from orgstructure.models import Section, Unit
 
 from .models import OutOnPass as P
 
+
+# These tests exercise the module itself, so it is switched on regardless of
+# the start date (outonpass/availability.py, 2026-11-24).
+_IN_USE = override_settings(OUT_ON_PASS_START_DATE=None)
+
+
+def setUpModule():
+    _IN_USE.enable()
+
+
+def tearDownModule():
+    _IN_USE.disable()
+
+
 MEDIA = tempfile.mkdtemp()
 
 

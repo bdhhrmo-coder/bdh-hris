@@ -43,7 +43,7 @@ MENU = [
         ("Exchange of Duty", "exchange:my_exchanges", "repeat", "all"),
         ("Attendance", "attendance:my_attendance", "fingerprint", "all"),
         ("Official Business / Errand / OT", "official_requests:my_requests", "briefcase", "all"),
-        ("Out-on-Pass", "outonpass:mine", "door-open", "has_employee"),
+        ("Out-on-Pass", "outonpass:mine", "door-open", "oop_mine"),
         ("File for a Group", "official_requests:batch_file", "users-round", "can_file_batch"),
         ("My Schedule", "schedules:mine", "calendar-days", "all"),
         ("My Profile", "employees:my_profile_edit_request", "user-round", "has_employee"),
@@ -54,7 +54,7 @@ MENU = [
         ("Exchange of Duty", "exchange:exchange_queue", "repeat", "approver"),
         ("Attendance Correction", "attendance:correction_queue", "fingerprint", "correction_validator"),
         ("Official Business / Errand / OT", "official_requests:request_queue", "briefcase", "approver"),
-        ("Out-on-Pass", "outonpass:queue", "door-open", "approver"),
+        ("Out-on-Pass", "outonpass:queue", "door-open", "oop_approver"),
         ("Profile Changes", "employees:profile_edit_request_queue", "clipboard-check", "can_review_profile_requests"),
         ("Officer-in-Charge (OIC)", "oic_home", "calendar-clock", "can_designate_oic"),
         ("CTO Year-end Carry-over", "cto:carry_over", "calendar-days", "approver"),
@@ -63,11 +63,11 @@ MENU = [
         ("Employees", "employees:employee_list", "user-round", "can_list_employees"),
         ("Duty Schedules", "schedules:list", "calendar-range", "can_view_schedules"),
         ("Approved Exchanges of Duty", "exchange:approved_exchanges", "repeat", "can_view_schedules"),
-        ("Gate: Out-on-Pass", "outonpass:gate", "door-open", "can_view_gate"),
+        ("Gate: Out-on-Pass", "outonpass:gate", "door-open", "oop_gate"),
     ]),
     ("reports", "Reports", "chart-column", [
         ("Dashboard", "dashboard:dashboard_home", "chart-column", "can_view_dashboard"),
-        ("Out-on-Pass Monthly Report", "outonpass:report", "door-open", "can_view_oop_report"),
+        ("Out-on-Pass Monthly Report", "outonpass:report", "door-open", "oop_report"),
         ("Audit Log", "auditlog:audit_log", "shield-check", "can_view_audit_log"),
     ]),
     ("admin", "HR Administration", "settings", [
@@ -120,6 +120,13 @@ def _flags(request, acting):
     from outonpass.views import _can_view_report
     f["can_view_oop_report"] = _can_view_report(acting)
     f["is_hr_admin"] = acting is not None and acting.has_role(RoleAssignment.HR_ADMINISTRATOR)
+    # Out-on-Pass items wait for the start date (outonpass/availability.py); Setup does not.
+    from outonpass.availability import in_use as oop_in_use
+    oop = oop_in_use()
+    f["oop_mine"] = oop and f["has_employee"]
+    f["oop_approver"] = oop and f["approver"]
+    f["oop_gate"] = oop and f["can_view_gate"]
+    f["oop_report"] = oop and f["can_view_oop_report"]
     f["all"] = True
     return f
 

@@ -266,6 +266,12 @@ CSRF_FAILURE_VIEW = "accounts.views.csrf_failure"
 # the month BEFORE the schedule month; HR can change it per schedule.
 SCHEDULE_CUTOFF_DAY = 20
 
+# Out-on-Pass start date (owner decision 2026-11-24, Option B): before it the
+# module's menu items are hidden and its pages say "not yet in use"; Setup stays
+# open for HR Administrators. YYYY-MM-DD; blank = in use now.
+_oop_start = os.environ.get("BDH_HRIS_OUT_ON_PASS_START", "2027-01-11").strip()
+OUT_ON_PASS_START_DATE = date.fromisoformat(_oop_start) if _oop_start else None
+
 # Out-on-Pass (CLAUDE.md 13B; BDH-ADM-AO-01 Rev 1, pending). Policy numbers
 # kept here, not in code. Minutes unless the name says hours.
 OUT_ON_PASS_RULES = {
