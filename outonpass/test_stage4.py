@@ -3,7 +3,7 @@
 from datetime import date, datetime, time
 
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -14,6 +14,19 @@ from orgstructure.models import Section
 from . import report, rules
 from .models import CospContractPeriod, OutOnPass as P, OutOnPassAction, PassOpeningUsage
 from .slip import build_document
+
+
+# These tests exercise the module itself, so it is switched on regardless of
+# the start date (outonpass/availability.py, 2026-11-24).
+_IN_USE = override_settings(OUT_ON_PASS_START_DATE=None)
+
+
+def setUpModule():
+    _IN_USE.enable()
+
+
+def tearDownModule():
+    _IN_USE.disable()
 
 DAY = date(2027, 2, 3)
 

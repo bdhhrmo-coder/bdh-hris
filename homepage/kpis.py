@@ -293,4 +293,7 @@ def waiting_for_me(acting_employee, user):
         ("Out-on-Pass", len(waiting_passes(acting_employee)) + len(missed_waiting(acting_employee)),
          "outonpass:queue"),
     ]
+    from outonpass.availability import in_use as oop_in_use
+    if not oop_in_use():  # before the Out-on-Pass start date (2026-11-24)
+        items = [i for i in items if i[2] != "outonpass:queue"]
     return [i for i in items if i[1]]

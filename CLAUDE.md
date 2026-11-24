@@ -480,6 +480,8 @@ Must include:
 
 Rule set: BDH-ADM-AO-01 Rev 0 (effective 2027-01-01) **as revised by the pending DICR (Rev 1)**, slip form BDH-ADM-AO-01F16. The COH must sign Rev 1 before the Dec 18 test. Do not merge to main, and do not change leave, CTO or approval logic, without the owner's say-so.
 
+**Start date (owner decision 2026-11-24, Option B; merged to main the same day):** the module is on main ahead of the policy, so until `OUT_ON_PASS_START_DATE` (env `BDH_HRIS_OUT_ON_PASS_START`, default **2027-01-11**, the day the HRIS takes over from the Google Sheets tracker; blank = in use) its menu items and the Out-on-Pass waiting count are hidden and every page shows "not yet in use" (`outonpass/availability.py`, `in_use_required` in `urls.py`). Only HR Administration → Out-on-Pass Setup stays open, so HR can enter COSP/PGSS contract periods ahead of time. No data is changed. The module's own tests switch it on (`setUpModule`).
+
 **Scope**
 - Personal pass only. "Local Official Errand" and F59 stay as they are.
 - 2026 passes are not charged. The Google Sheets tracker covers Jan 1-10, 2027; the HRIS takes over Jan 11, 2027, with a one-off "hours already used Jan 1-10" line per employee.

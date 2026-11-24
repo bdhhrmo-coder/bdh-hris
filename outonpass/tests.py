@@ -3,7 +3,7 @@
 from datetime import date, datetime, time, timedelta
 
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from accounts.models import RoleAssignment
@@ -13,6 +13,19 @@ from schedules.models import DutySchedule, ScheduleCell, ScheduleRow, ShiftCode
 
 from . import rules
 from .models import CospContractPeriod, OutOnPass as P, PassOpeningUsage
+
+
+# These tests exercise the module itself, so it is switched on regardless of
+# the start date (outonpass/availability.py, 2026-11-24).
+_IN_USE = override_settings(OUT_ON_PASS_START_DATE=None)
+
+
+def setUpModule():
+    _IN_USE.enable()
+
+
+def tearDownModule():
+    _IN_USE.disable()
 
 # A fixed "now": Monday Feb 1, 2027, 7:00 AM. Passes below are later that day or later in Feb.
 NOW = timezone.make_aware(datetime(2027, 2, 1, 7, 0))
