@@ -2,6 +2,7 @@ from django import forms
 from django.utils import timezone
 
 from .models import OfficialRequest
+from .vehicles import VEHICLE_CHOICES
 
 
 class OfficialRequestForm(forms.ModelForm):
@@ -42,8 +43,6 @@ class OfficialRequestForm(forms.ModelForm):
     vehicle = forms.ChoiceField(label="Type of transport", required=False, choices=[])
 
     def __init__(self, *args, acting_employee=None, **kwargs):
-        from .f59 import VEHICLE_CHOICES
-
         super().__init__(*args, **kwargs)
         self.fields["vehicle"].choices = VEHICLE_CHOICES
         if self.instance.pk and self.instance.request_type == OfficialRequest.TRAVEL:
@@ -114,8 +113,6 @@ class BatchForm(forms.Form):
 
     def __init__(self, *args, acting_employee=None, batch=None, line_initial=None, **kwargs):
         from . import batch as batch_rules
-
-        from .f59 import VEHICLE_CHOICES
 
         super().__init__(*args, **kwargs)
         self.fields["vehicle"].choices = VEHICLE_CHOICES
