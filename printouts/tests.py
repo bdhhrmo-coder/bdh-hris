@@ -110,7 +110,7 @@ class PrintViewTests(TestCase):
                                               end_date=date(2026, 10, 12), number_of_days=Decimal("1"))
         LeaveApplicationAction.objects.create(application=app, action="submit", resulting_status="SUBMITTED",
                                               acted_by=self.emp.user)
-        r = self.get(self.emp.user, reverse("leave:print_cosp_leave_form", args=[app.pk]))
+        r = self.get(self.hr.user, reverse("leave:print_cosp_leave_form", args=[app.pk]))
         self.assertEqual(r.status_code, 200)
         text = self.captured_sheet_text()
         self.assertIn("BDH-ADM-HR-01F04-A", text)

@@ -4,12 +4,7 @@
 {% block content %}
 <h1>My CTO</h1>
 
-<div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 220px));">
-  <div class="kpi-tile accent-teal">
-    <div class="kpi-value">{{ balance }}</div>
-    <div class="kpi-label">Available CTO balance (days)</div>
-  </div>
-</div>
+{% if cto_panel %}{% include "components/balance_summary.html" with bal=cto_panel %}{% endif %}
 
 <p><a href="{% url 'cto:cto_apply' %}" class="btn">+ New CTO application</a></p>
 
@@ -18,12 +13,21 @@
   <tr><th>Dates</th><th>Days</th><th>Reason</th><th>Status</th><th>Submitted</th><th>Form</th></tr>
   {% for a in applications %}
   <tr>
-    <td>{{ a.start_date }} to {{ a.end_date }}</td>
+    {% if a.cosp_leave_id %}
+    <td><a href="{% url 'leave:leave_detail' a.cosp_leave_id %}">{{ a.start_date }} to {{ a.end_date }}</a></td>
+    <td>{{ a.number_of_days }}</td>
+    <td>Part of a COSP leave (see the leave)</td>
+    <td>{% status_badge a.status a.get_status_display %}</td>
+    <td>{{ a.submitted_at|date:"Y-m-d" }}</td>
+    <td>—</td>
+    {% else %}
+    <td><a href="{% url 'cto:cto_detail' a.pk %}">{{ a.start_date }} to {{ a.end_date }}</a></td>
     <td>{{ a.number_of_days }}</td>
     <td>{{ a.reason }}</td>
     <td>{% status_badge a.status a.get_status_display %}</td>
     <td>{{ a.submitted_at|date:"Y-m-d" }}</td>
     <td><a href="{% url 'cto:print_cto_form' a.pk %}" target="_blank">Print</a></td>
+    {% endif %}
   </tr>
   {% empty %}
   <tr><td colspan="6" class="empty-note">No CTO applications yet.</td></tr>

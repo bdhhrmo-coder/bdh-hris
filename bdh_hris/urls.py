@@ -21,7 +21,7 @@ from django.contrib.auth.decorators import login_required
 from django.urls import include, path
 from django.views.generic import RedirectView
 
-from accounts import oic
+from accounts import oic, oic_hr
 from accounts.views import BDHLoginView, BDHPasswordChangeView, home
 
 def favicon(request):
@@ -50,9 +50,12 @@ urlpatterns = [
     # Batch 7: Officer-in-Charge screen (accounts/oic.py)
     path("oic/", oic.oic_home, name="oic_home"),
     path("oic/<int:pk>/end/", oic.oic_end, name="oic_end"),
+    path("oic/hr/", oic_hr.oic_hr_home, name="oic_hr_home"),
+    path("oic/<int:pk>/instruction/", oic_hr.oic_instruction, name="oic_instruction"),
     path("employees/", include("employees.urls")),
     path("leave/", include("leave.urls")),
     path("cto/", include("cto.urls")),
+    path("date-changes/", include("datechange.urls")),
     path("exchange/", include("exchange.urls")),
     path("attendance/", include("attendance.urls")),
     path("official-requests/", include("official_requests.urls")),
@@ -65,4 +68,5 @@ urlpatterns = [
     path("data-import/", include("dataimport.urls")),
     path("announcements/", include("announcements.urls")),
     path("schedules/", include("schedules.urls")),
+    path("out-on-pass/", include("outonpass.urls")),
 ]

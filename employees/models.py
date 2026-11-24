@@ -91,12 +91,17 @@ class Employee(models.Model):
     # Who funds a COSP contract (dashboard, 2026-10-06). Blank for regular staff.
     COSP_UNDER_PGP = "PGP"
     COSP_UNDER_LGU = "LGU"
+    # PGSS security personnel are recorded as COSP (owner decision 2026-11-14,
+    # Option A): they follow the COSP Out-on-Pass allowance; this marks them
+    # so the slip and the monthly report can show "PGSS (Security)".
+    COSP_UNDER_PGSS = "PGSS"
     COSP_UNDER_CHOICES = [
         (COSP_UNDER_PGP, "PGP (Provincial Government of Palawan)"),
         (COSP_UNDER_LGU, "LGU (Local Government Unit)"),
+        (COSP_UNDER_PGSS, "PGSS (Security)"),
     ]
     cosp_under = models.CharField(
-        "COSP under", max_length=3, choices=COSP_UNDER_CHOICES, blank=True,
+        "COSP under", max_length=5, choices=COSP_UNDER_CHOICES, blank=True,
         help_text="For COSP employees only: whether the contract is under the PGP or the LGU.",
     )
     date_of_appointment = models.DateField(null=True, blank=True)

@@ -43,7 +43,7 @@ def leave_counts(start_date, end_date, section=None):
 
 
 def cto_counts(start_date, end_date, section=None):
-    qs = CTOUsageApplication.objects.filter(submitted_at__date__range=(start_date, end_date))
+    qs = CTOUsageApplication.standalone().filter(submitted_at__date__range=(start_date, end_date))
     if section:
         qs = qs.filter(employee__sections=section).distinct()
     return _bucket(
@@ -130,7 +130,7 @@ def on_leave_today(section=None, today=None):
 
 def on_cto_today(section=None, today=None):
     today = today or date.today()
-    qs = CTOUsageApplication.objects.filter(
+    qs = CTOUsageApplication.standalone().filter(
         status=CTOUsageApplication.APPROVED, start_date__lte=today, end_date__gte=today
     )
     if section:

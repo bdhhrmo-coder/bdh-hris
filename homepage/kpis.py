@@ -74,7 +74,7 @@ def involved_requests(acting_employee, user):
 
     out["Leave"] = ids(visible_applications_for(me)) | ids(LeaveApplication.objects.filter(
         Q(actions__acted_by=user) | Q(employee=me)))
-    out["CTO"] = ids(visible_cto_applications_for(me)) | ids(CTOUsageApplication.objects.filter(
+    out["CTO"] = ids(visible_cto_applications_for(me)) | ids(CTOUsageApplication.standalone().filter(
         Q(actions__acted_by=user) | Q(employee=me)))
     out["Exchange of Duty"] = ids(visible_exchange_requests_for(me)) | ids(DutyExchangeRequest.objects.filter(
         Q(actions__acted_by=user) | Q(employee_a=me) | Q(employee_b=me)))
@@ -128,7 +128,7 @@ def absent_today(today=None, ids=None, with_type=False):
     rows = OrderedDict()
     leave = _limit(LeaveApplication.objects.filter(LeaveApplication.counted_q(), start_date__lte=today, end_date__gte=today),
                    ids).select_related("employee", "leave_type")
-    cto = _limit(CTOUsageApplication.objects.filter(status=CTOUsageApplication.APPROVED, start_date__lte=today,
+    cto = _limit(CTOUsageApplication.standalone().filter(status=CTOUsageApplication.APPROVED, start_date__lte=today,
                                                     end_date__gte=today), ids).select_related("employee")
     for app in leave:
         label = app.leave_type.name if with_type else "Leave"
@@ -181,7 +181,7 @@ def on_leave_this_month(today=None, ids=None, with_type=False):
 def on_cto_this_month(today=None, ids=None):
     """Approved CTO with any day in the current month."""
     first, last = _month_bounds(today)
-    qs = _limit(CTOUsageApplication.objects.filter(status=CTOUsageApplication.APPROVED, start_date__lte=last,
+    qs = _limit(CTOUsageApplication.standalone().filter(status=CTOUsageApplication.APPROVED, start_date__lte=last,
                                                    end_date__gte=first), ids).select_related("employee").order_by(
         "start_date")
     return _month_rows(qs, lambda a: "CTO")
@@ -199,7 +199,7 @@ def pending_leave_cto(ids=None, with_type=False, only=None):
     for app in leave.select_related("employee", "leave_type"):
         rows.append({"employee": app.employee, "what": [app.leave_type.name if with_type else "Leave"],
                      "dates": [(app.start_date, app.end_date)], "status": app.get_status_display()})
-    cto = _limit(CTOUsageApplication.objects.exclude(status__in=list(CTOUsageApplication.TERMINAL_STATUSES)
+    cto = _limit(CTOUsageApplication.standalone().exclude(status__in=list(CTOUsageApplication.TERMINAL_STATUSES)
                                                      + [CTOUsageApplication.RETURNED]), ids)
     if only is not None:
         cto = cto.filter(pk__in=only["CTO"])
@@ -217,7 +217,7 @@ def _pending_querysets():
     return [
         ("Leave", LeaveApplication.objects.exclude(
             status__in=list(LeaveApplication.TERMINAL_STATUSES) + [LeaveApplication.RETURNED]), "employee_id"),
-        ("CTO", CTOUsageApplication.objects.exclude(
+        ("CTO", CTOUsageApplication.standalone().exclude(
             status__in=list(CTOUsageApplication.TERMINAL_STATUSES) + [CTOUsageApplication.RETURNED]), "employee_id"),
         ("Exchange of Duty", DutyExchangeRequest.objects.exclude(
             status__in=list(DutyExchangeRequest.DEAD_STATUSES) + [DutyExchangeRequest.APPROVED,
@@ -270,13 +270,19 @@ def waiting_for_me(acting_employee, user):
     from leave.permissions import visible_applications_for
     from official_requests.batch import batches_awaiting
     from official_requests.permissions import visible_requests_for
+    from outonpass.gate import missed_waiting_for as missed_waiting
+    from outonpass.routing import waiting_for as waiting_passes
     from schedules.rules import schedules_waiting_for
 
     if acting_employee is None:
         return []
+    from datechange.rules import waiting_for as date_changes_waiting
+
     items = [
-        ("Leave", visible_applications_for(acting_employee).count(), "leave:leave_queue"),
-        ("CTO", visible_cto_applications_for(acting_employee).count(), "cto:cto_queue"),
+        ("Leave", visible_applications_for(acting_employee).count()
+         + len(date_changes_waiting(acting_employee, "LEAVE")), "leave:leave_queue"),
+        ("CTO", visible_cto_applications_for(acting_employee).count()
+         + len(date_changes_waiting(acting_employee, "CTO")), "cto:cto_queue"),
         ("Exchange of Duty", visible_exchange_requests_for(acting_employee).count(), "exchange:exchange_queue"),
         ("Attendance correction", visible_correction_requests_for(acting_employee).count(),
          "attendance:correction_queue"),
@@ -284,5 +290,7 @@ def waiting_for_me(acting_employee, user):
          visible_requests_for(acting_employee).count() + len(batches_awaiting(acting_employee, user)),
          "official_requests:request_queue"),
         ("Duty schedule", len(schedules_waiting_for(acting_employee, user)), "schedules:list"),
+        ("Out-on-Pass", len(waiting_passes(acting_employee)) + len(missed_waiting(acting_employee)),
+         "outonpass:queue"),
     ]
     return [i for i in items if i[1]]

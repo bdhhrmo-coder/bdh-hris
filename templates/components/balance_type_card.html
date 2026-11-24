@@ -1,0 +1,16 @@
+{% comment %}One balance per leave type, in the standard balance-summary look
+(templates/components/balance_summary.html). `t`: name, value, state ok|low|out|neutral,
+sub, segments [{kind, pct, label}], rows [(label, value)], type_id.{% endcomment %}
+<div class="bal-card bal-type bal-type-{{ t.state }}"{% if t.type_id %} :class="{ 'is-selected': sel === '{{ t.type_id }}' }"{% endif %}>
+  <div class="bal-label">{{ t.name }}</div>
+  <div class="bal-type-value">{{ t.value }}</div>
+  <div class="bal-sub">{% if t.state != "neutral" %}Available  ·  {% endif %}{{ t.sub }}</div>
+  {% if t.segments %}
+  <div class="bal-bar" role="img" aria-label="{% for s in t.segments %}{{ s.label }} {{ s.pct }}%{% if not forloop.last %}, {% endif %}{% endfor %}">
+    {% for s in t.segments %}{% if s.pct %}<span class="bal-seg bal-seg-{{ s.kind }}" style="width: {{ s.pct }}%"></span>{% endif %}{% endfor %}
+  </div>
+  {% endif %}
+  <dl class="bal-rows">
+    {% for label, value in t.rows %}<div><dt>{{ label }}</dt><dd>{{ value }}</dd></div>{% endfor %}
+  </dl>
+</div>

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load badges documents_tags %}
+{% load badges documents_tags leave_print %}
 {% block title %}Leave application — BDH HRIS{% endblock %}
 {% block content %}
 {% if a.employee.user_id == request.user.pk %}<p><a href="{% url 'leave:my_applications' %}">&larr; My leave applications</a></p>
@@ -17,20 +17,35 @@
     <tr><th>{% if forloop.first %}6.B {% endif %}{{ label }}</th><td>{{ value }}</td></tr>
     {% endfor %}
     <tr><th>6.C Working days</th><td>{{ a.number_of_days|floatformat:"-2" }}</td></tr>
+    {% if cto_split %}<tr><th>Charged to</th><td>{{ cto_split }}</td></tr>{% endif %}
     <tr><th>Inclusive dates</th><td>{{ a.dates_label }}</td></tr>
     {% if not a.is_cosp_route %}<tr><th>6.D Commutation</th><td>{{ a.get_commutation_display }}</td></tr>{% endif %}
     {% if a.justification %}<tr><th>Justification</th><td>{{ a.justification|linebreaksbr }}</td></tr>{% endif %}
     <tr><th>Approval</th><td>{{ a.get_route_display }}</td></tr>
   </table>
   <p class="row-actions">
-    {% if a.is_cosp_route %}
+    {% print_wait a as wait %}
+    {% if wait %}
+      <button type="button" class="btn btn-secondary" disabled title="{{ wait }}">{% if a.is_cosp_route %}Print COSP Leave Form{% else %}Print CSC Form 6{% endif %}</button>
+      <span class="print-wait">{{ wait }}</span>
+    {% elif a.is_cosp_route %}
       <a class="btn btn-secondary" href="{% url 'leave:print_cosp_leave_form' a.pk %}" target="_blank">Print COSP Leave Form</a>
     {% else %}
       <a class="btn btn-secondary" href="{% url 'leave:print_csc_form6' a.pk %}" target="_blank">Print CSC Form 6</a>
     {% endif %}
     <a class="btn btn-secondary" href="{% documents_url a %}">Documents</a>
     {% if can_edit %}<a class="btn" href="{% url 'leave:leave_edit' a.pk %}">{% if a.status == "RETURNED" %}Edit and resubmit{% else %}Edit{% endif %}</a>{% endif %}
+    {% if not change_block %}<a class="btn" href="{% url 'datechange:new' 'leave' a.pk %}">Request date change</a>{% endif %}
   </p>
+  {% if can_cancel %}
+  <form method="post" action="{% url 'leave:leave_cancel' a.pk %}" class="row-actions"
+        onsubmit="return confirm('Cancel this leave application? This cannot be undone. You can file a new one.');">
+    {% csrf_token %}
+    <button type="submit" class="btn-secondary">Cancel this application</button>
+    <span class="help">While it is pending you may cancel it and file a new one.</span>
+  </form>
+  {% endif %}
+  {% if show_capitol_note %}<p class="msg info">The dates of this leave were changed. Print the updated CSC Form No. 6 and send it to the Provincial Capitol as usual.</p>{% endif %}
   {% if can_record_capitol %}
   <form method="post" action="{% url 'leave:leave_action' a.pk %}" x-data="{ remark: '' }" class="capitol-box">
     {% csrf_token %}<input type="hidden" name="next" value="detail">
@@ -42,6 +57,7 @@
   </form>
   {% endif %}
 </div>
+{% include "datechange/_changes_card.html" %}
 <h2>History</h2>
 <div class="card"><div class="table-scroll">
 <table>

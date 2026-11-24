@@ -60,7 +60,11 @@ Implemented as a **custom `Role` model tied to Employee** (not Django's built-in
 
 **COSP OIC (owner decision 2026-11-03, dry-run item 11):** a COSP employee may also be designated OIC, with limited reach: only for a **Supervisor area at unit level, or of a section that has no units**, and only if they belong to that unit/section (`accounts/oic.py cosp_may_cover`). Never for the Chief Nurse (the section head above unit heads, found by structure, not by name), the AO or the COH. Regular employees still need an active Supervisor role to be OIC.
 
-**OIC coverage:** Ad-hoc delegation triggered by the Supervisor themself (not pre-scheduled by HR Admin). One Supervisor can be designated OIC across multiple sections.
+**OIC coverage:** Ad-hoc delegation triggered by the Supervisor themself (not pre-scheduled by HR Admin; the one exception is the HR Administrator designation below).
+
+**HR Administrator designates an OIC (owner decision 2026-11-16, Option B; branch `oic-hr-admin-designation`):** when an approver (Supervisor, AO or COH) cannot designate one themself, an HR Administrator may do it on their behalf on **HR Administration → OIC for an Approver** (`/oic/hr/`, `accounts/oic_hr.py`). A **reason** and a **written instruction** (PDF/JPG/PNG, max 10 MB, content-checked) are required; the same OIC eligibility rules apply; the approver and the OIC are notified; the Audit Log shows "designate (by HR)" with the HR Administrator, reason and that an instruction is attached (`designated_by_hr`, `designation_reason`, `instruction`). The instruction file opens only for HR Administrators, the AO, the COH, the approver and the OIC. The HR Administrator can end an HR-made OIC; the approver can too. The HR Administrator uses their own OIC screen for their own roles. The **System Administrator cannot** designate or end any OIC. One Supervisor can be designated OIC across multiple sections.
+
+**One OIC for several approver roles (owner decision 2026-11-16, Option A):** one person may be OIC for the AO and the COH at the same time (for example the Chief Nurse, as the next in rank, during a short absence of both), and for several areas. No code limit; keep it that way. Known effects: a person cannot act on a request they filed, so their own requests wait at the AO/COH steps until another AO/COH or OIC is available; one person may act at several steps of the same request. Recommended: a written Office Order or memo naming the OIC for both functions.
 
 **OIC rules (settled 2026-10-13, Batch 7):** the approver (Supervisor, AO or COH) designates the OIC on the **Officer-in-Charge (OIC)** screen (`/oic/`, `accounts/oic.py`), for one of their own role areas. Only an employee who already holds an active Supervisor role can be OIC (or a COSP employee, within the limits above). The OIC acts only between the start and end dates (every role assignment's dates are honoured, `RoleAssignment.in_force_q`). While the OIC is in force, the delegator's own assignment for that role and area is set aside (`Employee.active_role_assignments`), so the absent approver cannot act there and is not notified for it. The absent approver keeps **view-only** access to that area (records, printouts, documents, schedules, homepage figures, Dashboard, Audit Log) — view checks pass `viewing=True` (`has_role`, `is_hr`/`is_administrative_officer`/`is_chief_of_hospital`, `is_supervisor_of`); action checks and queues never do (owner, 2026-10-13). "End now" cancels an upcoming OIC or ends a running one yesterday; nothing is deleted. Designations and early endings appear in the Audit Log (module "OIC Designation").
 
@@ -193,12 +197,12 @@ Implemented as a **custom `Role` model tied to Employee** (not Django's built-in
 - **Credits:** taken when HR records and verifies (regular) or when the COH approves (COSP). **Given back automatically** (a ledger adjustment, nothing deleted) on any return or rejection after they were taken, inside BDH or by the Capitol (`_restore_credits`). A resubmission takes them again at the HR step.
 - Absences, balances and Dashboard "used" figures count leave whose days are taken: `LeaveApplication.counted_q()` (approved, older recorded, for Capitol approval, or regular leave from the HR step on).
 - **COH's own regular leave** (no level above): HR records and verifies it and it goes straight to For Capitol approval (assumption, matching the COH's other requests; confirm with the owner if needed).
-- Printing: regular leave prints CSC Form No. 6 at any time from submission (no BDH code, no digital stamps); COSP route prints 01F04-A (title and credits follow the leave type).
+- Printing: regular leave prints CSC Form No. 6 (no BDH code, no digital stamps); COSP route prints 01F04-A (title and credits follow the leave type). **Print timing (owner decision 2026-11-18, pilot issue 2; replaces "printable once the internal chain is complete (2026-11-18)", Nursing included):** the person who filed the application (whatever other roles they hold) can print only when every internal step is complete: COSP route = COH approved; Regular route = COH recommended ("For Capitol approval"; the Capitol's decision is not needed). Older RECORDED records stay printable. Before that, the button shows "Available once all internal approvals are complete."; returned, rejected or cancelled requests cannot be printed; a resubmission starts over. Enforced in the print views (`leave/permissions.py print_wait_reason`), so the direct link is blocked too. HR, AO, COH and Supervisors printing other people's applications are unchanged. Only these two leave print views are affected (CTO, Exchange, Attendance, Travel/OB and Schedule forms have their own views).
 - `RECORDED` (HR only) is the old regular path, kept for records filed before 2026-11-03.
 
 ### 6.3 Output Forms
 - COSP employees' leave (COSP Leave, Wellness, Emergency): custom BDH-branded form, **Form No. BDH-ADM-HR-01F04-A**
-- Regular employees' leave: CSC Form No. 6 layout — official CSC form, left as is (no BDH code, no digital stamp, because regular leave is approved at the Capitol); printable from submission
+- Regular employees' leave: CSC Form No. 6 layout — official CSC form, left as is (no BDH code, no digital stamp, because regular leave is approved at the Capitol); printable once the internal chain is complete (2026-11-18)
 - CTO application: **BDH-ADM-HR-01F04-B**
 - Exchange of Duty application: **BDH-ADM-HR-01F04-C**
 - Attendance Correction (formal): Missed Log Justification Form **BDH-ADM-AO-01F10, Revision 2**
@@ -213,6 +217,23 @@ Implemented as a **custom `Role` model tied to Employee** (not Django's built-in
 - The HRIS is meant to be paperless; printing is incidental, on request.
 - BDH forms (01F04-A/B/C, F10) print a **"digitally processed/approved" stamp** for each routing step — the person's name, position, date and time from the request's action log — **instead of signature lines**. Steps not yet reached print as PENDING; a returned/rejected request prints a red banner with the remarks.
 - Whether these stamps are accepted in place of wet signatures by the Capitol, COA or CSC is a BDH policy matter (e.g. an Office Order), not something the system decides.
+
+### 6.3.2 Date change of approved leave or CTO; cancelling a pending one (owner decisions 2026-11-19, Part 2; branch `date-change-approved-leave-cto`, not merged)
+- **Date change** (`datechange` app): the employee, on the detail page of their **own approved** request ("Request date change"): COSP leave approved by the COH; regular leave once the COH has recommended it (For Capitol approval, or older Recorded); CTO approved by the COH. Only **before the first original date**; one open change per request; new dates must be in the future; a **required justification**.
+- Checks (`datechange/rules.py`): the **number of days never changes** (dates too short for it are refused; approvers check the schedule, since there is no holiday calendar — owner choice, Option A); the new dates stay in the **same year** (and for COSP Leave the same contract year — owner choice); **no overlap** with the employee's other pending/approved leave or CTO or other open date changes; CTO also passes `cto.balances.usage_rule_error` (the same code a new CTO application uses: 5 days a month, no 3+ consecutive days, last day of service) and stays within the **effective date and use deadline of the credit it already holds** (never extended). Everything is checked again before the last step.
+- Route: the **same as the original** (`next_step`, built on `leave.permissions`): Supervisor (unit head then section head where two-level applies) → HR → AO → COH approves (COSP leave, CTO) or recommends (regular leave); the COH's own regular leave: HR only. HR may not reject a regular leave's change. Return/reject need a remark; the original dates stay; the employee may ask again.
+- When the last step acts, the **same record takes the new dates** (`start_date`/`end_date`); days, ledger lines and CTO credit held are untouched, so the balance never moves. Printouts read the record, so they show the new dates only after approval; layouts unchanged. Regular leave: the employee is told to print the updated CSC Form No. 6 and send it to the Capitol.
+- Records: `DateChangeAction` log shown on the change page, as "Date changes" on the original's page, and in the Audit Log (module "Date Change": old → new dates, justification, each step). Notifications go to the next person to act and open the change request. Waiting change requests show on the Leave and CTO approval pages and in their menu counts.
+- **Cancel** (owner 2026-11-19): the filer may cancel their own leave or CTO application while it is **pending or returned** (`is_cancellable_by_filer`); regular-leave days already taken at the HR step come back (`_restore_credits`); held CTO credit is released; logged as "cancel". Approved requests are never cancelled — their dates are changed instead. CTO applications now have a detail page (`/cto/<id>/`).
+
+### 6.3.3 CTO can cover COSP leave (owner decisions 2026-11-19, Part 3; branch `cto-covers-cosp-leave`, from the Part 2 branch, not merged)
+- **COSP employees only**, on any of their COSP-route leave (COSP Leave, Wellness, Emergency). On the leave form they may tick "Charge some of these days to my CTO" and give the number of CTO days (half days allowed) and **one date range inside the leave dates** (implementation choice; a range keeps the existing CTO checks). Default: leave credits only. Chosen when filing (or when correcting a Submitted or Returned application), never on an approved leave. Regular employees never see it.
+- **One application, one route:** the normal COSP leave route. The CTO days are held in a `CTOUsageApplication` linked to the leave (`cosp_leave`, `leave/cto_cover.py`) that is **never routed on its own**: it follows the leave (approved with it; returned, rejected or cancelled with it, releasing the CTO days). Queues, home-page and Dashboard CTO figures use `CTOUsageApplication.standalone()`, so such a leave is counted once, as leave. The linked record cannot be opened, printed, cancelled or date-changed on its own; everything goes through the leave.
+- **CTO rules on the CTO days only**, from the existing code: credit is picked and held at filing by `plan_allocation` (effective date arrived, not past its deadline, oldest first); `usage_rule_error` checks 5 days a month, no 3+ consecutive days (counting other CTO), last day of service. Days charged to leave credits are not subject to the CTO limits.
+- **Balances:** CTO held at filing; leave credits deducted at COH approval for the **rest only** (`leave_credit_days`). Both are checked at filing; at COH approval the CTO credit held is checked again (`error_at_approval`) and, if it is no longer good, the leave is **returned automatically** with the reason.
+- **Date change (Part 2) keeps the split:** the CTO days move by the same number of days as the leave's start, must stay inside the new dates, and are checked again against the CTO rules and the held credit's deadline.
+- **Records:** the leave's log (and so the Audit Log) records the split on filing/resubmission ("N day(s) charged to CTO (dates); M day(s) to leave credits"); the leave page shows "Charged to"; the leave queue shows "(N charged to CTO)".
+- **Printed 01F04-A (owner decision 2026-11-19, Option B):** layout unchanged; only the value on the existing "No. of Days" line shows the split, e.g. "3 (2 from COSP Leave credits; 1 charged to CTO: Dec 02, 2026)" (`cosp_leave_form.days_label`). A leave with no CTO prints as before.
 
 ### 6.4 Self-Service Restrictions
 Employee profile edits are self-service only for: contact information, address, civil status — and all such edits require Administrator approval before taking effect.
@@ -307,6 +328,8 @@ Decided by the project owner in a 2026-11-01 design session; these **replace** t
 - **Exception claims after a rejected carry-over reason:** can an exception claim restore credit forfeited by a rejected carry-over reason? (Rejection is final; undecided.)
 - **Reductions after the opening-balance lock:** an exception claim can only add credit. How BDH wants a wrong opening line reduced after `CTO_OPENING_BALANCE_DATE` is undecided (deferred 2026-11-01). Until then, only voiding before the lock reduces credit.
 
+**Office Order draft (2026-11-19):** the owner asked for an Office Order stating these rules for approval and chose to add CSC-DBM JC No. 2, s. 2004's caps: **40 hours of CTO earned per month** and an **unused balance of at most 120 hours**. **Not enforced by the HRIS yet** (HR monitors by hand); build only once the Office Order is approved.
+
 **Configuration:** `CTO_FILING_DEADLINE_MONTH_DAY`, `CTO_USAGE_CUTOFF_MONTH_DAY`, `CTO_CARRYOVER_REASON_DEADLINE_MONTH_DAY`, `CTO_CARRYOVER_REMINDER_DATES`, `CTO_OPENING_BALANCE_DATE` and reminder dates in settings; multipliers in the `CTOMultiplierRate` table.
 
 ---
@@ -383,6 +406,7 @@ Decided by the project owner in a 2026-11-01 design session; these **replace** t
 - **Icons:** Lucide line icons (ISC licence) kept locally in `templates/components/icon_sprite.html`; `{% load ui %}{% icon "name" %}`. Always beside a text label.
 - **Menu additions (Batch 7, 2026-10-13):** My Profile (all), Profile Changes (HR Administrator) and Officer-in-Charge (approvers) under Approvals/My Requests; Import Biometric Attendance and Minor Attendance Correction (HR) under HR Administration.
 - **Dark menu (owner request 2026-11-03):** the side menu is deep Royal Blue (`--nav-bg: #0f2a4f`, darker than the top bar) with light text, a slightly smaller font (0.86rem) and the gold current-page marker; hidden in print. Structure, behaviour and the phone/tablet menu are unchanged.
+- **Menu hierarchy (owner request 2026-11-18, pilot issue 1):** group headers are bold and larger with a bigger arrow that rotates; sub-items are smaller, normal weight, softer colour, no icon, indented under a thin guide line (`.nav-sub` in `templates/base.html`). The gold marker is drawn by CSS on the current page's link only (the sliding JS bar was removed); a group header never gets it. A group that is only one page of the same name renders as a plain link with no arrow (none today: Home holds Home + Announcements, so it stays a group). Sidebar width 280px so labels stay on one line. Items, order and groups are unchanged.
 - **Menu groups (dry-run item 1, 2026-11-03):** a menu group stays open until the user opens another group or clicks outside the menu; only the group holding the current page is open when a page loads (no remembered state).
 - **Approver lists (dry-run item 9):** the leave queue shows the leave type with its 6.B details (illness left out: it is medical); the Official Business / Errand / OT queue shows the full reason/purpose.
 - **Menu:** defined in ONE place, `employees/navigation.py` (groups: Home, My Requests, Approvals, Workforce, Reports, HR Administration). Each item names the permission flag that decides visibility; pages keep their own server-side checks. Approvals show waiting counts. Notifications only via the header bell. "File for a Group" stays under My Requests. System Administrator gets "User Accounts and Roles" (Django admin).
@@ -449,6 +473,57 @@ Must include:
 - **2FA** — simple username/password login is sufficient for now
 - **SMS notifications** — out of scope (owner decision 2026-11-03)
 - **Live/API biometric integration** — batch import only for now
+
+---
+
+## 13B. Out-on-Pass module (owner decisions 2026-11-14; BRANCH `feature/out-on-pass`, merge only after the pilot Go/No-Go)
+
+Rule set: BDH-ADM-AO-01 Rev 0 (effective 2027-01-01) **as revised by the pending DICR (Rev 1)**, slip form BDH-ADM-AO-01F16. The COH must sign Rev 1 before the Dec 18 test. Do not merge to main, and do not change leave, CTO or approval logic, without the owner's say-so.
+
+**Scope**
+- Personal pass only. "Local Official Errand" and F59 stay as they are.
+- 2026 passes are not charged. The Google Sheets tracker covers Jan 1-10, 2027; the HRIS takes over Jan 11, 2027, with a one-off "hours already used Jan 1-10" line per employee.
+- PGSS security personnel get HRIS accounts. Excludes official business and approved leave.
+
+**Gate time and hours**
+- The employee taps **Out** and **In** on a hospital computer; the HRIS time is the official gate time. The guard keeps a name / pass number cross-check log.
+- Hours charged = actual minutes, whole minutes, seconds ignored. **No rounding.**
+- Over 2 hours by not more than 5 minutes: not counted as excess, but the minutes are still charged to the balance.
+- A missed Tap Out/In: confirmed by the supervisor, time verified by the guard on duty, reviewed by HRMO before hours are charged.
+
+**Allowance and limits (the system checks all of them at filing)**
+- Per policy year (Jan 1-Dec 31): permanent 12 h; COSP 1 h per full month of contract, up to 12 h (contracts started before 2027 count from Jan 1, 2027). Non-cumulative, forfeited at year/contract end.
+- Max 2 h per pass; 2 passes a month; never more than 3 a month; 1 pass a day; none in the first or last hour of the shift; max 2 employees of a unit out at once; none during a surge or Code activation.
+- Violation: the system **flags it, does not process the pass and tells the user why**. No filing after the fact.
+- Shift-hour rule: refuse when the duty schedule shows the shift; with no schedule, the supervisor confirms. Surge/Code and coverage: the supervisor confirms.
+
+**Routing**
+- Ordinary pass: Employee -> Supervisor (unit head, else section head; single level) -> AO or COH approves. **No HRMO step.** The AO's own pass goes to the COH. Nobody acts on their own pass. A return needs a remark.
+- Third pass, exception (beyond balance or 2 h) and documented emergency pass: separate request types with a reason; Supervisor endorses, **COH alone decides**; the system marks the type. A third pass needs its proof **attached at filing**; no proof, not processed. HRMO sees these only in the monthly list. No COH, no approval.
+- Time not covered (over 2 h, over balance, unapproved): permanent staff = undertime; COSP and PGSS = hours not rendered, unpaid.
+- Proof documents are confidential: visible only to the filer, supervisor and approver (see section 10).
+- Monthly report to the COH from the HRIS (hours per unit, third passes, exceptions, unapproved absences, low balances).
+
+**Owner decisions 2026-11-14 (after stage 1)**
+- COSP allowance: HR enters each contract period (`CospContractPeriod`); the contract's hours are usable from its first day (Option A).
+- PGSS security personnel are recorded as COSP with "COSP under" = **PGSS (Security)** (Option A); they follow the COSP allowance.
+- Each special type lifts only its own rule (Option A): third pass = the 2-a-month limit; exception = balance and 2-hour limits; emergency = may be filed after the fact. Every other rule still applies.
+- The COH's own pass is **recorded by HR** (`recorded_only`, SUBMITTED -> RECORDED), with Tap Out / Tap In (Option B).
+- Slip Part I reasons: Medical appointment, Legal matter, Government or bank transaction, Family emergency, Personal errand, Other (+ details).
+
+**How it is built (`outonpass/`)**
+- `rules.py`: allowance, balance (opening line + charged minutes + minutes held by live passes) and `check_pass`; numbers in `settings.OUT_ON_PASS_RULES`. `routing.py`: who acts. When the person at the Supervisor step may also approve the pass (AO for a section head's ordinary pass; COH for the AO's own), their action approves it in one step (confirmed by the owner 2026-11-14, Option A). An approved pass has a "Show to guard" card (`/out-on-pass/<id>/guard/`). Rules are re-checked at every step. Proof uses the documents app but its own access rule (`OutOnPass.may_view_document`).
+- Stage 3 (`gate.py`): Tap Out opens `TAP_OUT_EARLY_MINUTES` (15) before the planned time out and closes at the expected time in; an emergency pass records its time out as a missed tap. Tap In charges the pass (`minutes_charged`, `excess_minutes`, `over_balance_minutes`) and sets COMPLETED. Excess / over-balance minutes are recorded and listed, **not** deducted from leave credits (no leave logic changed). Missed tap (`MissedTap`): employee -> Supervisor step (`endorsers_for`; the AO for the COH) confirms -> a guard (PGSS employee) verifies, may correct the time with a remark -> HR reviews; only then is the time recorded and the pass charged. Gate page `/out-on-pass/gate/` (guards, HR, AO, COH): today's passes, missed taps to verify, passes out but not back.
+
+**Owner decisions 2026-11-14 (after stage 3)**
+- **Time not covered** (excess over 2 h beyond the grace, minutes over the balance): recorded on the pass and listed for HR; HR enters it as a **minor attendance correction** (existing path, deducts on HR Administrator approval). No automatic leave deduction (Option A).
+- **No Tap In and no accepted missed Tap In** (Option B): the pass stays open on HR's "out, not back" list; another HR Processor/Administrator closes it by entering the time in with a required remark (`gate.hr_close`, logged as `hr_close`), and it is charged then. Nothing is assumed. An approved pass never tapped out after its expected time in can be marked **not used** by HR with a remark (`hr_not_used`, CANCELLED) so it stops holding the balance.
+- **Guards = PGSS security personnel** (confirmed): any active employee recorded as COSP under PGSS may verify a missed tap.
+
+**Stage 4 (built 2026-11-14)**
+- **Slip printout** (`outonpass/slip.py`, `printouts/assets/f16_base.docx` = the Rev 1 draft layout): BDH-ADM-AO-01F16 filled from the pass, boxes ticked, digital stamps for Filed / Endorsed / Approved (or Recorded by HR), gate times, missed-tap review, minutes charged and excess. "Print slip (01F16)" on every pass page. Swap the base file when the COH signs Rev 1 if the layout changes.
+- **Monthly report** (`outonpass/report.py`, Reports menu; HR, AO, COH; Excel and PDF): hours per unit, third passes / exceptions / emergency passes, time not covered (HR's list for minor attendance corrections), open passes (out not back, never tapped out), low balances (`LOW_BALANCE_MINUTES`, 60), staff with third passes in 3+ months.
+- **Setup** (HR Administration -> Out-on-Pass Setup; HR Administrator only, never their own records): COSP/PGSS contract periods (no overlaps) and the one-off Jan 1-10, 2027 hours (one line per employee per year). Wrong lines are voided with a reason, never edited or deleted. All of it, and every pass and missed-tap action, appears in the Audit Log (module "Out-on-Pass").
 
 ---
 

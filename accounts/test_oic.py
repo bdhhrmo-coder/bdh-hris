@@ -264,3 +264,69 @@ class CospOICTests(TestCase):
     def test_regular_non_supervisor_still_cannot_be_oic(self):
         self.assertEqual(self.post(self.lab_head, self.regular).status_code, 200)
         self.assertFalse(R.objects.filter(is_oic=True).exists())
+
+
+class HRDesignatesOICTests(TestCase):
+    """Owner decision 2026-11-16, Option B: HR Administrator designates for an approver."""
+
+    def setUp(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.SimpleUploadedFile = SimpleUploadedFile
+        self.today = timezone.localdate()
+        self.lab = Section.objects.get(name="Laboratory Section")
+        self.head = person("hrlabhead", R.SUPERVISOR, self.lab)
+        self.cand = person("hrcand", R.SUPERVISOR, Section.objects.get(name="Pharmacy Section"))
+        self.hradmin = person("hradm", R.HR_ADMINISTRATOR)
+        self.sysadmin = person("sysadm", R.SYSTEM_ADMINISTRATOR)
+        self.scope = R.objects.get(employee=self.head, role=R.SUPERVISOR)
+
+    def post(self, user, **over):
+        self.client.force_login(user.user)
+        pdf = self.SimpleUploadedFile("memo.pdf", b"%PDF-1.4 test", content_type="application/pdf")
+        data = {"scope": self.scope.pk, "oic": self.cand.pk, "start_date": self.today,
+                "end_date": self.today + timedelta(days=2), "reason": "On emergency leave", "instruction": pdf}
+        data.update(over)
+        return self.client.post(reverse("oic_hr_home"), data)
+
+    def test_hr_admin_designates_with_reason_and_instruction(self):
+        r = self.post(self.hradmin)
+        self.assertRedirects(r, reverse("oic_hr_home"))
+        ra = R.objects.get(is_oic=True)
+        self.assertEqual((ra.employee, ra.delegated_by, ra.designated_by_hr), (self.cand, self.head, self.hradmin))
+        self.assertTrue(ra.instruction and ra.designation_reason)
+        self.assertTrue(Notification.objects.filter(recipient=self.head).exists())
+        self.assertTrue(Notification.objects.filter(recipient=self.cand).exists())
+        row = [x for x in audit_rows() if x["module"] == "OIC Designation"][0]
+        self.assertEqual(row["actor"], self.hradmin.user)
+        self.assertIn("HR Administrator", row["detail"])
+
+    def test_system_administrator_cannot(self):
+        self.client.force_login(self.sysadmin.user)
+        self.assertEqual(self.client.get(reverse("oic_hr_home")).status_code, 403)
+        self.post(self.sysadmin)
+        self.assertFalse(R.objects.filter(is_oic=True).exists())
+
+    def test_reason_and_instruction_are_required_and_file_checked(self):
+        self.post(self.hradmin, reason="")
+        self.post(self.hradmin, instruction="")
+        bad = self.SimpleUploadedFile("memo.pdf", b"not a pdf", content_type="application/pdf")
+        self.post(self.hradmin, instruction=bad)
+        self.assertFalse(R.objects.filter(is_oic=True).exists())
+
+    def test_same_oic_rules_apply(self):
+        plain = person("hrplain")
+        self.post(self.hradmin, oic=plain.pk)
+        self.assertFalse(R.objects.filter(is_oic=True).exists())
+
+    def test_hr_admin_can_end_it_and_instruction_access(self):
+        self.post(self.hradmin)
+        ra = R.objects.get(is_oic=True)
+        self.client.force_login(self.hradmin.user)
+        self.assertEqual(self.client.get(reverse("oic_instruction", args=[ra.pk])).status_code, 200)
+        stranger = person("hrstranger")
+        self.client.force_login(stranger.user)
+        self.assertEqual(self.client.get(reverse("oic_instruction", args=[ra.pk])).status_code, 403)
+        self.client.force_login(self.hradmin.user)
+        self.client.post(reverse("oic_end", args=[ra.pk]))
+        ra.refresh_from_db()
+        self.assertTrue(ra.ended_at)

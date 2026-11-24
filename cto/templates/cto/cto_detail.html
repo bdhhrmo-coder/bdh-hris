@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% load badges %}
+{% block title %}CTO application — BDH HRIS{% endblock %}
+{% block content %}
+{% if own %}<p><a href="{% url 'cto:my_cto' %}">&larr; My CTO</a></p>
+{% else %}<p><a href="{% url 'cto:cto_queue' %}">&larr; CTO queue</a></p>{% endif %}
+<div class="split-row spread">
+  <h1>CTO application</h1>
+  {% status_badge a.status a.get_status_display %}
+</div>
+<div class="card form-card">
+  <table class="detail-table">
+    <tr><th>Employee</th><td>{{ a.employee.full_name }} ({{ a.employee.employee_id }})</td></tr>
+    <tr><th>Date filed</th><td>{{ a.submitted_at|date:"M d, Y" }}</td></tr>
+    <tr><th>Dates</th><td>{{ a.start_date|date:"M d, Y" }}{% if a.end_date != a.start_date %} to {{ a.end_date|date:"M d, Y" }}{% endif %}</td></tr>
+    <tr><th>Days</th><td>{{ a.number_of_days|floatformat:"-2" }}</td></tr>
+    {% if a.reason %}<tr><th>Reason</th><td>{{ a.reason }}</td></tr>{% endif %}
+    {% if allocations %}<tr><th>Credit used</th><td>{% for al in allocations %}{{ al.days|floatformat:"-2" }} day(s) from work on {{ al.line.work_date|date:"M d, Y" }}{% if al.line.use_deadline %} (use by {{ al.line.use_deadline|date:"M d, Y" }}){% endif %}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td></tr>{% endif %}
+  </table>
+  <p class="row-actions">
+    <a class="btn btn-secondary" href="{% url 'cto:print_cto_form' a.pk %}" target="_blank">Print CTO form</a>
+    {% if not change_block %}<a class="btn" href="{% url 'datechange:new' 'cto' a.pk %}">Request date change</a>{% endif %}
+  </p>
+  {% if can_cancel %}
+  <form method="post" action="{% url 'cto:cto_cancel' a.pk %}" class="row-actions"
+        onsubmit="return confirm('Cancel this CTO application? The CTO days go back to your balance.');">
+    {% csrf_token %}
+    <button type="submit" class="btn-secondary">Cancel this application</button>
+    <span class="help">While it is pending you may cancel it and file a new one.</span>
+  </form>
+  {% endif %}
+</div>
+{% include "datechange/_changes_card.html" %}
+<h2>History</h2>
+<div class="card"><div class="table-scroll">
+<table>
+  <tr><th>When</th><th>Action</th><th>By</th><th>Remarks</th></tr>
+  {% for h in history %}
+  <tr><td>{{ h.acted_at|date:"M d, Y g:i A" }}</td><td>{{ h.action|capfirst }}</td>
+      <td>{{ h.acted_by.employee.full_name|default:h.acted_by.username }}</td><td>{{ h.notes|default:"—" }}</td></tr>
+  {% endfor %}
+</table>
+</div></div>
+{% endblock %}

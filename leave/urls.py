@@ -11,6 +11,7 @@ urlpatterns = [
     path("<int:pk>/", views.leave_detail, name="leave_detail"),
     path("<int:pk>/edit/", views.leave_edit, name="leave_edit"),
     path("<int:pk>/action/", views.leave_action, name="leave_action"),
+    path("<int:pk>/cancel/", views.leave_cancel, name="leave_cancel"),
     path("<int:pk>/print/csc-form-6/", views.print_csc_form6, name="print_csc_form6"),
     path("<int:pk>/print/cosp-leave-form/", views.print_cosp_leave_form, name="print_cosp_leave_form"),
 ]

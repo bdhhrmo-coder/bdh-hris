@@ -17,6 +17,7 @@ Row shape (a plain dict, not a model — nothing here is ever saved):
 """
 
 from cto.models import CTOClaimAction, CTOUsageApplicationAction
+from datechange.models import DateChangeAction
 from documents.models import UploadedDocumentEvent
 from employees.models import EmployeeEditHistory
 from exchange.models import DutyExchangeRequestAction
@@ -31,7 +32,38 @@ ACTION_LABELS = {
     "opening_line_voided": "Opening CTO line voided",
     "correct_day_type": "Day type corrected",
     "skip": "Step skipped",
+    "cancel": "Cancelled by the filer",
+    "hr_close": "Closed by HR (time in entered)",
+    "hr_not_used": "Marked not used by HR",
+    "tap_out": "Tap Out", "tap_in": "Tap In", "complete": "Charged",
 }
+
+
+def _rows_from_out_on_pass_setup():
+    """Out-on-Pass contract periods and Jan 1-10 opening lines: entered and voided."""
+    from outonpass.models import CospContractPeriod, PassOpeningUsage
+    from outonpass.rules import hm
+
+    rows = []
+    for line in CospContractPeriod.objects.select_related("employee", "entered_by", "voided_by"):
+        what = f"COSP contract {line.start_date:%b %d, %Y} - {line.end_date:%b %d, %Y}"
+        rows.append({"timestamp": line.entered_at, "module": "Out-on-Pass", "action": "Contract period added",
+                     "detail": what, "actor": line.entered_by, "employee_ids": {line.employee_id},
+                     "employee_display": str(line.employee)})
+        if line.voided_at:
+            rows.append({"timestamp": line.voided_at, "module": "Out-on-Pass", "action": "Contract period voided",
+                         "detail": f"{what}: {line.void_reason}", "actor": line.voided_by,
+                         "employee_ids": {line.employee_id}, "employee_display": str(line.employee)})
+    for line in PassOpeningUsage.objects.select_related("employee", "entered_by", "voided_by"):
+        what = f"{hm(line.minutes_used)} used before the HRIS ({line.year}): {line.reason}"
+        rows.append({"timestamp": line.entered_at, "module": "Out-on-Pass", "action": "Opening hours added",
+                     "detail": what, "actor": line.entered_by, "employee_ids": {line.employee_id},
+                     "employee_display": str(line.employee)})
+        if line.voided_at:
+            rows.append({"timestamp": line.voided_at, "module": "Out-on-Pass", "action": "Opening hours voided",
+                         "detail": f"{what} - {line.void_reason}", "actor": line.voided_by,
+                         "employee_ids": {line.employee_id}, "employee_display": str(line.employee)})
+    return rows
 
 
 def _employees_for_object(obj):
@@ -150,13 +182,16 @@ def _rows_from_oic_designations():
 
     rows = []
     for ra in RoleAssignment.objects.filter(is_oic=True).select_related(
-        "employee", "delegated_by__user", "section", "unit", "created_by", "ended_by"
+        "employee", "designated_by_hr", "delegated_by__user", "section", "unit", "created_by", "ended_by"
     ):
         detail = (f"{ra.employee.full_name} as OIC, {ra.scope_label}, "
                   f"{ra.start_date or '—'} to {ra.end_date or 'open'}, for {ra.delegated_by.full_name if ra.delegated_by else '—'}")
+        if ra.designated_by_hr_id:
+            detail += (f". Designated by HR Administrator {ra.designated_by_hr.full_name} on the approver's behalf. "
+                       f"Reason: {ra.designation_reason}. Written instruction attached")
         actor = ra.created_by or (ra.delegated_by.user if ra.delegated_by else None)
         rows.append({
-            "timestamp": ra.created_at, "module": "OIC Designation", "action": "designate", "detail": detail,
+            "timestamp": ra.created_at, "module": "OIC Designation", "action": "designate (by HR)" if ra.designated_by_hr_id else "designate", "detail": detail,
             "actor": actor, "employee_ids": {ra.employee_id}, "employee_display": ra.employee.full_name,
         })
         if ra.ended_at:
@@ -164,6 +199,24 @@ def _rows_from_oic_designations():
                 "timestamp": ra.ended_at, "module": "OIC Designation", "action": "end early", "detail": detail,
                 "actor": ra.ended_by, "employee_ids": {ra.employee_id}, "employee_display": ra.employee.full_name,
             })
+    return rows
+
+
+def _rows_from_date_changes():
+    """Date changes of approved leave/CTO (Part 2, 2026-11-19): every step,
+    with the old and new dates and the justification or remark."""
+    rows = []
+    for row in DateChangeAction.objects.select_related("request__employee", "acted_by"):
+        r = row.request
+        detail = f"#{r.pk} {r.what}: {r.old_dates_label} -> {r.new_dates_label}"
+        if row.action == "submit":
+            detail += f" - justification: {r.justification}"
+        elif row.notes:
+            detail += f" - {row.notes}"
+        rows.append({
+            "timestamp": row.acted_at, "module": "Date Change", "action": row.label, "detail": detail,
+            "actor": row.acted_by, "employee_ids": {r.employee_id}, "employee_display": str(r.employee),
+        })
     return rows
 
 
@@ -178,6 +231,7 @@ def audit_rows(employee_id=None, module=None, date_from=None, date_to=None):
     rows += _rows_from_employee_edit_history(EmployeeEditHistory.objects.all())
     rows += _rows_from_request_actions(LeaveApplicationAction.objects.all(), "Leave", "application")
     rows += _rows_from_request_actions(CTOUsageApplicationAction.objects.all(), "CTO", "application")
+    rows += _rows_from_date_changes()
     rows += _rows_from_request_actions(CTOClaimAction.objects.all(), "CTO Claim", "claim")
     rows += _rows_from_request_actions(DutyExchangeRequestAction.objects.all(), "Exchange of Duty", "request")
     rows += _rows_from_request_actions(
@@ -188,6 +242,11 @@ def audit_rows(employee_id=None, module=None, date_from=None, date_to=None):
     rows += _rows_from_announcement_actions()
     rows += _rows_from_schedule_events()
     rows += _rows_from_oic_designations()
+    from outonpass.models import MissedTapAction, OutOnPassAction
+    rows += _rows_from_request_actions(OutOnPassAction.objects.all(), "Out-on-Pass", "out_on_pass")
+    rows += _rows_from_request_actions(MissedTapAction.objects.select_related("missed_tap__out_on_pass__employee"),
+                                       "Out-on-Pass", "missed_tap")
+    rows += _rows_from_out_on_pass_setup()
 
     if employee_id:
         rows = [r for r in rows if employee_id in r["employee_ids"]]
@@ -215,4 +274,5 @@ MODULE_CHOICES = [
     "Announcements",
     "Duty Schedule",
     "OIC Designation",
+    "Out-on-Pass",
 ]

@@ -16,27 +16,11 @@
 <h1>Apply for leave</h1>
 {% endif %}
 
-<section class="balance-panel" aria-labelledby="balances-title">
-  <h2 id="balances-title" class="balance-panel-title">My balances <small>as of {% now "M j, Y" %}</small></h2>
-  <div class="balance-cards">
-    {% for c in cards %}
-    <div class="balance-card is-{{ c.colour }}"
-         {% if c.type_id %}:class="{ 'is-selected': sel === '{{ c.type_id }}' }"{% endif %}>
-      <p class="bc-name">{{ c.name }}</p>
-      {% if c.remaining is None %}
-        <p class="bc-remaining bc-nolimit">No fixed limit</p>
-        <p class="bc-used">{{ c.used|floatformat:"-2" }} used this year</p>
-      {% else %}
-        <p class="bc-remaining">{{ c.remaining|floatformat:"-2" }} <span>day{{ c.remaining|pluralize }} left</span></p>
-        <p class="bc-used">{{ c.used|floatformat:"-2" }} used / {{ c.total|floatformat:"-2" }} total</p>
-        <div class="bc-bar" role="progressbar" aria-label="{{ c.name }} remaining" aria-valuemin="0" aria-valuemax="100"
-             aria-valuenow="{{ c.percent }}"><span style="width: {{ c.percent }}%"></span></div>
-      {% endif %}
-      {% if c.note %}<p class="bc-note">{{ c.note }}</p>{% endif %}
-    </div>
-    {% endfor %}
-  </div>
+<h2 class="balance-panel-title">My balances <small>as of {% now "M j, Y" %}</small></h2>
+<section class="bal-types" aria-label="My leave balances">
+  {% for t in panels %}{% include "components/balance_type_card.html" with t=t %}{% endfor %}
 </section>
+
 
 <div class="card form-card">
   <form method="post" class="form-2col" novalidate>
@@ -76,6 +60,21 @@
       {% include "leave/_field.html" with f=form.end_date %}
     </div>
     {% include "leave/_field.html" with f=form.number_of_days required=True %}
+    {% if form.offers_cto %}{# Part 3: COSP employees may charge some days to CTO #}
+    <div class="field-block" x-data="{ useCto: {{ form.use_cto.value|yesno:'true,false' }} }">
+      <label class="field-title"><input type="checkbox" name="use_cto" x-model="useCto" {% if form.use_cto.value %}checked{% endif %}> {{ form.use_cto.label }}</label>
+      <p class="field-help">Optional. By default every day is charged to your leave credits.
+        The CTO rules apply to the CTO days only: at most 5 CTO days a month, not 3 or more days in a row, and only
+        credit that is already usable (see your CTO balance above).</p>
+      {% for e in form.use_cto.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+      <div class="form-2col m-0" x-show="useCto" x-cloak>
+        {% include "leave/_field.html" with f=form.cto_days %}
+        <div></div>
+        {% include "leave/_field.html" with f=form.cto_start_date help="First date charged to CTO (inside the leave dates)." %}
+        {% include "leave/_field.html" with f=form.cto_end_date help="Last date charged to CTO." %}
+      </div>
+    </div>
+    {% endif %}
     {% if not is_cosp %}{# COSP employees' leave is not on CSC Form 6: no commutation #}
     <div x-show="code && code !== 'COSP_LEAVE'" x-cloak>
       {% include "leave/_field.html" with f=form.commutation radios=True %}

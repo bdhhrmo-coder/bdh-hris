@@ -323,12 +323,35 @@ class CTOUsageApplication(models.Model):
     status = models.CharField(max_length=25, choices=STATUS_CHOICES, default=SUBMITTED)
     submitted_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # Part 3 (owner 2026-11-19): CTO days that cover part of a COSP leave.
+    # Such a record is never routed on its own: it follows the leave (same
+    # status, filed and approved with it) and only holds the CTO credit, so
+    # every CTO rule (monthly cap, consecutive days, credit deadline) sees
+    # those days. See leave/cto_cover.py.
+    cosp_leave = models.OneToOneField(
+        "leave.LeaveApplication", null=True, blank=True, on_delete=models.CASCADE, related_name="cto_cover",
+        help_text="Set when these CTO days cover part of a COSP leave application.")
 
     class Meta:
         ordering = ["-submitted_at"]
 
     def __str__(self):
         return f"{self.employee} — CTO {self.start_date} to {self.end_date} ({self.status})"
+
+    @classmethod
+    def standalone(cls):
+        """CTO applications filed on their own: leaves out CTO days that only
+        cover part of a COSP leave (those are counted as that leave)."""
+        return cls.objects.filter(cosp_leave__isnull=True)
+
+    CANCELLABLE_STATUSES = (SUBMITTED, ENDORSED_BY_UNIT_HEAD, ENDORSED_BY_SUPERVISOR, PROCESSED_BY_HR,
+                            RECOMMENDED_BY_AO, RETURNED)
+
+    def is_cancellable_by_filer(self):
+        """Pending (or returned) only (Part 2, owner 2026-11-19); approved CTO
+        is moved with a date change request, never cancelled. CTO days that
+        cover a COSP leave go with that leave."""
+        return self.cosp_leave_id is None and self.status in self.CANCELLABLE_STATUSES
 
     def clean(self):
         if self.employee_id and self.employee.has_role("CHIEF_OF_HOSPITAL"):

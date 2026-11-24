@@ -48,9 +48,31 @@ class LeaveApplicationForm(forms.ModelForm):
             "commutation": "6.D Commutation",
         }
 
+    # Part 3 (owner 2026-11-19): COSP employees may charge some or all of the
+    # leave days to CTO. Not model fields: the CTO days live in a linked CTO
+    # record (leave/cto_cover.py). Default: leave credits only.
+    use_cto = forms.BooleanField(required=False, label="Charge some of these days to my CTO")
+    cto_days = forms.DecimalField(required=False, max_digits=5, decimal_places=2, label="Days charged to CTO",
+                                  help_text="Half days (0.5) or whole days. The rest is charged to leave credits.")
+    cto_start_date = forms.DateField(required=False, label="CTO from",
+                                     widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"))
+    cto_end_date = forms.DateField(required=False, label="CTO to",
+                                   widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"))
+
     def __init__(self, *args, employee=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.employee = employee
+        from .cto_cover import cover_of
+
+        self.offers_cto = employee is not None and employee.employment_status == "COSP"
+        if not self.offers_cto:
+            for name in ("use_cto", "cto_days", "cto_start_date", "cto_end_date"):
+                del self.fields[name]
+        elif not self.is_bound:
+            cover = cover_of(self.instance)
+            if cover is not None:
+                self.initial.update(use_cto=True, cto_days=cover.number_of_days,
+                                    cto_start_date=cover.start_date, cto_end_date=cover.end_date)
         for name in ("location", "sick_leave_type", "study_purpose", "wellness_reason", "other_purpose"):
             self.fields[name].choices = [c for c in self.fields[name].choices if c[0]]  # no "---------" radio
         self.fields["commutation"].choices = L.COMMUTATION_CHOICES
@@ -115,4 +137,14 @@ class LeaveApplicationForm(forms.ModelForm):
             self.add_error("end_date", "End date cannot be before the start date.")
         if leave_type and leave_type.requires_justification and not (cleaned.get("justification") or "").strip():
             self.add_error("justification", f"{leave_type.name} requires a justification.")
+        if self.offers_cto and cleaned.get("use_cto"):
+            from .cto_cover import may_use_cto, shape_error
+
+            if not may_use_cto(self.employee, leave_type):
+                self.add_error("use_cto", "CTO cannot be charged for this leave.")
+            else:
+                problem = shape_error(cleaned.get("number_of_days"), start, end, cleaned.get("cto_days"),
+                                      cleaned.get("cto_start_date"), cleaned.get("cto_end_date"))
+                if problem:
+                    self.add_error("cto_days", problem)
         return cleaned

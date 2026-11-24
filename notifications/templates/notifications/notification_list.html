@@ -12,18 +12,17 @@
 </div>
 <div class="card">
 <table class="notification-table">
-  <tr><th>When</th><th>Message</th><th></th></tr>
+  <tr><th>When</th><th>Message</th></tr>
   {% for n in notifications %}
-  <tr class="{% if n.pk in unread_ids %}is-unread{% endif %}">
+  {% comment %}Whole row is the link (pilot issue 3): one click marks it read and opens the request.
+     The real <a> in the message cell keeps keyboard and screen-reader use working.{% endcomment %}
+  <tr class="notif-row{% if n.pk in unread_ids %} is-unread{% endif %}"
+      x-data @click="if (!$event.target.closest('a')) window.location.href = '{% url 'notifications:open' n.pk %}'">
     <td>{{ n.created_at|date:"Y-m-d H:i" }}</td>
-    <td>{% if n.pk in unread_ids %}<span class="unread-dot" aria-hidden="true"></span><span class="sr-only">Unread: </span>{% endif %}{{ n.message }}</td>
-    <td>
-      {% if n.url %}<a href="{% url 'notifications:open' n.pk %}">Open</a>
-      {% elif n.pk in unread_ids %}<a href="{% url 'notifications:open' n.pk %}">Mark read</a>{% endif %}
-    </td>
+    <td>{% if n.pk in unread_ids %}<span class="unread-dot" aria-hidden="true"></span><span class="sr-only">Unread: </span>{% endif %}<a class="notif-link" href="{% url 'notifications:open' n.pk %}">{{ n.message }}</a></td>
   </tr>
   {% empty %}
-  <tr><td colspan="3" class="empty-note">No notifications yet.</td></tr>
+  <tr><td colspan="2" class="empty-note">No notifications yet.</td></tr>
   {% endfor %}
 </table>
 </div>

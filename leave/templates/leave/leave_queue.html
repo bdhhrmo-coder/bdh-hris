@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load badges %}
+{% load badges leave_print %}
 {% block title %}Leave queue — BDH HRIS{% endblock %}
 {% block content %}
 <h1>Leave applications awaiting my action</h1>
@@ -11,10 +11,13 @@
     <td><a href="{% url 'leave:leave_detail' a.pk %}">{{ a.employee.full_name }}</a></td>
     <td><strong>{{ a.leave_type.name }}</strong>{% with d=a.queue_details %}{% if d %}<br><small>{{ d }}</small>{% endif %}{% endwith %}</td>
     <td>{{ a.dates_label }}</td>
-    <td>{{ a.number_of_days }}</td>
+    <td>{{ a.number_of_days }}{% if a.cto_days_charged %} <span class="muted">({{ a.cto_days_charged|floatformat:"-2" }} charged to CTO)</span>{% endif %}</td>
     <td>{% status_badge a.status a.status_label %}</td>
     <td>
-      {% if a.is_cosp_route %}
+      {% print_wait a as wait %}
+      {% if wait %}
+        <span class="print-wait">{{ wait }}</span>
+      {% elif a.is_cosp_route %}
         <a href="{% url 'leave:print_cosp_leave_form' a.pk %}" target="_blank">Print COSP Leave Form</a>
       {% else %}
         <a href="{% url 'leave:print_csc_form6' a.pk %}" target="_blank">Print CSC Form 6</a>
@@ -76,4 +79,5 @@
 </table>
 </div></div>
 {% endif %}
+{% include "datechange/_queue_card.html" %}
 {% endblock %}

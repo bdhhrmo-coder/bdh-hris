@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Out-on-Pass — BDH HRIS{% endblock %}
+{% block content %}
+<p><a href="{% url 'outonpass:mine' %}">&larr; My passes</a></p>
+<h1>{% if p %}Correct and resubmit pass {{ p.pass_number }}{% else %}File a personal pass{% endif %}</h1>
+<p class="muted">File before you leave. A pass may not be longer than 2 hours, and you are charged the actual minutes from Tap Out to Tap In. A pass without approval is an unauthorized absence.{% if is_coh %} Your own pass is recorded by HR.{% endif %}</p>
+
+{% if violations %}
+<div class="msg error" role="alert">
+  <strong>This pass was not filed. Please fix the following:</strong>
+  <ul>{% for v in violations %}<li>{{ v.message }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+{% include "outonpass/_summary.html" %}
+
+<div class="card form-card" x-data="{ kind: '{{ form.kind.value|default_if_none:''|escapejs }}' }">
+  <form method="post" enctype="multipart/form-data" class="form-2col">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <div @change="kind = $event.target.value">{% include "official_requests/_field.html" with field=form.kind %}</div>
+    <p class="helptext" x-show="kind === 'THIRD'">Only after 2 passes this month, for an urgent reason. Attach the proof now. The Chief of Hospital decides.</p>
+    <p class="helptext" x-show="kind === 'EXCEPTION'">Only for an urgent matter that leave cannot handle, when the pass is beyond your balance or 2 hours. The Chief of Hospital decides.</p>
+    <p class="helptext" x-show="kind === 'EMERGENCY'">For a documented emergency when you had to leave before filing. File it as soon as you can. The Chief of Hospital decides.</p>
+    {% include "official_requests/_field.html" with field=form.pass_date %}
+    {% include "official_requests/_field.html" with field=form.time_out %}
+    {% include "official_requests/_field.html" with field=form.time_in %}
+    {% include "official_requests/_field.html" with field=form.reason_type %}
+    {% include "official_requests/_field.html" with field=form.reason %}
+    {% include "official_requests/_field.html" with field=form.proof %}
+    <button type="submit">{% if p %}Resubmit{% else %}File pass{% endif %}</button>
+  </form>
+</div>
+{% endblock %}

@@ -20,6 +20,7 @@ from auditlog.permissions import can_view_audit_log
 from dashboard.permissions import can_view_dashboard
 
 from accounts.oic import can_designate_oic
+from accounts.oic_hr import can_hr_designate_oic
 from cto.claims import can_file_exception
 from cto.opening import can_enter_opening
 from cto.permissions import is_cto_eligible
@@ -42,6 +43,7 @@ MENU = [
         ("Exchange of Duty", "exchange:my_exchanges", "repeat", "all"),
         ("Attendance", "attendance:my_attendance", "fingerprint", "all"),
         ("Official Business / Errand / OT", "official_requests:my_requests", "briefcase", "all"),
+        ("Out-on-Pass", "outonpass:mine", "door-open", "has_employee"),
         ("File for a Group", "official_requests:batch_file", "users-round", "can_file_batch"),
         ("My Schedule", "schedules:mine", "calendar-days", "all"),
         ("My Profile", "employees:my_profile_edit_request", "user-round", "has_employee"),
@@ -52,6 +54,7 @@ MENU = [
         ("Exchange of Duty", "exchange:exchange_queue", "repeat", "approver"),
         ("Attendance Correction", "attendance:correction_queue", "fingerprint", "correction_validator"),
         ("Official Business / Errand / OT", "official_requests:request_queue", "briefcase", "approver"),
+        ("Out-on-Pass", "outonpass:queue", "door-open", "approver"),
         ("Profile Changes", "employees:profile_edit_request_queue", "clipboard-check", "can_review_profile_requests"),
         ("Officer-in-Charge (OIC)", "oic_home", "calendar-clock", "can_designate_oic"),
         ("CTO Year-end Carry-over", "cto:carry_over", "calendar-days", "approver"),
@@ -60,19 +63,23 @@ MENU = [
         ("Employees", "employees:employee_list", "user-round", "can_list_employees"),
         ("Duty Schedules", "schedules:list", "calendar-range", "can_view_schedules"),
         ("Approved Exchanges of Duty", "exchange:approved_exchanges", "repeat", "can_view_schedules"),
+        ("Gate: Out-on-Pass", "outonpass:gate", "door-open", "can_view_gate"),
     ]),
     ("reports", "Reports", "chart-column", [
         ("Dashboard", "dashboard:dashboard_home", "chart-column", "can_view_dashboard"),
+        ("Out-on-Pass Monthly Report", "outonpass:report", "door-open", "can_view_oop_report"),
         ("Audit Log", "auditlog:audit_log", "shield-check", "can_view_audit_log"),
     ]),
     ("admin", "HR Administration", "settings", [
         ("Data Import", "dataimport:home", "upload", "can_import_data"),
+        ("OIC for an Approver", "oic_hr_home", "calendar-clock", "can_hr_designate_oic"),
         ("Import Biometric Attendance", "attendance:biometric_import", "fingerprint", "is_hr"),
         ("Minor Attendance Correction", "attendance:minor_correction_create", "clipboard-check", "is_hr"),
         ("CTO Opening Balances", "cto:opening_balances", "clock-3", "can_enter_opening"),
         ("Exception CTO Claim", "cto:exception_claim_new", "clock-3", "can_file_exception"),
         ("CTO Separation Status", "cto:separation", "user-round", "can_set_separation"),
         ("Manage Announcements", "announcements:manage", "megaphone", "can_manage_announcements"),
+        ("Out-on-Pass Setup", "outonpass:setup", "door-open", "is_hr_admin"),
         ("Shift Codes", "schedules:shift_codes", "list", "can_manage_announcements"),
         ("Schedule Cut-off Dates", "schedules:cutoff_dates", "calendar-clock", "is_hr"),
         ("User Accounts and Roles", "admin:index", "user-cog", "is_system_admin"),
@@ -81,7 +88,8 @@ MENU = [
 
 # Queue url name -> label used by homepage.kpis.waiting_for_me (for the counts).
 QUEUE_COUNT_URLS = {"leave:leave_queue", "cto:cto_queue", "exchange:exchange_queue",
-                    "attendance:correction_queue", "official_requests:request_queue"}
+                    "attendance:correction_queue", "official_requests:request_queue",
+                    "outonpass:queue"}
 
 
 def _flags(request, acting):
@@ -97,6 +105,7 @@ def _flags(request, acting):
                                          or acting.has_role(RoleAssignment.HR_ADMINISTRATOR))
     f["can_review_profile_requests"] = can_review_profile_requests(acting)
     f["can_designate_oic"] = can_designate_oic(acting)
+    f["can_hr_designate_oic"] = can_hr_designate_oic(acting)
     # OT/CTO pages (2026-11-02): the pages' own checks, but the AO sees them
     # only while the D3 fallback can apply (at most one other HR holder).
     hr_admin = [RoleAssignment.HR_ADMINISTRATOR]
@@ -106,6 +115,11 @@ def _flags(request, acting):
     f["can_set_separation"] = can_set_separation(acting) and _hr_or_ao_fallback(acting, hr_any)
     # CTO does not apply to the COH (Dec 16, 2025 policy; main hides the homepage CTO card too).
     f["cto_eligible"] = acting is None or is_cto_eligible(acting)
+    from outonpass.gate import can_view_gate
+    f["can_view_gate"] = can_view_gate(acting)
+    from outonpass.views import _can_view_report
+    f["can_view_oop_report"] = _can_view_report(acting)
+    f["is_hr_admin"] = acting is not None and acting.has_role(RoleAssignment.HR_ADMINISTRATOR)
     f["all"] = True
     return f
 

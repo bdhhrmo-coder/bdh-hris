@@ -91,6 +91,17 @@ class NotificationListViewTests(TestCase):
         self.assertContains(response, "Mine")
         self.assertNotContains(response, "Not mine")
 
+    def test_whole_row_is_the_link_and_no_open_button(self):
+        n = Notification.objects.create(recipient=self.employee, message="Leave waiting", url="/leave/")
+        self.client.login(username="listview_emp", password="testpass123")
+        page = self.client.get(reverse("notifications:notification_list")).content.decode()
+        open_url = reverse("notifications:open", args=[n.pk])
+        self.assertIn('class="notif-row is-unread"', page)
+        self.assertIn(f"window.location.href = '{open_url}'", page)
+        self.assertIn(f'<a class="notif-link" href="{open_url}">Leave waiting</a>', page)
+        self.assertNotIn(">Open</a>", page)
+        self.assertNotIn(">Mark read</a>", page)
+
     def test_viewing_the_list_no_longer_marks_everything_read(self):
         n = Notification.objects.create(recipient=self.employee, message="Unread")
         self.client.login(username="listview_emp", password="testpass123")

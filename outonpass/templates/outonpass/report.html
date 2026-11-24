@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% load badges outonpass_tags %}
+{% block title %}Out-on-Pass Monthly Report — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Out-on-Pass Monthly Report</h1>
+<form method="get" class="row-actions">
+  <label>Month <input type="month" name="month" value="{{ month_value }}" style="width:auto; display:inline-block"></label>
+  <button type="submit">Show</button>
+  <a class="btn btn-secondary" href="?month={{ month_value }}&format=xlsx">Excel</a>
+  <a class="btn btn-secondary" href="?month={{ month_value }}&format=pdf" target="_blank">PDF</a>
+</form>
+<p class="muted">{{ r.label }}. Passes pending, approved or completed in the month. Hours are actual minutes from Tap Out to Tap In.</p>
+
+<div class="kpi-grid">
+  <div class="kpi-tile"><div class="kpi-value">{{ r.totals.passes }}</div><div class="kpi-label">Passes</div></div>
+  <div class="kpi-tile"><div class="kpi-value">{{ r.totals.minutes|hm }}</div><div class="kpi-label">Hours charged</div></div>
+  <div class="kpi-tile"><div class="kpi-value">{{ r.totals.third }}</div><div class="kpi-label">Third passes</div></div>
+  <div class="kpi-tile"><div class="kpi-value">{{ r.totals.exception }} / {{ r.totals.emergency }}</div><div class="kpi-label">Exceptions / emergency</div></div>
+  <div class="kpi-tile"><div class="kpi-value">{{ r.not_covered|length }}</div><div class="kpi-label">With time not covered</div></div>
+</div>
+
+<h2>Hours per unit</h2>
+<div class="card"><div class="table-scroll"><table>
+  <tr><th>Unit / Section</th><th>Passes</th><th>Completed</th><th>Hours charged</th><th>Excess (min)</th><th>Not covered by balance (min)</th><th>Third</th><th>Exception</th><th>Emergency</th></tr>
+  {% for a in r.areas %}<tr><td>{{ a.area }}</td><td>{{ a.passes }}</td><td>{{ a.completed }}</td><td>{{ a.minutes|hm }}</td><td>{{ a.excess }}</td><td>{{ a.over_balance }}</td><td>{{ a.third }}</td><td>{{ a.exception }}</td><td>{{ a.emergency }}</td></tr>
+  {% empty %}<tr><td colspan="9" class="empty-note">No passes this month.</td></tr>{% endfor %}
+  {% if r.areas %}<tr><th>Total</th><th>{{ r.totals.passes }}</th><th>{{ r.totals.completed }}</th><th>{{ r.totals.minutes|hm }}</th><th>{{ r.totals.excess }}</th><th>{{ r.totals.over_balance }}</th><th>{{ r.totals.third }}</th><th>{{ r.totals.exception }}</th><th>{{ r.totals.emergency }}</th></tr>{% endif %}
+</table></div></div>
+
+<h2>Third passes, exceptions and emergency passes</h2>
+<div class="card"><div class="table-scroll"><table>
+  <tr><th>Pass no.</th><th>Employee</th><th>Type</th><th>Date</th><th>Reason</th><th>Status</th><th>Charged</th></tr>
+  {% for p in r.special %}<tr><td><a href="{% url 'outonpass:detail' p.pk %}">{{ p.pass_number }}</a></td><td>{{ p.employee.full_name }}</td><td>{{ p.get_kind_display }}</td><td>{{ p.pass_date|date:"M d" }}</td><td>{{ p.get_reason_type_display }}</td><td>{% status_badge p.status p.get_status_display %}</td><td>{% if p.minutes_charged is not None %}{{ p.minutes_charged|hm }}{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="7" class="empty-note">None.</td></tr>{% endfor %}
+</table></div></div>
+
+<h2>Time not covered <small class="muted">(HR enters these as minor attendance corrections)</small></h2>
+<div class="card"><div class="table-scroll"><table>
+  <tr><th>Pass no.</th><th>Employee</th><th>Employment</th><th>Date</th><th>Charged</th><th>Excess (min)</th><th>Not covered by balance (min)</th><th>Note</th></tr>
+  {% for p in r.not_covered %}<tr><td><a href="{% url 'outonpass:detail' p.pk %}">{{ p.pass_number }}</a></td><td>{{ p.employee.full_name }}</td><td>{{ p.employee.get_employment_status_display }}</td><td>{{ p.pass_date|date:"M d" }}</td><td>{{ p.minutes_charged|hm }}</td><td>{{ p.excess_minutes }}</td><td>{{ p.over_balance_minutes }}</td><td>{% if p.kind == "EXCEPTION" %}Exception approved by the COH{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="8" class="empty-note">None.</td></tr>{% endfor %}
+</table></div></div>
+
+{% if r.not_back or r.unused %}
+<h2>Open passes (HR to close)</h2>
+<div class="card"><div class="table-scroll"><table>
+  <tr><th>Pass no.</th><th>Employee</th><th>Date</th><th>Planned</th><th>Situation</th></tr>
+  {% for p in r.not_back %}<tr><td><a href="{% url 'outonpass:detail' p.pk %}">{{ p.pass_number }}</a></td><td>{{ p.employee.full_name }}</td><td>{{ p.pass_date|date:"M d" }}</td><td>{{ p.time_out|time:"g:i A" }} – {{ p.time_in|time:"g:i A" }}</td><td>Out, not back</td></tr>{% endfor %}
+  {% for p in r.unused %}<tr><td><a href="{% url 'outonpass:detail' p.pk %}">{{ p.pass_number }}</a></td><td>{{ p.employee.full_name }}</td><td>{{ p.pass_date|date:"M d" }}</td><td>{{ p.time_out|time:"g:i A" }} – {{ p.time_in|time:"g:i A" }}</td><td>Never tapped out</td></tr>{% endfor %}
+</table></div></div>
+{% endif %}
+
+<h2>Low or exhausted balances <small class="muted">({{ r.low_limit|hm }} or less)</small></h2>
+<div class="card"><div class="table-scroll"><table>
+  <tr><th>Employee</th><th>Unit / Section</th><th>Allowance</th><th>Balance</th></tr>
+  {% for x in r.low %}<tr><td>{{ x.employee.full_name }}</td><td>{{ x.area }}</td><td>{{ x.allowance|hm }}</td><td>{{ x.balance|hm }}</td></tr>
+  {% empty %}<tr><td colspan="4" class="empty-note">None.</td></tr>{% endfor %}
+</table></div></div>
+
+{% if r.repeaters %}
+<h2>Third passes in 3 or more months <small class="muted">(for supervisor review)</small></h2>
+<div class="card"><table>
+  <tr><th>Employee</th><th>Months with a third pass</th></tr>
+  {% for e, months in r.repeaters %}<tr><td>{{ e.full_name }}</td><td>{{ months|length }}</td></tr>{% endfor %}
+</table></div>
+{% endif %}
+{% endblock %}
