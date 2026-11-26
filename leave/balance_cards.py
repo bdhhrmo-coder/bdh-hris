@@ -108,8 +108,8 @@ def balance_cards(employee, today=None):
         from cto.balances import upcoming_text
 
         later = upcoming_text(employee, today)  # Item 4: approved credit not yet usable
-        note = f"Use by {cutoff:%b} {cutoff.day}" + (f" · {later}" if later else "")
+        note = f"Use by {cutoff:%b} {cutoff.day}"
         card = _card("CTO", "CTO", compute_available_cto_balance(employee, today), used, note)
-        card["upcoming"] = later
+        card["upcoming"] = f"Also earned: {later}" if later else ""
         cards.append(card)
     return cards

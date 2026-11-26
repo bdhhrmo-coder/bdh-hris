@@ -34,10 +34,14 @@ class UpcomingCreditTests(TestCase):
         self.assertEqual(compute_available_cto_balance(self.emp, today), Decimal("0"))
         self.assertEqual(upcoming_credit(self.emp, today), [(date(2026, 12, 1), Decimal("1.00"))])
         text = upcoming_text(self.emp, today)
-        self.assertEqual(text, "+1 approved, usable from Dec 1, 2026")
-        self.assertIn(text, cto_panel(self.emp, today)["primary"]["sub"])
+        self.assertEqual(text, "1 day, usable from Dec 1, 2026")
+        panel = cto_panel(self.emp, today)
+        earned = next(c for c in panel["cards"] if c["label"] == "Total earned credits")
+        self.assertEqual(earned["value"], "1 day")  # counted as earned at once
+        self.assertEqual(earned["note"], "1 day usable from Dec 1, 2026")
+        self.assertEqual(panel["primary"]["value"], "0 days")  # available: usable today only
         card = next(c for c in balance_cards(self.emp, today) if c["key"] == "CTO")
-        self.assertEqual(card["upcoming"], text)
+        self.assertEqual(card["upcoming"], "Also earned: " + text)
         self.assertEqual(card["remaining"], Decimal("0"))
         self.assertEqual(upcoming_text(self.emp, date(2026, 12, 1)), "")  # it is in the balance now
         self.assertEqual(compute_available_cto_balance(self.emp, date(2026, 12, 1)), Decimal("1.00"))
@@ -47,5 +51,7 @@ class UpcomingCreditTests(TestCase):
         c = Client()
         c.force_login(self.emp.user)
         with t.on(date(2026, 11, 12)):
-            self.assertContains(c.get(reverse("cto:cto_apply")), "+1 approved, usable from Dec 1, 2026")
-            self.assertContains(c.get("/hris/home/"), "+1 approved, usable from Dec 1, 2026")
+            self.assertContains(c.get(reverse("cto:cto_apply")), "Also earned:")
+            self.assertContains(c.get(reverse("cto:cto_apply")), "1 day, usable from Dec 1, 2026")
+            self.assertContains(c.get("/hris/home/"), "Also earned: 1 day, usable from Dec 1, 2026")
+            self.assertContains(c.get(reverse("cto:my_cto")), "usable from Dec 1, 2026")

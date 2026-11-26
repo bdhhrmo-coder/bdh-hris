@@ -239,11 +239,22 @@ def upcoming_credit(employee, as_of_date=None):
     return sorted(by_date.items())
 
 
+def _days(amount):
+    n = f"{amount.normalize():f}"
+    return f"{n} day" if amount == 1 else f"{n} days"
+
+
 def upcoming_text(employee, as_of_date=None):
-    """'+1.5 approved, usable from Dec 1, 2026' (more dates follow with '; ')."""
+    """'1.5 days, usable from Dec 1, 2026' (more dates follow with '; ').
+    Shown as "Also earned: ..." beside the available balance (owner, 2026-11-25)."""
     parts = []
     for i, (day, amount) in enumerate(upcoming_credit(employee, as_of_date)):
-        n = f"{amount.normalize():f}"
         when = f"{day:%b} {day.day}, {day.year}"
-        parts.append(f"+{n} approved, usable from {when}" if i == 0 else f"+{n} from {when}")
+        parts.append(f"{_days(amount)}, usable from {when}" if i == 0 else f"{_days(amount)} from {when}")
     return "; ".join(parts)
+
+
+def usable_from_text(employee, as_of_date=None):
+    """'Usable from Dec 1, 2026' for the earned-credit figure ('' when nothing is waiting)."""
+    dates = [f"{d:%b} {d.day}, {d.year}" for d, _ in upcoming_credit(employee, as_of_date)]
+    return f"Usable from {' / '.join(dates)}" if dates else ""
