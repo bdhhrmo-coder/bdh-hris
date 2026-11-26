@@ -209,7 +209,7 @@ def claim_action(request, pk):
 
                 oic_error, notes = oic_repeat_guard(employee, claim, {
                     routing.STEP_AO: RA.ADMINISTRATIVE_OFFICER, routing.STEP_COH: RA.CHIEF_OF_HOSPITAL}.get(
-                    claim.current_step), notes)
+                    claim.current_step), notes, action=action)
                 if oic_error:  # Item 5
                     raise ValidationError(oic_error)
                 if action == "approve":
@@ -312,8 +312,8 @@ def carry_over(request):
     return render(request, "cto/carry_over.html", {
         "year": year,
         "rows": rows,
-        "pending": CTOCarryOverReason.objects.filter(status=CTOCarryOverReason.PENDING).select_related(
-            "employee", "submitted_by") if is_coh else [],
+        "pending": CTOCarryOverReason.objects.filter(status=CTOCarryOverReason.PENDING).exclude(
+            employee=actor).select_related("employee", "submitted_by") if is_coh else [],  # never one's own (Item 5)
         "reason_deadline": carryover.reason_deadline(year),
         "submission_open": today <= carryover.reason_deadline(year),
     })
@@ -451,7 +451,7 @@ def cto_action(request, pk):
 
     oic_error, notes = oic_repeat_guard(acting_employee, application, {
         CTOUsageApplication.PROCESSED_BY_HR: RA.ADMINISTRATIVE_OFFICER,
-        CTOUsageApplication.RECOMMENDED_BY_AO: RA.CHIEF_OF_HOSPITAL}.get(status), notes)
+        CTOUsageApplication.RECOMMENDED_BY_AO: RA.CHIEF_OF_HOSPITAL}.get(status), notes, action=action)
     if oic_error:  # Item 5
         messages.error(request, oic_error)
         return redirect("cto:cto_queue")

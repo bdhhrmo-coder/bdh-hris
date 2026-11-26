@@ -116,7 +116,7 @@ def change_action(request, pk):
 
     oic_error, notes = oic_repeat_guard(acting_employee, change, {
         DC.PROCESSED_BY_HR: RA.ADMINISTRATIVE_OFFICER, DC.RECOMMENDED_BY_AO: RA.CHIEF_OF_HOSPITAL}.get(change.status),
-        notes)
+        notes, action=action)
     if oic_error:  # Item 5
         messages.error(request, oic_error)
         return redirect("datechange:detail", pk=pk)

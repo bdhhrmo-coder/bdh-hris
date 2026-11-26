@@ -288,7 +288,7 @@ def leave_action(request, pk):
     from accounts.models import RoleAssignment as RA
 
     step_role = {A.PROCESSED_BY_HR: RA.ADMINISTRATIVE_OFFICER, A.RECOMMENDED_BY_AO: RA.CHIEF_OF_HOSPITAL}.get(status)
-    oic_error, notes = oic_repeat_guard(acting_employee, application, step_role, notes)
+    oic_error, notes = oic_repeat_guard(acting_employee, application, step_role, notes, action=action)
     if oic_error:
         messages.error(request, oic_error)
         return done()

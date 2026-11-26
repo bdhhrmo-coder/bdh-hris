@@ -101,7 +101,7 @@ class OICForCohAoTests(TestCase):
         app.refresh_from_db()
         return r
 
-    def test_oic_acting_again_gets_the_automatic_remark(self):
+    def test_oic_acting_again_must_type_a_remark(self):
         self.oic_for_ao()
         app = self.leave(self.nurse)
         self.act(self.head, app, "endorse")
@@ -110,11 +110,13 @@ class OICForCohAoTests(TestCase):
         self.assertEqual(app.status, LeaveApplication.PROCESSED_BY_HR)
         note = Notification.objects.filter(recipient=self.head).order_by("-pk").first()
         self.assertTrue(note.message.startswith("As OIC for the AO: "), note.message)
-        self.act(self.head, app, "recommend")  # no remark typed: still goes through
+        self.act(self.head, app, "recommend")  # no remark typed: refused (owner Decision 1, 2026-11-26)
+        self.assertEqual(app.status, LeaveApplication.PROCESSED_BY_HR)
+        self.act(self.head, app, "recommend", "Coverage checked")
         self.assertEqual(app.status, LeaveApplication.RECOMMENDED_BY_AO)
         last = app.actions.order_by("-pk").first()
-        self.assertTrue(last.notes.startswith(OIC_REPEAT_TAG))
-        self.assertIn("Acted as OIC for the AO", last.notes)
+        self.assertEqual(last.notes, f"{OIC_REPEAT_TAG} Recommended as OIC for the AO, after endorsing it earlier: "
+                                     "Coverage checked")
         rows = [x for x in audit_rows(module="Leave") if "OIC, acted earlier" in x["action"]]
         self.assertEqual(len(rows), 1)
 
@@ -132,7 +134,8 @@ class OICForCohAoTests(TestCase):
         r = self.act(self.ao, app, "approve", "Approved")
         self.assertEqual(app.status, LeaveApplication.APPROVED, r.content[:0])
         last = app.actions.order_by("-pk").first()
-        self.assertTrue(last.notes.startswith(OIC_REPEAT_TAG + " Acted as OIC for the COH"), last.notes)
+        self.assertTrue(last.notes.startswith(OIC_REPEAT_TAG + " Approved as OIC for the COH, after recommending"),
+                        last.notes)
         self.assertTrue(last.notes.endswith("Approved"))
         notice = Notification.objects.filter(recipient=self.nurse).order_by("-pk").first().message
         self.assertIn('Remark: "Approved"', notice)  # the automatic OIC note is not quoted to the filer
