@@ -98,7 +98,7 @@
       </aside>
       <div class="nav-backdrop" x-show="navOpen" x-transition.opacity @click="navOpen = false" style="display:none"></div>
       <main class="app-main">
-        {% if oic_banner %}<div class="oic-banner" role="status"><strong>You are acting as Officer-in-Charge:</strong> {{ oic_banner|join:"; " }}.{% if oic_banner_waits %} You never act on your own requests: they wait at the AO / COH step until the OIC ends.{% endif %}</div>{% endif %}
+        {% if oic_banner %}<div class="oic-banner" role="status"><strong>You are acting as Officer-in-Charge:</strong> {{ oic_banner|join:"; " }}.{% if oic_banner_waits %} You never act on your own requests: they go to the next level up, or wait until the OIC ends if no one else can act.{% endif %}</div>{% endif %}
   {% else %}
     <main class="guest-main">
   {% endif %}
