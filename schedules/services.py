@@ -103,8 +103,12 @@ def submit(schedule, user):
     resubmit = schedule.status == S.RETURNED
     schedule.status = S.SUBMITTED
     schedule.save(update_fields=["status", "updated_at"])
-    log(schedule, "resubmit" if resubmit else "submit", user)
-    _notify_next(schedule)
+    # Item 1 / audit fix F4: a resubmission after the cut-off is allowed but shown to HR.
+    late = ""
+    if resubmit and schedule.cutoff_date and timezone.localdate() > schedule.cutoff_date:
+        late = f"Resubmitted after cut-off ({schedule.cutoff_date:%b %d, %Y})."
+    log(schedule, "resubmit" if resubmit else "submit", user, late)
+    _notify_next(schedule, late)
 
 
 def _check_exchanges_before_submit(schedule, user):
@@ -172,7 +176,7 @@ def act(schedule, user, action, notes=""):
         _notify_next(schedule)
 
 
-def _notify_next(schedule):
+def _notify_next(schedule, extra=""):
     who = rules.STEPS.get(schedule.status, (None, None, None, None))[3]
     people = {"HR": lambda: hr_employees(),
               "Administrative Officer": lambda: employees_with_role(RoleAssignment.ADMINISTRATIVE_OFFICER),
@@ -181,7 +185,8 @@ def _notify_next(schedule):
         return
     preparer = getattr(schedule.prepared_by, "employee", None)
     notify([p for p in people() if preparer is None or p.pk != preparer.pk],
-           f"Duty schedule for {schedule} is waiting for your action.", _url(schedule))
+           f"Duty schedule for {schedule} is waiting for your action." + (f" {extra}" if extra else ""),
+           _url(schedule))
 
 
 # -- after approval ------------------------------------------------------------------------
