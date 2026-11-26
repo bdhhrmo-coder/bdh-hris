@@ -2,7 +2,8 @@
 {% block title %}Apply for CTO — BDH HRIS{% endblock %}
 {% block content %}
 <h1>Apply for CTO</h1>
-<p>Available CTO balance: <strong class="text-primary">{{ balance }} day(s)</strong></p>
+<p>Available CTO balance: <strong class="text-primary">{{ balance }} day(s)</strong>{% if upcoming %} <span class="badge badge-pending">{{ upcoming }}</span>{% endif %}</p>
+{% if upcoming %}<p class="field-help">Approved credit counts from the 1st of the month after the work was done (or from the COH's approval, if later). You can file for dates from then on.</p>{% endif %}
 
 <div class="card form-card">
   <form method="post" class="form-2col">

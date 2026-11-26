@@ -163,9 +163,6 @@ def cto_panel(employee, today=None):
     pending = (allocs.exclude(usage_application__status=CTOUsageApplication.APPROVED)
                .aggregate(t=Sum("days"))["t"] or ZERO)
     available = sum((ln.remaining for ln in usable_lines(employee, today)), ZERO)
-    upcoming = (CTOClaimLine.objects.filter(claim__employee=employee, state=CTOClaimLine.CREDITED,
-                                            effective_date__gt=today)
-                .order_by("effective_date"))
     soonest = next((ln for ln in usable_lines(employee, today)), None)
     if soonest is not None:
         validity = f"Use {days(soonest.remaining)} by {soonest.use_deadline:%b %d, %Y}"
@@ -180,12 +177,13 @@ def cto_panel(employee, today=None):
     whole = int(cap)
     for i in range(whole):
         steps.append({"state": "used" if month_used >= i + 1 else ("half" if month_used > i else "free")})
-    upcoming_days = sum((ln.credited_days for ln in upcoming), ZERO)
     foot = "Days in a pending application are held from the day it is filed. A rejected or returned application " \
            "gives them back."
-    if upcoming_days:
-        nxt = upcoming.first()
-        foot = f"{days(upcoming_days)} more credited, counting from {nxt.effective_date:%b %d, %Y}. " + foot
+    from cto.balances import upcoming_text
+
+    approved_later = upcoming_text(employee, today)  # Item 4: approved credit not yet usable
+    if approved_later:
+        validity = f"{approved_later}. {validity}"
     return {
         "primary": {
             "label": "Available CTO balance", "value": days(available),

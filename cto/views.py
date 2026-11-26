@@ -395,7 +395,10 @@ def cto_apply(request):
     else:
         form = CTOUsageApplicationForm(employee=employee)
 
-    return render(request, "cto/cto_apply.html", {"form": form, "balance": compute_available_cto_balance(employee)})
+    from .balances import upcoming_text
+
+    return render(request, "cto/cto_apply.html", {"form": form, "balance": compute_available_cto_balance(employee),
+                                                  "upcoming": upcoming_text(employee)})
 
 
 @login_required

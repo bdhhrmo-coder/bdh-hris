@@ -570,3 +570,10 @@ Do not attempt to build this in one pass. Suggested phase order:
 - Command: `BDH_HRIS_DEBUG=1 venv/bin/python manage.py test`
 - `BDH_HRIS_DEBUG=1` is needed locally: with DEBUG off, settings switch to WhiteNoise's manifest storage, and without a `collectstatic` run about 20 page tests fail with "Missing staticfiles manifest entry".
 - **Known failures (4):** the CSC Form 6 and COSP leave-form print tests in `leave.tests` (`PrintCscForm6Tests` x2, `PrintCospLeaveFormTests` x2) need LibreOffice. Without it they fail as `302 != 200` (on current main; older code showed `FileNotFoundError: 'libreoffice'`). They pass only on a machine with LibreOffice installed. Any other failure is a real one.
+
+---
+
+## 16. Pilot improvement items (owner requests 2026-11-24; rebuilt 2026-11-26 after the first build was lost, one branch each)
+
+### Item 4 — CTO credit not yet usable (branch `item4-cto-usable-from`)
+- The rule is **unchanged** (§7.1: a credit counts from the later of the 1st of the month after the workday and the COH approval date; the balance counts only credit in effect). What changed: approved credit that is not usable yet is **shown at once** as "+X approved, usable from [date]" (several dates: "; +Y from [date]") on the home "My balances" card, on My CTO (under the available balance) and on the CTO apply page (`cto.balances.upcoming_credit`, `upcoming_text`). The balance figure itself does not change until the date arrives. Separating employees see nothing extra (their credit is usable at once).

@@ -105,6 +105,11 @@ def balance_cards(employee, today=None):
             usage_application__start_date__gte=date(today.year, 1, 1), usage_application__start_date__lte=today,
         ).aggregate(t=Sum("days"))["t"] or Decimal("0")
         cutoff = date(today.year, *settings.CTO_USAGE_CUTOFF_MONTH_DAY)
-        cards.append(_card("CTO", "CTO", compute_available_cto_balance(employee, today), used,
-                           f"Use by {cutoff:%b} {cutoff.day}"))
+        from cto.balances import upcoming_text
+
+        later = upcoming_text(employee, today)  # Item 4: approved credit not yet usable
+        note = f"Use by {cutoff:%b} {cutoff.day}" + (f" · {later}" if later else "")
+        card = _card("CTO", "CTO", compute_available_cto_balance(employee, today), used, note)
+        card["upcoming"] = later
+        cards.append(card)
     return cards
