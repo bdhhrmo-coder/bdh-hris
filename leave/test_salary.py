@@ -49,3 +49,10 @@ class SalaryTests(TestCase):
         for who in (self.employee, self.hr, self.hrp, self.ao, self.coh):
             self.assertTrue(may_see_salary(who, a), who)
         self.assertFalse(may_see_salary(self.supervisor, a))
+
+    def test_no_salary_on_record_prints_blank(self):
+        self.employee.monthly_salary = None
+        self.employee.save()
+        a = self.recorded()
+        self.assertIsNone(a.salary_at_recording)
+        self.assertIn(fill_csc_form6(a, show_salary=True)["blank"]["AA12"].value, ("", None))
