@@ -588,3 +588,6 @@ Do not attempt to build this in one pass. Suggested phase order:
 - Who sees it on the printout: the employee, HR Processors, HR Administrators, the AO and the COH (view-only OIC rule applies). A Supervisor's printout leaves item 7 blank (`csc_form6.may_see_salary`). The COSP form (01F04-A) is unchanged.
 - Existing employees: the HR Administrator enters each salary on the employee record (no import column, since HR Processors may run the Data Import).
 - Tests use made-up figures only.
+
+### Item 4 — CTO credit not yet usable (branch `item4-cto-usable-from`; revised by the owner 2026-11-25)
+- The rule is **unchanged** (§7.1: a credit counts from the later of the 1st of the month after the workday and the COH approval date). **Earned** vs **available** (owner-confirmed rule, 2026-11-25): approved credit counts as **earned at once** — the CTO panel's "Total earned credits" (home page and My CTO) includes it, noted "X days usable from [date]" (`cto.balances.upcoming_credit`, `usable_from_text`). The **"Available CTO balance" and the CTO application page count only credit usable today**; the apply page and the home "My balances" card show the rest as "Also earned: X days, usable from [date]" (`upcoming_text`), so staff never file against days they cannot use yet. Separating employees see nothing extra (their credit is usable at once).

@@ -158,14 +158,17 @@ def cto_panel(employee, today=None):
     lines = list(CTOClaimLine.objects.filter(claim__employee=employee, state=CTOClaimLine.CREDITED,
                                              effective_date__lte=today))
     credited = sum((ln.credited_days for ln in lines), ZERO)
+    from cto.balances import upcoming_credit, usable_from_text
+
+    # Item 4 (owner, 2026-11-25): approved credit counts as earned at once, with "Usable from ...";
+    # the available balance below still counts only credit usable today.
+    earned_later = sum((d for _day, d in upcoming_credit(employee, today)), ZERO)
+    usable_from = usable_from_text(employee, today)
     allocs = CTOCreditAllocation.objects.filter(line__in=lines)
     used = allocs.filter(usage_application__status=CTOUsageApplication.APPROVED).aggregate(t=Sum("days"))["t"] or ZERO
     pending = (allocs.exclude(usage_application__status=CTOUsageApplication.APPROVED)
                .aggregate(t=Sum("days"))["t"] or ZERO)
     available = sum((ln.remaining for ln in usable_lines(employee, today)), ZERO)
-    upcoming = (CTOClaimLine.objects.filter(claim__employee=employee, state=CTOClaimLine.CREDITED,
-                                            effective_date__gt=today)
-                .order_by("effective_date"))
     soonest = next((ln for ln in usable_lines(employee, today)), None)
     if soonest is not None:
         validity = f"Use {days(soonest.remaining)} by {soonest.use_deadline:%b %d, %Y}"
@@ -180,12 +183,8 @@ def cto_panel(employee, today=None):
     whole = int(cap)
     for i in range(whole):
         steps.append({"state": "used" if month_used >= i + 1 else ("half" if month_used > i else "free")})
-    upcoming_days = sum((ln.credited_days for ln in upcoming), ZERO)
     foot = "Days in a pending application are held from the day it is filed. A rejected or returned application " \
            "gives them back."
-    if upcoming_days:
-        nxt = upcoming.first()
-        foot = f"{days(upcoming_days)} more credited, counting from {nxt.effective_date:%b %d, %Y}. " + foot
     return {
         "primary": {
             "label": "Available CTO balance", "value": days(available),
@@ -201,8 +200,8 @@ def cto_panel(employee, today=None):
             ],
         },
         "cards": [
-            {"label": "Total earned credits", "value": days(credited), "tone": "navy",
-             "note": "Credited and in effect"},
+            {"label": "Total earned credits", "value": days(credited + earned_later), "tone": "navy",
+             "note": (f"{days(earned_later)} {usable_from.replace("Usable", "usable", 1)}" if earned_later else "Credited and in effect")},
             {"label": "Utilized", "value": days(used), "tone": "neutral", "note": "Approved CTO taken"},
             {"label": "Pending applications", "value": days(pending), "tone": "amber",
              "note": "Held until decided"},

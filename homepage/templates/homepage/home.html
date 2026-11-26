@@ -76,6 +76,7 @@ unchanged (CLAUDE.md 8B); homepage/views.py _role_cards() decides which cards sh
     <p class="kpi-label">My balances</p>
     <ul class="kpi-list">
       {% for c in my_balances %}<li><span>{{ c.name }}</span><strong>{% if c.remaining is None %}No fixed limit{% else %}{{ c.remaining|floatformat:"-2" }} day{{ c.remaining|pluralize }}{% endif %}</strong></li>
+      {% if c.upcoming %}<li><small class="kpi-sub">{{ c.upcoming }}</small></li>{% endif %}
       {% empty %}<li><span>No balances recorded yet</span></li>{% endfor %}
     </ul>
   </a>

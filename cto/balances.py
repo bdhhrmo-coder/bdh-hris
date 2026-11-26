@@ -214,3 +214,47 @@ def usage_rule_error(employee, start_date, end_date, number_of_days, exclude_app
     if forms_illegal_consecutive_run(employee, start_date, end_date, exclude_application):
         return (None, "CTO cannot be taken for 3 or more consecutive days.")
     return None
+
+
+# -- Pilot Item 4 (owner request 2026-11-24; rebuilt 2026-11-26) -------------------------------
+# An approved claim's credit only counts from its effective date (the later of
+# the 1st of the month after the workday and the COH approval date, §7.1); the
+# rule is unchanged. What changed is that it is shown at once, next to the
+# balance, so the employee sees it the day the claim is approved.
+
+def upcoming_credit(employee, as_of_date=None):
+    """[(effective_date, days)] of approved credit whose effective date has not
+    arrived yet, soonest first. Empty for a separating employee, whose credit is
+    usable at once (§7.1)."""
+    from .models import CTOClaimLine
+    from .separation import is_separating
+
+    as_of_date = as_of_date or timezone.localdate()
+    if is_separating(employee):
+        return []
+    by_date = {}
+    for line in CTOClaimLine.objects.filter(claim__employee=employee, state=CTOClaimLine.CREDITED,
+                                            effective_date__gt=as_of_date):
+        by_date[line.effective_date] = by_date.get(line.effective_date, Decimal("0")) + line.credited_days
+    return sorted(by_date.items())
+
+
+def _days(amount):
+    n = f"{amount.normalize():f}"
+    return f"{n} day" if amount == 1 else f"{n} days"
+
+
+def upcoming_text(employee, as_of_date=None):
+    """'1.5 days, usable from Dec 1, 2026' (more dates follow with '; ').
+    Shown as "Also earned: ..." beside the available balance (owner, 2026-11-25)."""
+    parts = []
+    for i, (day, amount) in enumerate(upcoming_credit(employee, as_of_date)):
+        when = f"{day:%b} {day.day}, {day.year}"
+        parts.append(f"{_days(amount)}, usable from {when}" if i == 0 else f"{_days(amount)} from {when}")
+    return "; ".join(parts)
+
+
+def usable_from_text(employee, as_of_date=None):
+    """'Usable from Dec 1, 2026' for the earned-credit figure ('' when nothing is waiting)."""
+    dates = [f"{d:%b} {d.day}, {d.year}" for d, _ in upcoming_credit(employee, as_of_date)]
+    return f"Usable from {' / '.join(dates)}" if dates else ""
