@@ -144,5 +144,7 @@ def import_workbook(schedule, upload):
             if raw and raw not in codes:
                 problems.append(f"{emp_id} day {day}: unknown code '{raw}' (left blank)")
             values[(row.pk, month_days[day])] = codes.get(raw)
-    services.save_grid(schedule, values)
+    refused = []
+    services.save_grid(schedule, values, refused=refused)
+    problems += refused
     return sum(1 for v in values.values() if v), problems

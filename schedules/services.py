@@ -55,15 +55,23 @@ def add_row(schedule, employee, sort_order=None):
 
 
 @transaction.atomic
-def save_grid(schedule, values):
-    """values: {(row_id, date): shift_id or None}. Only while editable."""
+def save_grid(schedule, values, refused=None):
+    """values: {(row_id, date): shift_id or None}. Only while editable.
+    Item 6: the leave code (LV) goes only on a day with a leave or CTO request;
+    anywhere else the cell keeps its old value and the reason is added to
+    `refused` (a list), when given."""
     if not schedule.is_editable:
         raise ValidationError("This schedule can no longer be edited.")
     from exchange.regular import locked_cells
 
+    from .leave_marks import leave_codes, marks
+
     locked = locked_cells(schedule)  # days set by approved regular exchanges stay as they are
     codes = {c.pk: c for c in ShiftCode.objects.all()}
-    cells = {(c.row_id, c.date): c for c in ScheduleCell.objects.filter(row__schedule=schedule).select_related("row")}
+    cells = {(c.row_id, c.date): c for c in
+             ScheduleCell.objects.filter(row__schedule=schedule).select_related("row__employee")}
+    lv = leave_codes()
+    mark_map = None
     changed = []
     for key, shift_id in values.items():
         cell = cells.get(key)
@@ -71,6 +79,13 @@ def save_grid(schedule, values):
             continue
         new = codes.get(shift_id) if shift_id else None
         if (cell.shift_id or None) != (new.pk if new else None):
+            if new is not None and new.code.upper() in lv:
+                mark_map = marks(schedule) if mark_map is None else mark_map
+                if (cell.row.employee_id, cell.date) not in mark_map:
+                    if refused is not None:
+                        refused.append(f"{cell.row.employee} on {cell.date:%b %d}: {new.code} needs a leave or CTO "
+                                       "request for that day (kept the old value)")
+                    continue
             cell.shift = new
             changed.append(cell)
     ScheduleCell.objects.bulk_update(changed, ["shift"])

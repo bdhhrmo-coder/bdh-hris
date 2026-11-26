@@ -152,6 +152,10 @@ def fill_schedule_form(schedule, printed_by=None):
         cells[(c.row_id, c.date)] = c
     r = h2 + 1
     rows = list(schedule.rows.select_related("employee"))
+    from .leave_marks import APPROVED_MARKS, marks
+
+    # Item 6: approved leave / CTO shown on blank or OFF (non-duty) days; pending requests are not printed.
+    mark_map = {k: v for k, v in marks(schedule, [x.employee_id for x in rows]).items() if v in APPROVED_MARKS}
     for row in rows:
         row_cells = [cells.get((row.pk, d)) for d in days]
         hours, duty_days = rules.row_totals([c for c in row_cells if c])
@@ -160,7 +164,11 @@ def fill_schedule_form(schedule, printed_by=None):
         _put(ws, r, DESIG_COL, DESIG_COL, row.designation, size=7, align="left", wrap=False)
         for i, (d, c) in enumerate(zip(days, row_cells)):
             col = FIRST_DAY_COL + i
-            cell = _put(ws, r, col, col, c.shift.code if c and c.shift_id else "", size=6.5)
+            text = c.shift.code if c and c.shift_id else ""
+            mark = mark_map.get((row.employee_id, d))
+            if mark and not (c and c.shift_id and c.shift.is_duty):
+                text = mark
+            cell = _put(ws, r, col, col, text, size=6.5)
             if d.weekday() >= 5:
                 cell.fill = WEEKEND_FILL
         _put(ws, r, hours_col, hours_col, f"{hours.normalize():f}", bold=True, size=8)
@@ -180,6 +188,10 @@ def fill_schedule_form(schedule, printed_by=None):
         for c in ShiftCode.objects.filter(is_active=True))
     _put(ws, r, 1, last_col, f"Shift codes:  {legend}", size=7, align="left")
     r += 1
+    if mark_map:
+        _put(ws, r, 1, last_col, "LV = on approved leave   CTO = on approved CTO   (shown on days with no duty shift; "
+             "pending requests are not printed)", size=7, align="left")
+        r += 1
     _put(ws, r, 1, last_col, f"NOTES/ REMARKS:  {schedule.notes or ''}", size=8, align="left")
     r += 1
     changes = list(schedule.changes.select_related("employee"))

@@ -570,3 +570,14 @@ Do not attempt to build this in one pass. Suggested phase order:
 - Command: `BDH_HRIS_DEBUG=1 venv/bin/python manage.py test`
 - `BDH_HRIS_DEBUG=1` is needed locally: with DEBUG off, settings switch to WhiteNoise's manifest storage, and without a `collectstatic` run about 20 page tests fail with "Missing staticfiles manifest entry".
 - **Known failures (4):** the CSC Form 6 and COSP leave-form print tests in `leave.tests` (`PrintCscForm6Tests` x2, `PrintCospLeaveFormTests` x2) need LibreOffice. Without it they fail as `302 != 200` (on current main; older code showed `FileNotFoundError: 'libreoffice'`). They pass only on a machine with LibreOffice installed. Any other failure is a real one.
+
+---
+
+## 16. Pilot improvements (owner checklist 2026-11-24; rebuilt 2026-11-26, one branch per item, not merged)
+
+### Item 6 – Leave and CTO on the schedule (branch `item6-leave-cto-on-schedule`)
+- `schedules/leave_marks.py` reads the requests each time (nothing stored, no leave/CTO rule changed): **LV** approved leave (`counted_q`), **LV?** leave in the chain, **CTO** approved CTO, **CTO?** CTO in the chain; CTO days covering part of a COSP leave show as that leave. Returned, rejected and cancelled requests give no mark. An approved date change moves the mark (it reads the record's dates).
+- Grid (edit and detail pages): the mark shows under the cell, with a legend line.
+- **LV code** (seeded by migration `schedules 0004` if HR has none; `settings.SCHEDULE_LEAVE_CODES`): accepted only on a day with a leave or CTO request (pending or approved). Elsewhere the cell keeps its old value and the reason is listed (page message; Excel upload notes).
+- A duty shift on an approved leave/CTO day is a **warning only** on the edit and detail pages; saving and submitting still work.
+- F50 printout: approved LV / CTO printed on days with no duty shift (blank or OFF), plus a legend line; pending requests are not printed on the official form. Totals still come from the shift codes.
