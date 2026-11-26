@@ -286,7 +286,11 @@ def leave_action(request, pk):
 
     def apply_transition(new_status, action_name):
         application.status = new_status
-        application.save(update_fields=["status", "updated_at"])
+        fields = ["status", "updated_at"]
+        if action_name == "record":  # Item 3: keep the salary as of HR's recording
+            application.salary_at_recording = application.employee.monthly_salary
+            fields.append("salary_at_recording")
+        application.save(update_fields=fields)
         LeaveApplicationAction.objects.create(
             application=application, action=action_name, resulting_status=new_status,
             notes=notes, acted_by=request.user,
@@ -431,7 +435,9 @@ def print_csc_form6(request, pk):
         return redirect("leave:leave_detail", pk=application.pk)
 
     try:
-        pdf_bytes = render_csc_form6_pdf(application)
+        from .csc_form6 import may_see_salary
+
+        pdf_bytes = render_csc_form6_pdf(application, show_salary=may_see_salary(acting_employee, application))
     except RuntimeError as exc:
         return _pdf_unavailable(request, exc)
     filename = f"CSC-Form-6_{application.employee.surname}_{application.pk}.pdf"

@@ -115,6 +115,9 @@ def employee_create(request):
     return render(request, "employees/employee_create_form.html", {"form": form})
 
 
+HIDDEN_AMOUNT_FIELDS = {"monthly_salary"}
+
+
 @login_required
 def employee_detail(request, pk):
     employee = get_object_or_404(Employee, pk=pk)
@@ -176,6 +179,8 @@ def employee_edit(request, pk):
                 employee = form.save()
                 education_formset.save()
                 for field_name, (old_value, new_value) in changes.items():
+                    if field_name in HIDDEN_AMOUNT_FIELDS:  # Item 3: amounts never kept in the history
+                        old_value = new_value = "(amount not shown)"
                     EmployeeEditHistory.objects.create(
                         employee=employee,
                         field_name=field_name,

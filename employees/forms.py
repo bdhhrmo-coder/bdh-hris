@@ -74,6 +74,7 @@ class EmployeeForm(forms.ModelForm):
             "biometric_id",
             "item_plantilla_no",
             "salary_grade",
+            "monthly_salary",
             "appointment_type",
             "employment_status",
             "cosp_under",
@@ -109,6 +110,10 @@ class EmployeeForm(forms.ModelForm):
             and self.is_editing_existing
             and is_self_record_locked(acting_employee, self.instance)
         )
+
+        if not is_hr_admin and "monthly_salary" in self.fields:
+            # Pilot Item 3: only the HR Administrator sees or enters the salary.
+            del self.fields["monthly_salary"]
 
         for name in self.fields:
             if name == "reason":

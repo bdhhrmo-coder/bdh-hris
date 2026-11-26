@@ -84,6 +84,9 @@ class Employee(models.Model):
     position = models.CharField(max_length=150, blank=True)
     item_plantilla_no = models.CharField("Item/Plantilla No.", max_length=50, blank=True)
     salary_grade = models.CharField(max_length=10, blank=True)
+    # Pilot Item 3 (owner request 2026-11-24): the actual monthly salary printed on CSC Form No. 6.
+    # Entered and seen on screen by the HR Administrator only; its edit history never shows the amounts.
+    monthly_salary = models.DecimalField("Monthly salary", max_digits=12, decimal_places=2, null=True, blank=True)
     appointment_type = models.CharField(max_length=100, blank=True)
     employment_status = models.CharField(
         max_length=10, choices=EMPLOYMENT_STATUS_CHOICES, default=EMPLOYMENT_STATUS_REGULAR

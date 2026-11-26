@@ -254,6 +254,9 @@ class LeaveApplication(models.Model):
     ALL_DETAIL_FIELDS = ["location", "location_detail", "sick_leave_type", "illness", "study_purpose",
                          "other_purpose", "wellness_reason"]
 
+    # Pilot Item 3: the monthly salary when HR recorded the leave, printed on CSC Form No. 6 so a later
+    # salary change never alters a form already processed.
+    salary_at_recording = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     submitted_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

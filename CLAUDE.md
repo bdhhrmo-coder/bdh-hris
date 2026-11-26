@@ -581,3 +581,10 @@ Do not attempt to build this in one pass. Suggested phase order:
 
 ### Item 2 — Filing date and time (branch `item2-filing-time`)
 - Every request shows the **date and time it was first filed** (Philippine time) and, after a return, **"Resubmitted"** with that time beside it: My Applications, the details page and the approver's queue for leave, CTO applications and claims, Exchange of Duty, attendance corrections, Official Business / group requests, date changes, Out-on-Pass, and duty schedules ("Submitted"). One template tag does it (`{% filed obj %}` / `{% filed obj short=1 %}`, `accounts/templatetags/ui.py filing_times`): the first filing is the record's own filing time (or, for schedules and CTO claims, the first "submit" in its log); the resubmission is the latest "resubmit" in the log. Records filed before the change show the same, since both times were always kept.
+
+### Item 3 — Actual salary on CSC Form No. 6 (branch `item3-salary-csc-form6`)
+- `Employee.monthly_salary` (optional): **entered and seen on screen by the HR Administrator only** (the field is not on the form for anyone else, HR Processors included). A change is logged in the employee's history and the Audit Log as "(amount not shown)": amounts are never kept in the log.
+- **Item 7 (Salary) of CSC Form No. 6** prints the monthly salary instead of the Salary Grade (layout unchanged). The amount is the one **saved when HR recorded the leave** (`LeaveApplication.salary_at_recording`), so a later salary change never alters a processed form; before recording, or for leave recorded before this change, the current salary. Blank when none is on record.
+- Who sees it on the printout: the employee, HR Processors, HR Administrators, the AO and the COH (view-only OIC rule applies). A Supervisor's printout leaves item 7 blank (`csc_form6.may_see_salary`). The COSP form (01F04-A) is unchanged.
+- Existing employees: the HR Administrator enters each salary on the employee record (no import column, since HR Processors may run the Data Import).
+- Tests use made-up figures only.
