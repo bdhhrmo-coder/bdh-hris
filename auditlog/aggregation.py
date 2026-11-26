@@ -32,6 +32,7 @@ ACTION_LABELS = {
     "opening_line_voided": "Opening CTO line voided",
     "correct_day_type": "Day type corrected",
     "skip": "Step skipped",
+    "endorse_unit_first": "Endorsed by the first of two unit heads",
     "cancel": "Cancelled by the filer",
     "hr_close": "Closed by HR (time in entered)",
     "hr_not_used": "Marked not used by HR",
@@ -220,6 +221,24 @@ def _rows_from_date_changes():
     return rows
 
 
+def _rows_from_exchange_settings():
+    """Exchange groups given to positions, and the Exchange of Duty rules
+    (owner decisions 2026-11-26)."""
+    from employees.models import PositionGroupChange
+    from exchange.models import ExchangeRulesChange
+
+    rows = []
+    for ch in PositionGroupChange.objects.select_related("position", "changed_by"):
+        rows.append({"timestamp": ch.changed_at, "module": "Exchange of Duty", "action": "Exchange group changed",
+                     "detail": f"{ch.position}: {ch.old_group or 'none'} -> {ch.new_group or 'none'}",
+                     "actor": ch.changed_by, "employee_ids": set(), "employee_display": "—"})
+    for ch in ExchangeRulesChange.objects.select_related("changed_by"):
+        rows.append({"timestamp": ch.changed_at, "module": "Exchange of Duty", "action": "Rule changed",
+                     "detail": f"{ch.field}: {ch.old_value} -> {ch.new_value}",
+                     "actor": ch.changed_by, "employee_ids": set(), "employee_display": "—"})
+    return rows
+
+
 def audit_rows(employee_id=None, module=None, date_from=None, date_to=None):
     """
     Merged, filtered, newest-first list of audit rows across all
@@ -241,6 +260,7 @@ def audit_rows(employee_id=None, module=None, date_from=None, date_to=None):
     rows += _rows_from_document_events(UploadedDocumentEvent.objects.all())
     rows += _rows_from_announcement_actions()
     rows += _rows_from_schedule_events()
+    rows += _rows_from_exchange_settings()
     rows += _rows_from_oic_designations()
     from outonpass.models import MissedTapAction, OutOnPassAction
     rows += _rows_from_request_actions(OutOnPassAction.objects.all(), "Out-on-Pass", "out_on_pass")

@@ -261,7 +261,8 @@ def can_endorse_second(acting_employee, filers):
 # Option B). Whoever endorsed a request in its current cycle (unit head or
 # Supervisor step) cannot process it at the HR step; another HR Processor or
 # HR Administrator must. A return and resubmission starts a new cycle.
-_ENDORSED_STATUSES = ("ENDORSED_BY_UNIT_HEAD", "ENDORSED_BY_SUPERVISOR")
+# ENDORSED_BY_ONE_UNIT_HEAD: the first of two unit heads on a cross-unit Exchange of Duty (2026-11-26).
+_ENDORSED_STATUSES = ("ENDORSED_BY_ONE_UNIT_HEAD", "ENDORSED_BY_UNIT_HEAD", "ENDORSED_BY_SUPERVISOR")
 
 
 def endorser_ids(obj):

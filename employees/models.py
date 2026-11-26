@@ -82,6 +82,11 @@ class Employee(models.Model):
         help_text="The ID this employee has in PALMIRA (the biometric system), as printed on its report.",
     )
     position = models.CharField(max_length=150, blank=True)
+    # The position record for this title (owner decision 2026-11-26): kept in
+    # step with `position` on every save (employees/positions.py), so the
+    # Exchange of Duty rule compares records, not typed text.
+    position_ref = models.ForeignKey("Position", on_delete=models.PROTECT, null=True, blank=True,
+                                     related_name="employees", editable=False)
     item_plantilla_no = models.CharField("Item/Plantilla No.", max_length=50, blank=True)
     salary_grade = models.CharField(max_length=10, blank=True)
     appointment_type = models.CharField(max_length=100, blank=True)
@@ -196,6 +201,15 @@ class Employee(models.Model):
                                     violation_error_message="Another employee already has this Biometric ID."),
         ]
 
+    def save(self, *args, **kwargs):
+        from .positions import position_for
+
+        self.position_ref = position_for(self.position)
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None and "position" in update_fields:
+            kwargs["update_fields"] = set(update_fields) | {"position_ref"}
+        super().save(*args, **kwargs)
+
     def __str__(self):
         full = f"{self.surname}, {self.first_name}"
         if self.middle_name:
@@ -253,6 +267,50 @@ class Employee(models.Model):
         from accounts.models import RoleAssignment
 
         return self.has_role(RoleAssignment.HR_ADMINISTRATOR)
+
+
+class ExchangeGroup(models.Model):
+    """Positions that may exchange duty with each other (owner decision
+    2026-11-26). Kept by the HR Administrator on HR Administration ->
+    Positions and Exchange Groups."""
+
+    name = models.CharField(max_length=60, unique=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class Position(models.Model):
+    """One position title used in the HRIS. Created automatically from the
+    titles typed on employee records (employees/positions.py)."""
+
+    title = models.CharField(max_length=150)
+    title_key = models.CharField(max_length=150, unique=True, editable=False,
+                                 help_text="The title in lower case with single spaces, for matching.")
+    exchange_group = models.ForeignKey(ExchangeGroup, on_delete=models.PROTECT, null=True, blank=True,
+                                       related_name="positions")
+
+    class Meta:
+        ordering = ["title"]
+
+    def __str__(self):
+        return self.title
+
+
+class PositionGroupChange(models.Model):
+    """Every change of a position's Exchange group (Audit Log)."""
+
+    position = models.ForeignKey(Position, on_delete=models.CASCADE, related_name="group_changes")
+    old_group = models.CharField(max_length=60, blank=True)
+    new_group = models.CharField(max_length=60, blank=True)
+    changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    changed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["changed_at", "pk"]
 
 
 class EducationHistory(models.Model):

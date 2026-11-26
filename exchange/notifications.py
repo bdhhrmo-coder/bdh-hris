@@ -33,6 +33,15 @@ def notify_status_change(exchange_request):
             f"{a} and {b} filed a duty exchange request — awaiting your endorsement.",
             _QUEUE_URL,
         )
+    elif status == DutyExchangeRequest.ENDORSED_BY_ONE_UNIT_HEAD:
+        from .permissions import remaining_side, unit_sides
+
+        notify(
+            unit_sides(exchange_request).get(remaining_side(exchange_request), []),
+            f"A cross-unit duty exchange request between {a} and {b} was endorsed by the other unit head "
+            "— awaiting your endorsement.",
+            _QUEUE_URL,
+        )
     elif status == DutyExchangeRequest.ENDORSED_BY_UNIT_HEAD:
         notify(
             second_endorsers_for([a, b]),

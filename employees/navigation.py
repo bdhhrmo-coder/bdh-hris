@@ -82,6 +82,8 @@ MENU = [
         ("Out-on-Pass Setup", "outonpass:setup", "door-open", "is_hr_admin"),
         ("Shift Codes", "schedules:shift_codes", "list", "can_manage_announcements"),
         ("Schedule Cut-off Dates", "schedules:cutoff_dates", "calendar-clock", "is_hr"),
+        ("Positions and Exchange Groups", "exchange:positions", "repeat", "is_hr_admin"),
+        ("Exchange of Duty Rules", "exchange:rules", "repeat", "is_hr_admin"),
         ("User Accounts and Roles", "admin:index", "user-cog", "is_system_admin"),
     ]),
 ]

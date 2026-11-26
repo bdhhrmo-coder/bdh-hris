@@ -38,6 +38,7 @@ class DutyExchangeRequestForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.employee_a = employee_a
         self.kind = None
+        self.warnings = []
         if employee_a is not None:
             self.fields["employee_b"].queryset = self.fields["employee_b"].queryset.exclude(pk=employee_a.pk)
         duty = ShiftCode.objects.filter(is_active=True, is_duty=True)
@@ -64,19 +65,25 @@ class DutyExchangeRequestForm(forms.ModelForm):
             self.add_error("emergency_justification", "Required when filing as a documented emergency.")
 
         if date_a and date_b and employee_b is not None and self.employee_a is not None and date_a != date_b:
+            from schedules.services import cell_for
+
+            from .duty_checks import check_swap
+            from .schedule_checks import location_errors
+
             kind, errors = kind_for(self.employee_a, date_a, employee_b, date_b, is_emergency)
             for e in errors:
                 self.add_error(None, e)
             self.kind = kind
+            shift_a = shift_b = None
             if kind == X.KIND_REGULAR:
                 # No schedule yet: the employees give the shifts; checked against
-                # the filing deadline and other exchanges, not a schedule.
-                errs, _ = check(self.employee_a, date_a, employee_b, date_b, today, True, with_timing=False)
-                for e in [e for e in errs if "same unit" in e]:
+                # the filing deadline and other exchanges, not a submitted schedule.
+                for e in location_errors(self.employee_a, employee_b):
                     self.add_error(None, e)
                 for e in regular_errors(self.employee_a, date_a, employee_b, date_b, cleaned.get("shift_a"),
                                         cleaned.get("shift_b"), today):
                     self.add_error(None, e)
+                shift_a, shift_b = cleaned.get("shift_a"), cleaned.get("shift_b")
             elif kind is not None:
                 if violates_minimum_notice(min(date_a, date_b), today, is_emergency):
                     self.add_error(None, "This request gives less than 24 hours' notice before the earliest "
@@ -87,6 +94,16 @@ class DutyExchangeRequestForm(forms.ModelForm):
                 for e in errs + overlap_errors(self.employee_a, date_a, employee_b, date_b):
                     self.add_error(None, e)
                 self.schedule_notes = notes
+                cell_a, cell_b = cell_for(self.employee_a, date_a)[1], cell_for(employee_b, date_b)[1]
+                shift_a = cell_a.shift if cell_a is not None and cell_a.shift_id else None
+                shift_b = cell_b.shift if cell_b is not None and cell_b.shift_id else None
+            if kind is not None:
+                # Equal length and the duties next to each swapped date (2026-11-26).
+                errs, warnings, notes = check_swap(self.employee_a, date_a, shift_a, employee_b, date_b, shift_b)
+                for e in errs:
+                    self.add_error(None, e)
+                self.warnings = warnings
+                self.schedule_notes += notes
 
         if self.employee_a is not None and exceeds_monthly_cap(self.employee_a):
             self.add_error(None, "You have already reached the 3-exchange-request-per-month limit (§8).")
@@ -101,6 +118,8 @@ class DutyExchangeRequestForm(forms.ModelForm):
 
         obj = super().save(commit=False)
         obj.kind = self.kind or (X.KIND_EMERGENCY if obj.is_emergency else X.KIND_MODIFICATION)
+        obj.new_rules = True  # owner decisions 2026-11-26
+        obj.warnings = "\n".join(self.warnings)
         if obj.kind != X.KIND_REGULAR:
             # Read the shifts from the schedule, for the record and the form.
             for date_field, emp, shift_field in (("date_a", self.employee_a, "shift_a"),

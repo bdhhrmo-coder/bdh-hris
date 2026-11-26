@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Positions and Exchange Groups — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Positions and Exchange Groups</h1>
+<p class="muted">Exchange of Duty partners must be in the same section and hold positions in the same Exchange group. Both positions in the same group: allowed. Different groups, or one in a group and the other in none: not allowed. Neither in a group: allowed (same section only). A change applies to requests filed from then on.</p>
+<p class="muted">Positions are listed from the titles typed on employee records. Titles that differ only in capitals or spacing are one position; any other difference is a separate position, so give each variant its group.</p>
+<form method="post" class="card">
+  {% csrf_token %}
+  <input type="hidden" name="what" value="save">
+  <div class="table-scroll">
+  <table>
+    <tr><th>Position</th><th>Employees</th><th>Exchange group</th></tr>
+    {% for p in rows %}
+    <tr>
+      <td>{{ p.title }}</td>
+      <td>{{ p.n }}</td>
+      <td><select name="group_{{ p.pk }}" aria-label="Exchange group for {{ p.title }}">
+        <option value="">— none —</option>
+        {% for g in groups %}<option value="{{ g.pk }}" {% if p.exchange_group_id == g.pk %}selected{% endif %}>{{ g.name }}</option>{% endfor %}
+      </select></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="3" class="empty-note">No positions yet.</td></tr>
+    {% endfor %}
+  </table>
+  </div>
+  <button type="submit">Save changes</button>
+</form>
+<form method="post" class="card">
+  {% csrf_token %}
+  <input type="hidden" name="what" value="add_group">
+  <h2 class="mt-0">Add a group</h2>
+  <label>Group name <input type="text" name="name" maxlength="60" required></label>
+  <button type="submit" class="btn-secondary">Add group</button>
+</form>
+{% endblock %}

@@ -173,11 +173,13 @@ def schedule_edit(request, pk):
                 row.delete()
         if request.POST.get("then") == "submit":
             try:
-                services.submit(schedule, request.user)
+                flags = services.submit(schedule, request.user)
             except ValidationError as exc:
                 messages.error(request, " ".join(exc.messages))
                 return redirect("schedules:edit", pk=pk)
             messages.success(request, "Schedule submitted for HR review.")
+            for flag in flags or []:
+                messages.warning(request, flag)
             return redirect("schedules:detail", pk=pk)
         messages.success(request, "Draft saved. Only you can see it until you submit it."
                          if schedule.status == DutySchedule.DRAFT else "Schedule saved.")
