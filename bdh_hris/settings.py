@@ -266,7 +266,7 @@ CSRF_FAILURE_VIEW = "accounts.views.csrf_failure"
 # the month BEFORE the schedule month; HR can change it per schedule.
 SCHEDULE_CUTOFF_DAY = 20
 # Pilot Item 6: codes that mean "on leave / on CTO" on a duty schedule; allowed only on a day with a leave or CTO request.
-SCHEDULE_LEAVE_CODES = ("LV", "CTO")
+SCHEDULE_LEAVE_CODES = ("LV", "CTO")  # (code for a leave day, code for a CTO day): owner Decision 10, 2026-11-26
 
 # Out-on-Pass start date (owner decision 2026-11-24, Option B): before it the
 # module's menu items are hidden and its pages say "not yet in use"; Setup stays
