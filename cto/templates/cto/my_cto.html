@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ui %}
 {% load documents_tags badges %}
 {% block title %}My CTO — BDH HRIS{% endblock %}
 {% block content %}
@@ -18,14 +19,14 @@
     <td>{{ a.number_of_days }}</td>
     <td>Part of a COSP leave (see the leave)</td>
     <td>{% status_badge a.status a.get_status_display %}</td>
-    <td>{{ a.submitted_at|date:"Y-m-d" }}</td>
+    <td>{% filed a short=1 %}</td>
     <td>—</td>
     {% else %}
     <td><a href="{% url 'cto:cto_detail' a.pk %}">{{ a.start_date }} to {{ a.end_date }}</a></td>
     <td>{{ a.number_of_days }}</td>
     <td>{{ a.reason }}</td>
     <td>{% status_badge a.status a.get_status_display %}</td>
-    <td>{{ a.submitted_at|date:"Y-m-d" }}</td>
+    <td>{% filed a short=1 %}</td>
     <td><a href="{% url 'cto:print_cto_form' a.pk %}" target="_blank">Print</a></td>
     {% endif %}
   </tr>

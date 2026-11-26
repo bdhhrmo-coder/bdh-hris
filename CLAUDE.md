@@ -570,3 +570,10 @@ Do not attempt to build this in one pass. Suggested phase order:
 - Command: `BDH_HRIS_DEBUG=1 venv/bin/python manage.py test`
 - `BDH_HRIS_DEBUG=1` is needed locally: with DEBUG off, settings switch to WhiteNoise's manifest storage, and without a `collectstatic` run about 20 page tests fail with "Missing staticfiles manifest entry".
 - **Known failures (4):** the CSC Form 6 and COSP leave-form print tests in `leave.tests` (`PrintCscForm6Tests` x2, `PrintCospLeaveFormTests` x2) need LibreOffice. Without it they fail as `302 != 200` (on current main; older code showed `FileNotFoundError: 'libreoffice'`). They pass only on a machine with LibreOffice installed. Any other failure is a real one.
+
+---
+
+## 16. Pilot improvement items (owner requests 2026-11-24; rebuilt 2026-11-26 after the first build was lost, one branch each)
+
+### Item 2 — Filing date and time (branch `item2-filing-time`)
+- Every request shows the **date and time it was first filed** (Philippine time) and, after a return, **"Resubmitted"** with that time beside it: My Applications, the details page and the approver's queue for leave, CTO applications and claims, Exchange of Duty, attendance corrections, Official Business / group requests, date changes, Out-on-Pass, and duty schedules ("Submitted"). One template tag does it (`{% filed obj %}` / `{% filed obj short=1 %}`, `accounts/templatetags/ui.py filing_times`): the first filing is the record's own filing time (or, for schedules and CTO claims, the first "submit" in its log); the resubmission is the latest "resubmit" in the log. Records filed before the change show the same, since both times were always kept.

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ui %}
 {% block title %}Duty schedules — BDH HRIS{% endblock %}
 {% block content %}
 <div class="split-row spread">
@@ -25,16 +26,17 @@
 
 <div class="card"><div class="table-scroll">
 <table>
-  <tr><th>Month</th><th>Section / unit</th><th>Status</th><th>Prepared by</th><th></th></tr>
+  <tr><th>Month</th><th>Section / unit</th><th>Status</th><th>Prepared by</th><th>Submitted</th><th></th></tr>
   {% for s in schedules %}
   <tr>
     <td>{{ s.month_label }}</td>
     <td><a href="{% url 'schedules:detail' s.pk %}">{{ s.area_full_name }}</a></td>
     <td>{% include "schedules/_status_badge.html" %}</td>
     <td>{{ s.prepared_by.employee.full_name|default:s.prepared_by.username }} <small>({{ s.get_preparer_role_display }})</small></td>
+    <td>{% filed s short=1 %}</td>
     <td><a href="{% url 'schedules:print' s.pk %}" target="_blank" rel="noopener">Print</a></td>
   </tr>
-  {% empty %}<tr><td colspan="5" class="empty-note">No duty schedules yet.</td></tr>{% endfor %}
+  {% empty %}<tr><td colspan="6" class="empty-note">No duty schedules yet.</td></tr>{% endfor %}
 </table>
 </div></div>
 {% endblock %}

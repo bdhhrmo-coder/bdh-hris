@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ui %}
 {% block title %}{{ schedule }} — BDH HRIS{% endblock %}
 {% block content %}
 <p><a href="{% url 'schedules:list' %}">&larr; Duty schedules</a></p>
@@ -7,7 +8,7 @@
   {% include "schedules/_status_badge.html" with s=schedule %}
 </div>
 <p class="field-help">
-  Prepared by {{ schedule.prepared_by.employee.full_name|default:schedule.prepared_by.username }} ({{ schedule.get_preparer_role_display }})
+  Prepared by {{ schedule.prepared_by.employee.full_name|default:schedule.prepared_by.username }} ({{ schedule.get_preparer_role_display }}) · Submitted {% filed schedule short=1 %}
   {% if schedule.approved_at %} · Approved by the Chief of Hospital {{ schedule.approved_at|date:"M j, Y g:i A" }}{% endif %}
   {% if schedule.recorded_at %} · Recorded by HR {{ schedule.recorded_at|date:"M j, Y g:i A" }}{% endif %}
   · Exchange cut-off: {{ schedule.cutoff_date|date:"M j, Y" }}

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ui %}
 {% load badges %}
 {% block title %}CTO application — BDH HRIS{% endblock %}
 {% block content %}
@@ -11,7 +12,7 @@
 <div class="card form-card">
   <table class="detail-table">
     <tr><th>Employee</th><td>{{ a.employee.full_name }} ({{ a.employee.employee_id }})</td></tr>
-    <tr><th>Date filed</th><td>{{ a.submitted_at|date:"M d, Y" }}</td></tr>
+    <tr><th>Date and time filed</th><td>{% filed a %}</td></tr>
     <tr><th>Dates</th><td>{{ a.start_date|date:"M d, Y" }}{% if a.end_date != a.start_date %} to {{ a.end_date|date:"M d, Y" }}{% endif %}</td></tr>
     <tr><th>Days</th><td>{{ a.number_of_days|floatformat:"-2" }}</td></tr>
     {% if a.reason %}<tr><th>Reason</th><td>{{ a.reason }}</td></tr>{% endif %}

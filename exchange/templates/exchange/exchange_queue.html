@@ -1,13 +1,15 @@
 {% extends "base.html" %}
+{% load ui %}
 {% load badges %}
 {% block title %}Duty exchange queue — BDH HRIS{% endblock %}
 {% block content %}
 <h1>Duty exchange requests awaiting my action</h1>
 <div class="card">
 <table>
-  <tr><th>Employee A</th><th>Date A</th><th>Employee B</th><th>Date B</th><th>Type / shifts</th><th>Status</th><th>Action</th></tr>
+  <tr><th>Filed</th><th>Employee A</th><th>Date A</th><th>Employee B</th><th>Date B</th><th>Type / shifts</th><th>Status</th><th>Action</th></tr>
   {% for r in requests %}
   <tr>
+    <td>{% filed r short=1 %}</td>
     <td>{{ r.employee_a.full_name }}</td>
     <td>{{ r.date_a }}</td>
     <td>{{ r.employee_b.full_name }}</td>
@@ -40,7 +42,7 @@
     </td>
   </tr>
   {% empty %}
-  <tr><td colspan="7" class="empty-note">Nothing awaiting your action.</td></tr>
+  <tr><td colspan="8" class="empty-note">Nothing awaiting your action.</td></tr>
   {% endfor %}
 </table>
 </div>

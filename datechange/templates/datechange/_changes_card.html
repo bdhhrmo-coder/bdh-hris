@@ -1,3 +1,4 @@
+{% load ui %}
 {% load badges %}
 {% if changes %}
 <h2>Date changes</h2>
@@ -6,7 +7,7 @@
   <tr><th>#</th><th>From</th><th>To</th><th>Justification</th><th>Status</th><th>Filed</th></tr>
   {% for c in changes %}
   <tr><td><a href="{% url 'datechange:detail' c.pk %}">{{ c.pk }}</a></td><td>{{ c.old_dates_label }}</td><td>{{ c.new_dates_label }}</td>
-      <td>{{ c.justification|truncatechars:80 }}</td><td>{% status_badge c.status c.status_label %}</td><td>{{ c.submitted_at|date:"M d, Y" }}</td></tr>
+      <td>{{ c.justification|truncatechars:80 }}</td><td>{% status_badge c.status c.status_label %}</td><td>{% filed c short=1 %}</td></tr>
   {% endfor %}
 </table>
 </div></div>

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ui %}
 {% load badges documents_tags %}
 {% block title %}Attendance correction — BDH HRIS{% endblock %}
 {% block content %}
@@ -9,7 +10,7 @@
 <p class="muted mt-0">
   {{ correction.employee.full_name }} &middot; {{ correction.get_correction_type_display }}
   {% if correction.validator %}&middot; Validator: {{ correction.validator_label }}{% endif %}
-  &middot; Filed {{ correction.submitted_at|date:"M d, Y h:i A" }}
+  &middot; Filed {% filed correction short=1 %}
 </p>
 
 {% if can_edit %}
