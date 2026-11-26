@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ui %}
 {% load documents_tags badges leave_print %}
 {% block title %}My leave applications — BDH HRIS{% endblock %}
 {% block content %}
@@ -13,7 +14,7 @@
     <td>{{ a.dates_label }}</td>
     <td>{{ a.number_of_days }}</td>
     <td>{% status_badge a.status a.status_label %}</td>
-    <td>{{ a.submitted_at|date:"Y-m-d" }}</td>
+    <td>{% filed a short=1 %}</td>
     <td>
       {% print_wait a as wait %}
       {% if wait %}

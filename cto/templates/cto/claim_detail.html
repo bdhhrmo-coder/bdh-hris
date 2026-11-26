@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ui %}
 {% load documents_tags badges %}
 {% block title %}CTO claim #{{ claim.pk }} — BDH HRIS{% endblock %}
 {% block content %}
@@ -12,7 +13,7 @@
     <tr><th>Employee</th><td>{{ claim.employee.full_name }}{% if claim.employee.separation_status %} <span class="badge badge-pending">Separating — {{ claim.employee.get_separation_status_display }}, last day {{ claim.employee.last_day_of_service }}. Unapproved claims lapse after that day.</span>{% endif %}</td></tr>
     <tr><th>Type</th><td>{{ claim.get_duty_type_display }}</td></tr>
     {% if claim.is_exception %}<tr><th>Exception reason</th><td>{{ claim.exception_reason }}</td></tr>{% endif %}
-    {% if claim.first_filed_on %}<tr><th>First filed</th><td>{{ claim.first_filed_on }}</td></tr>{% endif %}
+    {% if claim.first_filed_on %}<tr><th>Date and time filed</th><td>{% filed claim %}</td></tr>{% endif %}
     {% if claim.approved_on %}<tr><th>Approved</th><td>{{ claim.approved_on }}</td></tr>{% endif %}
   </table>
 </div>

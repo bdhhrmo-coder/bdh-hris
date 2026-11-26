@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ui %}
 {% load badges documents_tags leave_print %}
 {% block title %}Leave application — BDH HRIS{% endblock %}
 {% block content %}
@@ -11,7 +12,7 @@
 <div class="card form-card">
   <table class="detail-table">
     <tr><th>Employee</th><td>{{ a.employee.full_name }} ({{ a.employee.employee_id }}){% if a.employee.position %} &middot; {{ a.employee.position }}{% endif %}</td></tr>
-    <tr><th>Date filed</th><td>{{ a.submitted_at|date:"M d, Y" }}</td></tr>
+    <tr><th>Date and time filed</th><td>{% filed a %}</td></tr>
     <tr><th>6.A Type of leave</th><td>{{ a.leave_type.name }}</td></tr>
     {% for label, value in a.details_6b %}
     <tr><th>{% if forloop.first %}6.B {% endif %}{{ label }}</th><td>{{ value }}</td></tr>

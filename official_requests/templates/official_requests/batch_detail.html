@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ui %}
 {% load badges %}
 {% block title %}Group request #{{ batch.pk }} — BDH HRIS{% endblock %}
 {% block content %}
@@ -8,7 +9,7 @@
 </div>
 <p class="muted mt-0">
   Filed by {{ batch.filed_by.employee.full_name|default:batch.filed_by.username }} ({{ batch.get_filer_role_display }})
-  on {{ batch.filed_at|date:"M d, Y h:i A" }}.<br>
+  on {% filed batch short=1 %}.<br>
   Route: {{ route|join:" → " }}{% if next_step %} &middot; <strong>Next: {{ next_step }}</strong>{% endif %}<br>
   <small>Skipped: {{ skipped }} (filed on behalf by {{ batch.get_filer_role_display }}).</small>
 </p>

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ui %}
 {% load documents_tags badges %}
 {% block title %}My duty exchanges — BDH HRIS{% endblock %}
 {% block content %}
@@ -41,7 +42,7 @@
       <td>{{ r.date_b }}</td>
       <td>{{ r.get_kind_display }}{% if r.shifts_label %}<br><small>{{ r.shifts_label }}</small>{% endif %}</td>
       <td>{% status_badge r.status r.get_status_display %}</td>
-      <td>{{ r.filed_at|date:"Y-m-d" }}</td>
+      <td>{% filed r short=1 %}</td>
       <td><a href="{% documents_url r %}">Documents</a></td>
       <td><a href="{% url 'exchange:print_exchange_form' r.pk %}" target="_blank">Print</a></td>
     </tr>

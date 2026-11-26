@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ui %}
 {% load badges %}
 {% block title %}My passes — BDH HRIS{% endblock %}
 {% block content %}
@@ -12,17 +13,18 @@
 {% include "outonpass/_summary.html" %}
 <div class="card"><div class="table-scroll">
 <table>
-  <tr><th>Pass no.</th><th>Type</th><th>Date and time</th><th>Reason</th><th>Status</th></tr>
+  <tr><th>Pass no.</th><th>Filed</th><th>Type</th><th>Date and time</th><th>Reason</th><th>Status</th></tr>
   {% for p in passes %}
   <tr>
     <td><a href="{% url 'outonpass:detail' p.pk %}">{{ p.pass_number }}</a></td>
+    <td>{% filed p short=1 %}</td>
     <td>{{ p.get_kind_display }}</td>
     <td>{{ p.pass_date|date:"M d, Y" }}<br><small>{{ p.time_out|time:"h:i A" }} – {{ p.time_in|time:"h:i A" }}</small></td>
     <td>{{ p.get_reason_type_display }}</td>
     <td>{% status_badge p.status p.get_status_display %}</td>
   </tr>
   {% empty %}
-  <tr><td colspan="5" class="empty-note">No passes yet.</td></tr>
+  <tr><td colspan="6" class="empty-note">No passes yet.</td></tr>
   {% endfor %}
 </table>
 </div></div>

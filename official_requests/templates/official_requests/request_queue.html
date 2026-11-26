@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ui %}
 {% load badges %}
 {% block title %}Requests queue — BDH HRIS{% endblock %}
 {% block content %}
@@ -13,12 +14,13 @@
 <p class="field-help mt-0">Approve or return the whole group. Open one to see every employee and date.</p>
 <div class="table-scroll">
 <table>
-  <tr><th>#</th><th>Type</th><th>Filed by</th><th>Lines</th><th>Reason / purpose</th><th>Status</th><th></th></tr>
+  <tr><th>#</th><th>Type</th><th>Filed by</th><th>Filed</th><th>Lines</th><th>Reason / purpose</th><th>Status</th><th></th></tr>
   {% for b in batches %}
   <tr>
     <td>{{ b.pk }}</td>
     <td>{{ b.type_label }}</td>
     <td>{{ b.filed_by.employee.full_name|default:b.filed_by.username }}<br><small>{{ b.get_filer_role_display }}</small></td>
+    <td>{% filed b short=1 %}</td>
     <td>{{ b.active_lines.count }}</td>
     <td class="reason-cell">{{ b.purpose|linebreaksbr }}</td>
     <td>{% status_badge b.status b.get_status_display %}</td>
@@ -33,10 +35,11 @@
 <div class="card">
 <h2 class="mt-0">Individual requests</h2>
 <table>
-  <tr><th>Employee</th><th>Type</th><th>Dates</th><th>Reason / purpose</th><th>Status</th><th>Action</th></tr>
+  <tr><th>Employee</th><th>Filed</th><th>Type</th><th>Dates</th><th>Reason / purpose</th><th>Status</th><th>Action</th></tr>
   {% for r in requests %}
   <tr>
     <td>{{ r.employee.full_name }}</td>
+    <td>{% filed r short=1 %}</td>
     <td>{{ r.get_request_type_display }}</td>
     <td>{{ r.start_date }} to {{ r.end_date }}</td>
     <td><span class="reason-cell">{{ r.purpose|linebreaksbr }}</span>{% if r.at_capitol %}<br><a href="{% url 'official_requests:print_travel_order' r.pk %}" target="_blank">Print Travel Order</a>{% endif %}</td>
@@ -56,7 +59,7 @@
     </td>
   </tr>
   {% empty %}
-  <tr><td colspan="6" class="empty-note">Nothing awaiting your action.</td></tr>
+  <tr><td colspan="7" class="empty-note">Nothing awaiting your action.</td></tr>
   {% endfor %}
 </table>
 </div>
