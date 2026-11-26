@@ -219,6 +219,7 @@ def schedule_detail(request, pk):
         "actions": rules.available_actions(acting, request.user, schedule),
         "can_edit": rules.can_edit(acting, request.user, schedule),
         "can_correct": rules.can_correct(acting, schedule),
+        "can_recall": rules.can_recall(request.user, schedule),
         "can_set_cutoff": is_hr(acting) and schedule.status not in (
             DutySchedule.DRAFT, DutySchedule.APPROVED, DutySchedule.RECORDED),
         "codes": ShiftCode.objects.filter(is_active=True),
@@ -271,18 +272,35 @@ def schedule_correct(request, pk):
     row = get_object_or_404(ScheduleRow, pk=request.POST.get("row"), schedule=schedule)
     try:
         day = date.fromisoformat(request.POST.get("date", ""))
+        day_to = date.fromisoformat(request.POST.get("date_to") or request.POST.get("date", ""))
         shift_id = request.POST.get("shift")
         shift = ShiftCode.objects.get(pk=shift_id) if shift_id else None
-        if day not in schedule.days:
-            raise ValidationError("That date is not in this schedule's month.")
-        services.hr_correction(schedule, row.employee, day, shift, request.POST.get("reason", ""), request.user)
+        changed = services.hr_correction(schedule, row.employee, day, shift, request.POST.get("reason", ""),
+                                         request.user, day_to=day_to)
     except (ValueError, ShiftCode.DoesNotExist):
         messages.error(request, "Choose a valid date and shift.")
     except ValidationError as exc:
         messages.error(request, " ".join(exc.messages))
     else:
-        messages.success(request, "Correction saved and logged.")
+        if changed:
+            messages.success(request, f"Correction saved and logged: {len(changed)} day(s) changed.")
+        else:
+            messages.info(request, "Nothing changed: those days already have that shift.")
     return redirect("schedules:detail", pk=pk)
+
+
+@login_required
+@require_POST
+def schedule_recall(request, pk):
+    """Item 1: the preparer recalls a submitted schedule to correct it."""
+    acting, schedule = _get(request, pk)
+    try:
+        services.recall(schedule, request.user, request.POST.get("reason", ""))
+    except ValidationError as exc:
+        messages.error(request, " ".join(exc.messages))
+        return redirect("schedules:detail", pk=pk)
+    messages.success(request, "Recalled. Edit the schedule and submit it again; it goes back to HR review.")
+    return redirect("schedules:edit", pk=pk)
 
 
 # -- Excel and print --------------------------------------------------------------------

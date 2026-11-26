@@ -23,6 +23,11 @@
 {% endif %}
 <div class="row-actions" style="display:block; margin-bottom:1rem;">
   {% if can_edit %}<a class="btn" href="{% url 'schedules:edit' schedule.pk %}">Edit grid</a>{% endif %}
+  {% if can_recall %}<details class="inline-details" style="display:inline-block; vertical-align:top;"><summary class="btn btn-secondary">Recall and edit</summary>
+    <form method="post" action="{% url 'schedules:recall' schedule.pk %}" class="card" x-data="{ r: '' }" style="margin-top:.5rem; max-width:32rem;">{% csrf_token %}
+      <p class="field-help">Takes the schedule back to correct it (until the Chief of Hospital approves it). HR is told. When you submit it again, it starts again at HR review.</p>
+      <label>Reason <input type="text" name="reason" maxlength="255" x-model="r" required></label>
+      <button type="submit" :disabled="!r.trim()">Recall</button></form></details>{% endif %}
   <a class="btn btn-secondary" href="{% url 'schedules:print' schedule.pk %}" target="_blank" rel="noopener">Print (F50)</a>
   <a class="btn btn-secondary" href="{% url 'schedules:excel_template' schedule.pk %}">Excel</a>
 </div>
@@ -71,11 +76,12 @@
 {% if can_correct %}
 <div class="card">
   <h2 class="mt-0">HR correction</h2>
-  <p class="field-help">For an approved schedule only. The old value stays in the change history below, and the employee is notified.</p>
+  <p class="field-help">For an approved schedule only. Pick one day or a range: each changed day is kept in the change history below (days that already have that shift are skipped), and the employee gets one notice.</p>
   <form method="post" action="{% url 'schedules:correct' schedule.pk %}" class="pattern-tool">
     {% csrf_token %}
     <label>Employee <select name="row" required>{% for g in grid %}<option value="{{ g.row.pk }}">{{ g.row.employee.full_name }}</option>{% endfor %}</select></label>
-    <label>Date <input type="date" name="date" required min="{{ schedule.days.0|date:'Y-m-d' }}" max="{{ schedule.days|last|date:'Y-m-d' }}"></label>
+    <label>From <input type="date" name="date" required min="{{ schedule.days.0|date:'Y-m-d' }}" max="{{ schedule.days|last|date:'Y-m-d' }}"></label>
+    <label>To <span class="field-help">(optional)</span> <input type="date" name="date_to" min="{{ schedule.days.0|date:'Y-m-d' }}" max="{{ schedule.days|last|date:'Y-m-d' }}"></label>
     <label>New shift <select name="shift"><option value="">blank</option>{% for c in codes %}<option value="{{ c.pk }}">{{ c.code }}</option>{% endfor %}</select></label>
     <label>Reason <input type="text" name="reason" maxlength="200" required></label>
     <button type="submit" class="btn-secondary">Save correction</button>

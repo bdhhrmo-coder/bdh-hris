@@ -570,3 +570,11 @@ Do not attempt to build this in one pass. Suggested phase order:
 - Command: `BDH_HRIS_DEBUG=1 venv/bin/python manage.py test`
 - `BDH_HRIS_DEBUG=1` is needed locally: with DEBUG off, settings switch to WhiteNoise's manifest storage, and without a `collectstatic` run about 20 page tests fail with "Missing staticfiles manifest entry".
 - **Known failures (4):** the CSC Form 6 and COSP leave-form print tests in `leave.tests` (`PrintCscForm6Tests` x2, `PrintCospLeaveFormTests` x2) need LibreOffice. Without it they fail as `302 != 200` (on current main; older code showed `FileNotFoundError: 'libreoffice'`). They pass only on a machine with LibreOffice installed. Any other failure is a real one.
+
+---
+
+## 16. Pilot improvements (owner checklist 2026-11-24; rebuilt 2026-11-26, one branch per item, not merged)
+
+### Item 1 – Recall a schedule; correct several days (branch `item1-schedule-recall-correct`)
+- **Recall and edit:** the preparer of a submitted schedule (Submitted, Reviewed or Recommended) may take it back with a **required reason** (`rules.can_recall`, `services.recall`, `/schedules/<id>/recall/`). It becomes **Returned** (editable), is logged as "recall" (Audit Log), and HR plus whoever was next to act are notified with the reason. Resubmitting uses the normal path: logged "resubmit", back at HR review, stamps restart. HR, the AO and the COH never see the button unless they prepared the schedule; it is gone once the COH approves.
+- **HR correction for a range:** the correction form takes From and an optional To date. Each changed day is its own `ScheduleChange` ("Changes after approval"); days already on that shift are skipped; the employee gets **one** notice listing the days; a summary "correct" line is logged. Both dates must be in the schedule's month. HR cannot correct their own duty (another HR person does it).

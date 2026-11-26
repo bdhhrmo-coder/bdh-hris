@@ -183,14 +183,67 @@ def change_cell(schedule, employee, day, new_shift, reason, user, exchange=None)
 
 
 @transaction.atomic
-def hr_correction(schedule, employee, day, new_shift, reason, user):
+def hr_correction(schedule, employee, day, new_shift, reason, user, day_to=None):
+    """Item 1: HR corrects one employee on an approved schedule, for one day or a
+    range (day .. day_to). Each changed day is logged; days that already have
+    that shift are skipped; the employee gets one notice. Returns the days changed."""
+    from datetime import timedelta
+
     if not schedule.is_locked:
         raise ValidationError("Corrections are only for approved schedules; edit the draft instead.")
     if not reason.strip():
         raise ValidationError("A reason is required for a correction.")
-    change_cell(schedule, employee, day, new_shift, f"HR correction: {reason.strip()}", user)
-    notify(employee, f"Your duty on {day:%b %d, %Y} was changed to {new_shift.code if new_shift else 'blank'} "
-                     f"({reason.strip()}).", "/schedules/mine/")
+    acting = getattr(user, "employee", None)
+    if acting is not None and acting.pk == employee.pk:
+        raise ValidationError("You cannot correct your own duty; another HR person must.")
+    day_to = day_to or day
+    if day_to < day:
+        raise ValidationError("The last day must be on or after the first day.")
+    month_days = set(schedule.days)
+    if day not in month_days or day_to not in month_days:
+        raise ValidationError("Both dates must be in this schedule's month.")
+    row = schedule.rows.filter(employee=employee).first()
+    changed, d = [], day
+    while d <= day_to:
+        cell = row.cells.filter(date=d).first() if row else None
+        if cell is None or cell.shift_id != (new_shift.pk if new_shift else None):
+            change_cell(schedule, employee, d, new_shift, f"HR correction: {reason.strip()}", user)
+            row = row or schedule.rows.get(employee=employee)
+            changed.append(d)
+        d += timedelta(days=1)
+    if changed:
+        code = new_shift.code if new_shift else "blank"
+        when = (f"{changed[0]:%b %d, %Y}" if len(changed) == 1 else
+                f"{len(changed)} days ({', '.join(f'{x:%b %d}' for x in changed)})")
+        notify(employee, f"Your duty on {when} was changed to {code} ({reason.strip()}).", "/schedules/mine/")
+        log(schedule, "correct", user, f"{employee}: {len(changed)} day(s) to {code} - {reason.strip()}"[:255])
+    return changed
+
+
+@transaction.atomic
+def recall(schedule, user, reason):
+    """Item 1: the preparer takes back a submitted schedule to correct it. It
+    becomes Returned (editable), HR and whoever was next to act are told, and a
+    resubmission starts again at HR review, like any return."""
+    from .rules import STEPS, can_recall
+
+    if not can_recall(user, schedule):
+        raise ValidationError("Only the preparer can recall it, and only before the Chief of Hospital approves it.")
+    if not (reason or "").strip():
+        raise ValidationError("Type the reason for recalling it. Nothing was changed.")
+    who = STEPS[schedule.status][3]
+    schedule.status = S.RETURNED
+    schedule.save(update_fields=["status", "updated_at"])
+    log(schedule, "recall", user, reason.strip()[:255])
+    people = list(hr_employees())
+    if who == "Administrative Officer":
+        people += list(employees_with_role(RoleAssignment.ADMINISTRATIVE_OFFICER))
+    elif who == "Chief of Hospital":
+        people += list(employees_with_role(RoleAssignment.CHIEF_OF_HOSPITAL))
+    preparer = getattr(user, "employee", None)
+    notify([p for p in {p.pk: p for p in people}.values() if preparer is None or p.pk != preparer.pk],
+           f"The duty schedule for {schedule} was recalled by its preparer for correction: \"{reason.strip()}\". "
+           "It will come back when resubmitted.", _url(schedule))
 
 
 # -- checks used by the grid and by Exchange of Duty -------------------------------------

@@ -96,6 +96,15 @@ def available_actions(acting, user, schedule):
     return actions
 
 
+RECALLABLE = {S.SUBMITTED, S.REVIEWED, S.RECOMMENDED}
+
+
+def can_recall(user, schedule):
+    """Item 1 (owner request 2026-11-24): the preparer may take back a submitted
+    schedule to correct it, until the COH approves it. Nobody else gets the button."""
+    return schedule.prepared_by_id == user.pk and schedule.status in RECALLABLE
+
+
 def can_correct(acting, schedule):
     """HR corrections to a locked (approved/recorded) schedule, with a reason."""
     return schedule.is_locked and is_hr(acting)
