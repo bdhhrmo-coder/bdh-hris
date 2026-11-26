@@ -43,3 +43,53 @@ class FilingTimeTests(TestCase):
         self.client.force_login(self.emp.user)
         self.assertContains(self.client.get(reverse("leave:my_applications")), "Nov 20, 2026 2:05 PM")
         self.assertContains(self.client.get(reverse("leave:leave_detail", args=[self.a.pk])), "Date and time filed")
+
+
+class EveryPageShowsIt(TestCase):
+    """Audit fix F5: each request type's list, detail and approval queue carries the filing time.
+    (Exchange of Duty and single Official Business/Errand requests have no detail page of their own.)"""
+
+    PAGES = {
+        "Leave": ["leave/my_applications.html", "leave/leave_detail.html", "leave/leave_queue.html"],
+        "CTO application and claim": ["cto/my_cto.html", "cto/cto_detail.html", "cto/claim_detail.html",
+                                      "cto/cto_queue.html"],
+        "Exchange of Duty": ["exchange/my_exchanges.html", "exchange/exchange_queue.html"],
+        "Attendance correction": ["attendance/my_attendance.html", "attendance/correction_detail.html",
+                                  "attendance/correction_queue.html"],
+        "Official Business / Errand / OT": ["official_requests/my_requests.html",
+                                            "official_requests/batch_detail.html",
+                                            "official_requests/request_queue.html"],
+        "Date change": ["datechange/change_detail.html", "datechange/_changes_card.html",
+                        "datechange/_queue_card.html"],
+        "Out-on-Pass": ["outonpass/mine.html", "outonpass/detail.html", "outonpass/queue.html"],
+    }
+
+    def test_templates_use_the_filed_tag(self):
+        from django.template.loader import get_template
+
+        for kind, names in self.PAGES.items():
+            for name in names:
+                source = get_template(name).template.source
+                self.assertIn("{% filed", source, f"{kind}: {name}")
+
+
+from schedules.tests import Base as ScheduleBase  # noqa: E402
+
+
+class ScheduleSubmittedTests(ScheduleBase):
+    """Duty schedules show "Submitted: ..." or "Not yet submitted" (owner checklist B2)."""
+
+    def show(self, s):
+        return Template("{% load ui %}{% schedule_submitted s %}").render(Context({"s": s}))
+
+    def test_draft_then_submitted(self):
+        from schedules import services
+
+        s = self.new_schedule()
+        self.assertIn("Not yet submitted", self.show(s))
+        services.submit(s, self.sup.user)
+        self.assertIn("Submitted: ", self.show(s))
+        self.assertNotIn("Not yet submitted", self.show(s))
+        self.client.force_login(self.sup.user)
+        self.assertContains(self.client.get(reverse("schedules:detail", args=[s.pk])), "Submitted: ")
+        self.assertContains(self.client.get(reverse("schedules:list")), "Submitted: ")
