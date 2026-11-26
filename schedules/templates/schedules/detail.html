@@ -21,15 +21,25 @@
   <button type="submit" class="btn-secondary">Change cut-off</button>
 </form>
 {% endif %}
+<div x-data="{ recall: false, r: '' }">
 <div class="row-actions" style="display:block; margin-bottom:1rem;">
   {% if can_edit %}<a class="btn" href="{% url 'schedules:edit' schedule.pk %}">Edit grid</a>{% endif %}
-  {% if can_recall %}<details class="inline-details" style="display:inline-block; vertical-align:top;"><summary class="btn btn-secondary">Recall and edit</summary>
-    <form method="post" action="{% url 'schedules:recall' schedule.pk %}" class="card" x-data="{ r: '' }" style="margin-top:.5rem; max-width:32rem;">{% csrf_token %}
-      <p class="field-help">Takes the schedule back to correct it (until the Chief of Hospital approves it). HR is told. When you submit it again, it starts again at HR review.</p>
-      <label>Reason <input type="text" name="reason" maxlength="255" x-model="r" required></label>
-      <button type="submit" :disabled="!r.trim()">Recall</button></form></details>{% endif %}
+  {% if can_recall %}<button type="button" class="btn-secondary" @click="recall = !recall" :aria-expanded="recall">Recall and edit</button>{% endif %}
   <a class="btn btn-secondary" href="{% url 'schedules:print' schedule.pk %}" target="_blank" rel="noopener">Print (F50)</a>
   <a class="btn btn-secondary" href="{% url 'schedules:excel_template' schedule.pk %}">Excel</a>
+</div>
+{% if can_recall %}
+<form method="post" action="{% url 'schedules:recall' schedule.pk %}" class="card" x-show="recall" x-cloak style="max-width:40rem;">{% csrf_token %}
+  <h2 style="margin-top:0;">Recall this schedule</h2>
+  <p class="field-help">Takes the schedule back so you can correct it (only until the Chief of Hospital approves it). HR is told, with your reason. When you submit it again, it starts again at HR review.</p>
+  <label for="recall-reason">Reason</label>
+  <input type="text" id="recall-reason" name="reason" maxlength="255" x-model="r" required>
+  <div class="row-actions" style="margin-top:.75rem;">
+    <button type="submit" :disabled="!r.trim()">Recall</button>
+    <button type="button" class="btn-secondary" @click="recall = false">Cancel</button>
+  </div>
+</form>
+{% endif %}
 </div>
 
 {% if conflicts %}
