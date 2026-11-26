@@ -57,7 +57,7 @@ def usable_criteria(employee):
 
 @transaction.atomic
 def file(acting, user, employee, criterion, incident_date, description, points, evidence_ref="", final_ref="",
-         auto_source=""):
+         auto_source="", today=None):
     if acting is not None and acting.pk == employee.pk:
         raise ValidationError("You cannot file a deduction about yourself.")
     if not criterion.is_active or not criterion.points_options:
@@ -74,7 +74,7 @@ def file(acting, user, employee, criterion, incident_date, description, points, 
         raise ValidationError("Give the evidence (a reference; files can be attached after filing).")
     if criterion.needs_final_ref and not (final_ref or "").strip():
         raise ValidationError("This criterion needs the final decision's reference.")
-    if incident_date > timezone.localdate():
+    if incident_date > (today or timezone.localdate()):
         raise ValidationError("The incident date cannot be in the future.")
     d = D.objects.create(employee=employee, criterion=criterion, incident_date=incident_date,
                          description=description.strip(), evidence_ref=(evidence_ref or "").strip(),

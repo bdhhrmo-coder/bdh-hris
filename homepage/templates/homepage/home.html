@@ -33,6 +33,13 @@ unchanged (CLAUDE.md 8B); homepage/views.py _role_cards() decides which cards sh
   </div>
   {% endif %}
 
+  {% if performance_todo %}
+  <div class="kpi-card">
+    <p class="kpi-label">Performance tasks</p>
+    <ul class="kpi-list">{% for label, url in performance_todo %}<li><a href="{{ url }}">{{ label }}</a></li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
   {% if show_personal %}
   <a class="kpi-card" href="{% url 'homepage:pending_applications_list' %}">
     <p class="kpi-label">My pending requests</p>

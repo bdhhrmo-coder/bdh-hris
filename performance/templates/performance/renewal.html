@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}COSP renewal averages — BDH HRIS{% endblock %}
+{% block content %}
+<p><a href="{% url 'performance:report' %}">&larr; Performance Report</a></p>
+<h1>COSP renewal averages</h1>
+<p class="card"><strong>{{ note }}</strong></p>
+<div class="card"><div class="table-scroll"><table><tr><th>Employee</th><th>Contract</th><th>Periods</th><th>Average TPE</th><th>Waiting (contested)</th></tr>
+{% for r in rows %}<tr><td>{{ r.contract.employee.full_name }}</td><td>{{ r.contract.start_date|date:"M j, Y" }} – {{ r.contract.end_date|date:"M j, Y" }}</td><td>{{ r.periods|length }}</td><td>{{ r.average|default:"—" }}</td><td>{{ r.waiting|length }}</td></tr>{% empty %}<tr><td colspan="5" class="empty-note">No current contracts.</td></tr>{% endfor %}</table></div></div>
+{% endblock %}

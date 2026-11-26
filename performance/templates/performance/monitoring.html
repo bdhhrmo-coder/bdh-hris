@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Performance Monitoring — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Performance Monitoring</h1>
+<form method="get" class="row-actions"><select name="window" aria-label="Window">{% for w in windows %}<option value="{{ w.pk }}" {% if w == window %}selected{% endif %}>{{ w.name }}</option>{% endfor %}</select><button class="btn-secondary">Show</button> <a href="?scope=cosp">COSP periods ending within 90 days</a></form>
+<p class="muted">{{ count }} period(s){% if window %} in {{ window.name }}{% elif cosp %} (COSP){% endif %}.</p>
+<div class="card"><h2 class="mt-0">Still to do</h2><ul>
+  <li>Flags to review: {{ queues.flags }}</li><li>Comments to screen: {{ queues.comments }}</li>
+  <li>Certified ratings not verified: {{ queues.certified }}</li><li>DTR counts not verified: {{ queues.dtr }}</li>
+  <li>COSP Performance Forms not in: {{ queues.cosp_forms }}</li><li>Next-level reviews: {{ queues.reviews }}</li>
+  <li>Computed, not released: {{ queues.to_release }}</li><li>Contests open: {{ queues.contests }}</li>
+  <li>Conferences not recorded: {{ queues.conferences }}</li><li>Development plans not agreed: {{ queues.plans }}</li></ul></div>
+<div class="card"><h2 class="mt-0">Completion by unit / section</h2><div class="table-scroll"><table><tr><th>Area</th><th>Forms</th><th>Submitted</th><th>Open</th><th>Overdue</th><th>%</th></tr>
+  {% for r in completion %}<tr><td>{{ r.area }}</td><td>{{ r.forms }}</td><td>{{ r.submitted }}</td><td>{{ r.open }}</td><td>{{ r.overdue }}</td><td>{{ r.pct }}</td></tr>{% empty %}<tr><td colspan="6" class="empty-note">No forms.</td></tr>{% endfor %}</table></div></div>
+<div class="card"><h2 class="mt-0">Rating time</h2><p>Expected about <strong>{{ load.expected }}</strong> minutes (forms + {{ load.conferences }} conference(s) + {{ load.checkins }} check-in(s)); actual time on submitted forms about <strong>{{ load.actual }}</strong> minutes.</p></div>
+<div class="card"><h2 class="mt-0">Average TPE by unit / section</h2><p class="muted">Hidden for groups under {{ min_n }} results.</p><ul>{% for a in averages %}<li>{{ a.area }}: {% if a.mean is not None %}{{ a.mean }}{% else %}— (n={{ a.n }}){% endif %}</li>{% empty %}<li class="empty-note">No released results.</li>{% endfor %}</ul></div>
+{% if window %}<p><a href="{% url 'performance:rr_feed' %}?window={{ window.pk }}">R&amp;R feed (Excel, Final results)</a> · <a href="{% url 'performance:register' %}">Deduction register</a></p>{% endif %}
+{% endblock %}

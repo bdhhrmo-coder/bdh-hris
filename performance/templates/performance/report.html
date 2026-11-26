@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Performance Report — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Performance Report</h1>
+<p class="muted">Hospital-level summary with no individual data. Small groups are shown as "fewer than N". The "what we will do" and "you said, we did" texts are written by HR with the PMT.</p>
+<form method="get" class="row-actions"><select name="window" aria-label="Window">{% for w in windows %}<option value="{{ w.pk }}" {% if w == window %}selected{% endif %}>{{ w.name }}</option>{% endfor %}</select><button class="btn-secondary">Show</button>{% if window %} <a href="?window={{ window.pk }}&format=xlsx">Excel</a> · <a href="?window={{ window.pk }}&format=pdf">PDF</a>{% endif %} · <a href="{% url 'performance:renewal' %}">COSP renewal averages</a></form>
+{% if s %}
+<div class="card"><p>Results counted: <strong>{{ s.n }}</strong> · Mean TPE: <strong>{{ s.mean|default:"—" }}</strong></p>
+  <h3>By performance description</h3><ul>{% for b in s.bands %}<li>{{ b.band }}: {{ b.n }}</li>{% endfor %}</ul>
+  <h3>By section</h3><ul>{% for x in s.sections %}<li>{{ x.section }}: {{ x.mean|default:"—" }}</li>{% endfor %}</ul>
+  <h3>Strongest items</h3><ul>{% for x in s.strongest %}<li>{{ x.text }} ({{ x.mean|floatformat:2 }})</li>{% endfor %}</ul>
+  <h3>Common gaps</h3><ul>{% for x in s.gaps %}<li>{{ x.text }} ({{ x.mean|floatformat:2 }})</li>{% empty %}<li class="empty-note">—</li>{% endfor %}</ul>
+  <p>Development plans: {{ s.plans }} ({{ s.agreed }} agreed) · check-ins held {{ s.held }}, missed {{ s.missed }}</p></div>
+{% else %}<p class="empty-note">No window yet.</p>{% endif %}
+{% endblock %}

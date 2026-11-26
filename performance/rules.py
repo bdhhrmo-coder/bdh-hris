@@ -182,7 +182,7 @@ def open_window(acting, user, window):
     warnings = []
     if not year_has_holidays(window.closes_on.year):
         warnings.append(f"The holiday list for {window.closes_on.year} is empty, so due dates count every Monday "
-                        "to Friday. Add the holidays on HR Administration -> Holidays.")
+                        "to Friday. Add the holidays on HR Settings -> Holidays.")
     window.status, window.opened_at = RatingWindow.OPEN, timezone.now()
     window.save(update_fields=["status", "opened_at"])
     mid = midpoint(window.start_date, window.end_date)
