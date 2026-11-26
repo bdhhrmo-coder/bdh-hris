@@ -136,8 +136,20 @@ def _fill_details_6b(ws, a):
         ws[CHECK_TERMINAL] = "X"
 
 
-def fill_csc_form6(application):
-    """Returns an openpyxl Workbook with `application`'s data filled in."""
+def salary_text(application):
+    """Pilot Item 3: the monthly salary saved when HR recorded the leave; before
+    that (or for leave recorded before the salary was kept), the employee's
+    current salary. Blank when none is on record."""
+    amount = application.salary_at_recording
+    if amount is None:
+        amount = application.employee.monthly_salary
+    return "" if amount is None else f"{amount:,.2f}"
+
+
+def fill_csc_form6(application, show_salary=False):
+    """Returns an openpyxl Workbook with `application`'s data filled in.
+    `show_salary`: item 7 (Salary) is filled only for the employee, HR, the AO and
+    the COH; a Supervisor's printout leaves it blank (Item 3)."""
     wb = openpyxl.load_workbook(TEMPLATE_PATH)
     ws = wb["blank"]
     employee = application.employee
@@ -148,7 +160,7 @@ def fill_csc_form6(application):
 
     ws["F12"] = application.submitted_at.strftime("%m/%d/%Y")  # narrow cell (F12:J12) — long month names overflow
     _write_shrink_to_fit(ws, "O12", employee.position, POSITION_FIELD_MAX_CHARS, POSITION_FIELD_MIN_FONT_SIZE)
-    ws["AA12"] = employee.salary_grade
+    ws["AA12"] = salary_text(application) if show_salary else ""
 
     code = application.leave_type.code
     row = LEAVE_TYPE_CHECKBOX_ROW.get(code)
@@ -178,7 +190,20 @@ def fill_csc_form6(application):
     return wb
 
 
-def render_pdf(application) -> bytes:
+def render_pdf(application, show_salary=False) -> bytes:
     """Fills the form and converts it to PDF bytes via headless LibreOffice
     (see leave/pdf_convert.py for how the executable is located)."""
-    return workbook_to_pdf(fill_csc_form6(application), "CSC Form 6")
+    return workbook_to_pdf(fill_csc_form6(application, show_salary), "CSC Form 6")
+
+
+def may_see_salary(acting, application):
+    """Item 3: the employee, HR (Processor or Administrator), the AO and the COH
+    see the salary on the printed form; anyone else (a Supervisor) gets it blank."""
+    from accounts.models import RoleAssignment as R
+
+    if acting is None:
+        return False
+    if acting.pk == application.employee_id:
+        return True
+    return any(acting.has_role(r, viewing=True) for r in (R.HR_PROCESSOR, R.HR_ADMINISTRATOR,
+                                                           R.ADMINISTRATIVE_OFFICER, R.CHIEF_OF_HOSPITAL))

@@ -570,3 +570,14 @@ Do not attempt to build this in one pass. Suggested phase order:
 - Command: `BDH_HRIS_DEBUG=1 venv/bin/python manage.py test`
 - `BDH_HRIS_DEBUG=1` is needed locally: with DEBUG off, settings switch to WhiteNoise's manifest storage, and without a `collectstatic` run about 20 page tests fail with "Missing staticfiles manifest entry".
 - **Known failures (4):** the CSC Form 6 and COSP leave-form print tests in `leave.tests` (`PrintCscForm6Tests` x2, `PrintCospLeaveFormTests` x2) need LibreOffice. Without it they fail as `302 != 200` (on current main; older code showed `FileNotFoundError: 'libreoffice'`). They pass only on a machine with LibreOffice installed. Any other failure is a real one.
+
+---
+
+## 16. Pilot improvement items (owner requests 2026-11-24; rebuilt 2026-11-26 after the first build was lost, one branch each)
+
+### Item 3 — Actual salary on CSC Form No. 6 (branch `item3-salary-csc-form6`)
+- `Employee.monthly_salary` (optional): **entered and seen on screen by the HR Administrator only** (the field is not on the form for anyone else, HR Processors included). A change is logged in the employee's history and the Audit Log as "(amount not shown)": amounts are never kept in the log.
+- **Item 7 (Salary) of CSC Form No. 6** prints the monthly salary instead of the Salary Grade (layout unchanged). The amount is the one **saved when HR recorded the leave** (`LeaveApplication.salary_at_recording`), so a later salary change never alters a processed form; before recording, or for leave recorded before this change, the current salary. Blank when none is on record.
+- Who sees it on the printout: the employee, HR Processors, HR Administrators, the AO and the COH (view-only OIC rule applies). A Supervisor's printout leaves item 7 blank (`csc_form6.may_see_salary`). The COSP form (01F04-A) is unchanged.
+- Existing employees: the HR Administrator enters each salary on the employee record (no import column, since HR Processors may run the Data Import).
+- Tests use made-up figures only.
