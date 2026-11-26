@@ -1088,3 +1088,7 @@ body .app-sidebar nav .nav-sub a.is-current { color: #fff; font-weight: 600; bac
 /* Out-on-Pass Tap Out / Tap In button: large, easy to hit on a shared computer. */
 button.btn-tap, .row-actions button.btn-tap { font-size: 1.15rem; padding: 12px 28px; min-width: 160px; }
 button.btn-tap[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+/* Pilot Item 5: OIC banner on every page */
+.oic-banner { background: #fff7e0; border-left: 4px solid #E5B83F; color: #173D72; padding: .5rem .8rem; margin: 0 0 .8rem; border-radius: 4px; font-size: .9rem; }
+@media print { .oic-banner { display: none; } }

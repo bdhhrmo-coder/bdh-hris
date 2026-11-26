@@ -258,12 +258,22 @@ def correction_action(request, pk):
         messages.error(request, " ".join(e for errs in form.errors.values() for e in errs))
         return redirect("attendance:correction_detail", pk=pk)
 
+    from accounts.models import RoleAssignment as RA
+    from leave.permissions import oic_repeat_guard
+
+    R = AttendanceCorrectionRequest
+    ao_step = correction.correction_type == R.FORMAL and correction.status in (R.VALIDATED, R.PROCESSED_BY_HR)
+    oic_error, notes = oic_repeat_guard(acting_employee, correction, RA.ADMINISTRATIVE_OFFICER if ao_step else None,
+                                        form.cleaned_data["notes"])
+    if oic_error:  # Item 5
+        messages.error(request, oic_error)
+        return redirect("attendance:correction_detail", pk=pk)
     with transaction.atomic():
         if action == "approve":
             _finalize_correction(correction, request.user)
         correction.status = _NEXT_STATUS[action]
         correction.save(update_fields=["status", "updated_at"])
-        _log(correction, action, request.user, form.cleaned_data["notes"].strip())
+        _log(correction, action, request.user, notes)
     notify_status_change(correction)
     messages.success(request, "Action recorded.")
     return redirect("attendance:correction_queue")

@@ -143,9 +143,19 @@ def _is_next_level_supervisor(candidate, filer, viewing=False):
     return False
 
 
+OIC_LABELS = {RoleAssignment.ADMINISTRATIVE_OFFICER: "the AO", RoleAssignment.CHIEF_OF_HOSPITAL: "the COH"}
+
+
 def _with_role_except(role_code, filers):
     excluded = _ids(filers)
-    return [e for e in employees_with_role(role_code) if e.pk not in excluded]
+    people = [e for e in employees_with_role(role_code) if e.pk not in excluded]
+    if role_code in OIC_LABELS:
+        # Item 5: someone at the AO / COH step only as OIC is told so in their notices
+        # (notifications.services.notify reads this mark).
+        for e in people:
+            if holds_only_as_oic(e, role_code):
+                e.oic_notice_prefix = f"As OIC for {OIC_LABELS[role_code]}: "
+    return people
 
 
 def coh_step_actors(filers):
@@ -281,6 +291,54 @@ def endorser_ids(obj):
             if emp is not None:
                 ids.add(emp.pk)
     return ids
+
+
+# -- Pilot Item 5 (owner decisions 2026-11-24, revised 2026-11-25): an OIC for the AO or the COH
+#    who already acted on the same request earlier in this cycle may act again; the system adds
+#    the remark automatically (any remark they type is kept after it).
+OIC_REPEAT_TAG = "[OIC - acted earlier on this request]"
+_CYCLE_START_ACTIONS = ("submit", "resubmit", "file", "edit")
+
+
+def holds_only_as_oic(acting_employee, role):
+    """True when the person can act in `role` right now only through an OIC designation."""
+    if acting_employee is None:
+        return False
+    lines = [ra for ra in acting_employee.active_role_assignments() if ra.role == role]
+    return bool(lines) and all(ra.is_oic for ra in lines)
+
+
+def acted_this_cycle_ids(obj):
+    """Employee ids of everyone who took an action on `obj` since it was last (re)submitted."""
+    if obj is None or getattr(obj, "pk", None) is None:
+        return set()
+    actions = list(obj.actions.select_related("acted_by__employee").order_by("acted_at", "pk"))
+    start = 0
+    for i, a in enumerate(actions):
+        if getattr(a, "resulting_status", None) == "SUBMITTED" or a.action in _CYCLE_START_ACTIONS:
+            start = i + 1
+    ids = set()
+    for a in actions[start:]:
+        emp = getattr(a.acted_by, "employee", None) if a.acted_by_id else None
+        if emp is not None:
+            ids.add(emp.pk)
+    return ids
+
+
+def oic_repeat_guard(acting_employee, obj, step_role, notes):
+    """(error, notes to log). error is always None (kept so callers stay simple). Only for
+    the AO and COH steps, only for an OIC who acted earlier in this cycle: the automatic
+    remark goes first, then whatever they typed."""
+    from accounts.models import RoleAssignment as RA
+
+    notes = (notes or "").strip()
+    if step_role not in (RA.ADMINISTRATIVE_OFFICER, RA.CHIEF_OF_HOSPITAL) or acting_employee is None:
+        return None, notes
+    if not holds_only_as_oic(acting_employee, step_role) or acting_employee.pk not in acted_this_cycle_ids(obj):
+        return None, notes
+    auto = (f"{OIC_REPEAT_TAG} Acted as OIC for {OIC_LABELS.get(step_role, step_role)}; "
+            "this person also acted at an earlier step.")
+    return None, (f"{auto} {notes}" if notes else auto)[:255]
 
 
 def exclude_own_endorsements(qs, acting_employee, hr_status="ENDORSED_BY_SUPERVISOR"):

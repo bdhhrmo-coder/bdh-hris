@@ -151,6 +151,15 @@ def exchange_action(request, pk):
     status = exchange_request.status
     # Neither party acts on their own exchange (owner decision 2026-10-26).
     filers = [exchange_request.employee_a, exchange_request.employee_b]
+    from accounts.models import RoleAssignment as RA
+    from leave.permissions import oic_repeat_guard
+
+    oic_error, notes = oic_repeat_guard(acting_employee, exchange_request, {
+        DutyExchangeRequest.PROCESSED_BY_HR: RA.ADMINISTRATIVE_OFFICER,
+        DutyExchangeRequest.RECOMMENDED_BY_AO: RA.CHIEF_OF_HOSPITAL}.get(status), notes)
+    if oic_error:  # Item 5
+        messages.error(request, oic_error)
+        return redirect("exchange:exchange_queue")
 
     def apply_transition(new_status, action_name):
         exchange_request.status = new_status

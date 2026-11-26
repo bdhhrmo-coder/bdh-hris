@@ -99,6 +99,18 @@ def request_action(request, pk):
                                 "approval or disapproval.")
         return redirect("official_requests:request_queue")
 
+    from accounts.models import RoleAssignment as RA
+    from leave.permissions import oic_repeat_guard
+
+    from .routing import approver_role
+
+    step_role = {"AO": RA.ADMINISTRATIVE_OFFICER, "COH": RA.CHIEF_OF_HOSPITAL}.get(
+        approver_role(official_request.request_type, target_status) if target_status else None)
+    oic_error, notes = oic_repeat_guard(acting_employee, official_request, step_role, notes)
+    if oic_error:  # Item 5
+        messages.error(request, oic_error)
+        return redirect("official_requests:request_queue")
+
     allowed = False
     if expected_action is not None and actor_may_advance(acting_employee, official_request):
         if action == expected_action:

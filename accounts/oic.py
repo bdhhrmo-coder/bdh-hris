@@ -85,8 +85,31 @@ def _cosp_in_area(employee, scope):
     return employee.sections.filter(pk=scope.section_id).exists()
 
 
+def _ao_ids():
+    return set(R.objects.filter(R.in_force_q(), role=R.ADMINISTRATIVE_OFFICER, is_oic=False).values_list(
+        "employee_id", flat=True))
+
+
+def may_be_oic(person, scope):
+    """Pilot Item 5 (owner decisions 2026-11-24): Supervisors (unit heads, section heads incl.
+    the Chief Nurse) may be OIC for any approver area, the AO also for the COH; a COSP employee
+    only within the limits of cosp_may_cover (never for the Chief Nurse, the AO or the COH)."""
+    if person is None or scope is None or person.pk == scope.employee_id:
+        return False
+    cosp = person.employment_status == Employee.EMPLOYMENT_STATUS_COSP
+    if cosp and not cosp_may_cover(scope):
+        return False
+    if person.pk in _supervisor_ids():
+        return True
+    if scope.role == R.CHIEF_OF_HOSPITAL and person.pk in _ao_ids():
+        return True
+    return _cosp_in_area(person, scope)
+
+
 def oic_candidates(delegator):
     ids = _supervisor_ids()
+    if own_delegable_assignments(delegator).filter(role=R.CHIEF_OF_HOSPITAL).exists():
+        ids |= _ao_ids()  # Item 5: the COH may name the AO
     cosp_scopes = [ra for ra in own_delegable_assignments(delegator) if cosp_may_cover(ra)]
     if cosp_scopes:
         cosp = Employee.objects.filter(employment_status=Employee.EMPLOYMENT_STATUS_COSP, is_active=True)
@@ -98,6 +121,11 @@ def oic_candidates(delegator):
     )
 
 
+OIC_NOT_ALLOWED = ("This person cannot be OIC for this area. A Supervisor (unit head or section head) can be OIC "
+                   "for any approver; the AO also for the COH. A COSP employee only for their own unit (or their "
+                   "own section when it has no units) - never for the Chief Nurse, the AO or the COH.")
+
+
 class OICForm(forms.Form):
     scope = forms.ModelChoiceField(
         queryset=R.objects.none(), label="Area to hand over", empty_label=None,
@@ -105,8 +133,8 @@ class OICForm(forms.Form):
     )
     oic = forms.ModelChoiceField(
         queryset=Employee.objects.none(), label="Officer-in-Charge",
-        help_text="Employees who are already Supervisors. For a unit (or a section without units), "
-                  "a COSP employee of that unit/section may also be designated.",
+        help_text="Supervisors (unit heads and section heads); for the COH, also the AO. For a unit (or a "
+                  "section without units), a COSP employee of that unit/section may also be designated.",
     )
     start_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     end_date = forms.DateField(
@@ -133,9 +161,8 @@ class OICForm(forms.Form):
         if start and end and end < start:
             self.add_error("end_date", "The end date cannot be before the start date.")
         oic = cleaned.get("oic")
-        if oic and scope and oic.pk not in _supervisor_ids() and not _cosp_in_area(oic, scope):
-            self.add_error("oic", "A COSP employee can be OIC only for their own unit, or their own section "
-                                  "when it has no units - not for the Chief Nurse, the AO or the COH.")
+        if oic and scope and not may_be_oic(oic, scope):
+            self.add_error("oic", OIC_NOT_ALLOWED)
         if start and end and scope:
             overlap = R.objects.filter(
                 is_oic=True, is_active=True, delegated_by=self.delegator, role=scope.role,

@@ -134,6 +134,7 @@ TEMPLATES = [
                 "homepage.context_processors.greeting",
                 "homepage.context_processors.page_watermark",
                 "homepage.context_processors.test_system",
+                "accounts.context_processors.oic_banner",
                 "dashboard.context_processors.dashboard_link",
                 "auditlog.context_processors.audit_log_link",
                 "employees.context_processors.nav_links",

@@ -211,6 +211,18 @@ def batch_action(request, pk):
     if action in ("return", "reject") and not notes:
         messages.error(request, "Type the reason for returning or rejecting it, so the filer knows why.")
         return redirect("official_requests:batch_detail", pk=pk)
+    from accounts.models import RoleAssignment as RA
+    from leave.permissions import oic_repeat_guard
+
+    from .routing import approver_role
+
+    target = rules.next_status(batch)
+    step_role = {"AO": RA.ADMINISTRATIVE_OFFICER, "COH": RA.CHIEF_OF_HOSPITAL}.get(
+        approver_role(batch.request_type, target) if target else None)
+    oic_error, notes = oic_repeat_guard(acting_employee, batch, step_role, notes)
+    if oic_error:  # Item 5
+        messages.error(request, oic_error)
+        return redirect("official_requests:batch_detail", pk=pk)
     rules.apply_action(batch, request.user, action, notes)
     messages.success(request, "Action recorded for the whole group request.")
     return redirect("official_requests:request_queue")

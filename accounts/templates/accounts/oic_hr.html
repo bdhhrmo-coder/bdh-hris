@@ -2,7 +2,7 @@
 {% block title %}OIC for an Approver — BDH HRIS{% endblock %}
 {% block content %}
 <h1>OIC for an Approver</h1>
-<p class="muted">Use this only when a Supervisor, the AO or the COH cannot designate an OIC themself. You must give the reason and attach the written instruction. The approver and the OIC are notified, and the Audit Log shows that you did it. While the OIC is in force the approver cannot act on that area.</p>
+<p class="muted">Use this only when a Supervisor, the AO or the COH cannot designate an OIC themself. You must give the reference number of the signed designation, the reason, and attach the written instruction. The approver and the OIC are notified, and the Audit Log shows that you did it. While the OIC is in force the approver cannot act on that area.</p>
 
 <div class="card form-card">
   <h2 class="mt-0">Designate on the approver's behalf</h2>
@@ -25,7 +25,7 @@
     <td>{{ row.ra.end_date|date:"M d, Y" }}</td>
     <td>{{ row.status }}</td>
     <td>{{ row.ra.designated_by_hr.full_name }}</td>
-    <td>{{ row.ra.designation_reason }} <a href="{% url 'oic_instruction' row.ra.pk %}" target="_blank">Instruction</a></td>
+    <td>{% if row.ra.designation_reference %}Ref. {{ row.ra.designation_reference }} · {% endif %}{{ row.ra.designation_reason }} <a href="{% url 'oic_instruction' row.ra.pk %}" target="_blank">Instruction</a></td>
     <td>
       {% if row.status == "In force" or row.status == "Upcoming" %}
       <form method="post" action="{% url 'oic_end' row.ra.pk %}" class="m-0">
