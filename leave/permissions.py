@@ -293,11 +293,10 @@ def endorser_ids(obj):
     return ids
 
 
-# -- Pilot Item 5 (owner decisions 2026-11-24): an OIC for the AO or the COH who already
-#    acted on the same request earlier in this cycle may act again only with a typed remark.
+# -- Pilot Item 5 (owner decisions 2026-11-24, revised 2026-11-25): an OIC for the AO or the COH
+#    who already acted on the same request earlier in this cycle may act again; the system adds
+#    the remark automatically (any remark they type is kept after it).
 OIC_REPEAT_TAG = "[OIC - acted earlier on this request]"
-OIC_REPEAT_NEEDS_REMARK = ("You already acted on this request at an earlier step. As OIC you may act again, "
-                           "but type a remark first. Nothing was changed.")
 _CYCLE_START_ACTIONS = ("submit", "resubmit", "file", "edit")
 
 
@@ -327,8 +326,9 @@ def acted_this_cycle_ids(obj):
 
 
 def oic_repeat_guard(acting_employee, obj, step_role, notes):
-    """(error or None, notes to log). Only for the AO and COH steps, only for an OIC
-    who acted earlier in this cycle: a remark is required and is tagged."""
+    """(error, notes to log). error is always None (kept so callers stay simple). Only for
+    the AO and COH steps, only for an OIC who acted earlier in this cycle: the automatic
+    remark goes first, then whatever they typed."""
     from accounts.models import RoleAssignment as RA
 
     notes = (notes or "").strip()
@@ -336,14 +336,9 @@ def oic_repeat_guard(acting_employee, obj, step_role, notes):
         return None, notes
     if not holds_only_as_oic(acting_employee, step_role) or acting_employee.pk not in acted_this_cycle_ids(obj):
         return None, notes
-    if not notes:
-        return OIC_REPEAT_NEEDS_REMARK, notes
-    return None, f"{OIC_REPEAT_TAG} {notes}"[:255]
-
-
-def oic_repeat_pending(acting_employee, obj, step_role):
-    """For the page: True when acting here needs the OIC remark."""
-    return oic_repeat_guard(acting_employee, obj, step_role, "")[0] is not None
+    auto = (f"{OIC_REPEAT_TAG} Acted as OIC for {OIC_LABELS.get(step_role, step_role)}; "
+            "this person also acted at an earlier step.")
+    return None, (f"{auto} {notes}" if notes else auto)[:255]
 
 
 def exclude_own_endorsements(qs, acting_employee, hr_status="ENDORSED_BY_SUPERVISOR"):

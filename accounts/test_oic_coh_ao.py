@@ -101,7 +101,7 @@ class OICForCohAoTests(TestCase):
         app.refresh_from_db()
         return r
 
-    def test_oic_acting_again_needs_remark_and_is_tagged(self):
+    def test_oic_acting_again_gets_the_automatic_remark(self):
         self.oic_for_ao()
         app = self.leave(self.nurse)
         self.act(self.head, app, "endorse")
@@ -110,17 +110,30 @@ class OICForCohAoTests(TestCase):
         self.assertEqual(app.status, LeaveApplication.PROCESSED_BY_HR)
         note = Notification.objects.filter(recipient=self.head).order_by("-pk").first()
         self.assertTrue(note.message.startswith("As OIC for the AO: "), note.message)
-        self.assertFalse(Notification.objects.filter(recipient=self.ao, message__contains="AO").exclude(
-            message__contains="OIC").exists())  # the absent AO is not told to act
-        r = self.act(self.head, app, "recommend")
-        self.assertEqual(app.status, LeaveApplication.PROCESSED_BY_HR)
-        self.assertContains(r, "Nothing was changed")
-        self.act(self.head, app, "recommend", "Checked the staffing again")
+        self.act(self.head, app, "recommend")  # no remark typed: still goes through
         self.assertEqual(app.status, LeaveApplication.RECOMMENDED_BY_AO)
         last = app.actions.order_by("-pk").first()
         self.assertTrue(last.notes.startswith(OIC_REPEAT_TAG))
-        row = [x for x in audit_rows(module="Leave") if "OIC, acted earlier" in x["action"]]
-        self.assertEqual(len(row), 1)
+        self.assertIn("Acted as OIC for the AO", last.notes)
+        rows = [x for x in audit_rows(module="Leave") if "OIC, acted earlier" in x["action"]]
+        self.assertEqual(len(rows), 1)
+
+    def test_ao_as_oic_for_coh_acts_at_both_steps(self):
+        R.objects.create(employee=self.ao, role=R.CHIEF_OF_HOSPITAL, is_oic=True, delegated_by=self.coh,
+                         start_date=self.today, end_date=self.today + timedelta(days=5))
+        app = self.leave(self.nurse)
+        self.act(self.head, app, "endorse")
+        self.act(self.hr, app, "process")
+        self.act(self.ao, app, "recommend", "Staffing checked")
+        self.assertEqual(app.actions.order_by("-pk").first().notes, "Staffing checked")  # own AO step: no tag
+        self.client.force_login(self.ao.user)
+        self.assertContains(self.client.get(reverse("leave:leave_queue")), f"/leave/{app.pk}/")
+        self.assertContains(self.client.get(reverse("leave:leave_queue")), "OIC for the COH")
+        r = self.act(self.ao, app, "approve", "Approved")
+        self.assertEqual(app.status, LeaveApplication.APPROVED, r.content[:0])
+        last = app.actions.order_by("-pk").first()
+        self.assertTrue(last.notes.startswith(OIC_REPEAT_TAG + " Acted as OIC for the COH"), last.notes)
+        self.assertTrue(last.notes.endswith("Approved"))
 
     def test_oic_who_did_not_act_earlier_needs_no_remark(self):
         self.oic_for_ao(self.other_head)
