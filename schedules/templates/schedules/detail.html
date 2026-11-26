@@ -33,6 +33,11 @@
   <a class="btn btn-secondary" href="{% url 'schedules:excel_template' schedule.pk %}">Excel</a>
 </div>
 
+{% if leave_conflicts %}
+<div class="msg warning"><strong>On duty during approved leave or CTO:</strong>
+  {% for emp, day, shift, mark in leave_conflicts %}{{ emp.full_name }} on {{ day|date:"M j" }} ({{ shift }}, {{ mark }}){% if not forloop.last %}; {% endif %}{% endfor %}.
+  This is a warning only — check it before submitting.</div>
+{% endif %}
 {% if conflicts %}
 <div class="msg warning"><strong>Double-booked:</strong>
   {% for emp, day, other in conflicts %}{{ emp.full_name }} on {{ day|date:"M j" }} (also on {{ other.area_name }}){% if not forloop.last %}; {% endif %}{% endfor %}.</div>
@@ -65,11 +70,13 @@
     <tbody>
     {% for g in grid %}
       <tr><td class="sticky-col"><strong>{{ g.row.employee.full_name }}</strong><br><small>{{ g.row.designation }}</small></td>
-        {% for c in g.cells %}<td class="{% if c.shift %}{% if c.shift.is_duty %}cell-duty{% else %}cell-off{% endif %}{% endif %}">{{ c.shift.code|default:"" }}</td>{% endfor %}
+        {% for c, m in g.pairs %}<td class="{% if c.shift %}{% if c.shift.is_duty %}cell-duty{% else %}cell-off{% endif %}{% endif %}">{{ c.shift.code|default:"" }}{% if m %}<span class="leave-mark" title="{% if m == 'LV' %}Approved leave{% else %}CTO (approved or pending){% endif %}">{{ m }}</span>{% endif %}</td>{% endfor %}
         <td class="num"><strong>{{ g.hours|floatformat:"-2" }}</strong></td><td class="num"><strong>{{ g.days }}</strong></td></tr>
     {% empty %}<tr><td class="empty-note" colspan="34">No employees on this schedule.</td></tr>{% endfor %}
     </tbody>
   </table>
+<p class="field-help sched-legend">Leave and CTO: <span class="leave-mark">LV</span> approved leave · <span class="leave-mark">CTO</span> CTO (approved or pending). The codes LV and CTO can be entered only on a day with a leave or CTO request.</p>
+
   </div>
   {% if schedule.notes %}<p class="field-help" style="margin-top:.5rem;"><strong>Notes:</strong> {{ schedule.notes }}</p>{% endif %}
 </div>

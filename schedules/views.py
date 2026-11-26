@@ -17,6 +17,7 @@ from printouts.http import pdf_response
 
 from . import rules, services
 from .forms import NewScheduleForm, ShiftCodeForm
+from .leave_marks import duty_on_leave
 from .models import DutySchedule, ScheduleCell, ScheduleRow, ShiftCode
 
 
@@ -42,10 +43,15 @@ def _grid(schedule):
     for c in ScheduleCell.objects.filter(row__schedule=schedule).select_related("shift"):
         cells.setdefault(c.row_id, {})[c.date] = c
     out = []
+    from .leave_marks import marks, shown
+
+    mark_map = shown(marks(schedule, [r.employee_id for r in rows]))  # Item 6: leave / CTO on the grid
     for r in rows:
         row_cells = [cells.get(r.pk, {}).get(d) for d in schedule.days]
         hours, days = rules.row_totals([c for c in row_cells if c])
-        out.append({"row": r, "cells": row_cells, "hours": hours, "days": days})
+        out.append({"row": r, "cells": row_cells, "hours": hours, "days": days,
+                    "marks": [mark_map.get((r.employee_id, d), "") for d in schedule.days],
+                    "pairs": list(zip(row_cells, [mark_map.get((r.employee_id, d), "") for d in schedule.days]))})
     return out
 
 
@@ -147,7 +153,10 @@ def schedule_edit(request, pk):
                 continue
             if row_id not in row_ids:
                 raise PermissionDenied("Unknown row.")
-        services.save_grid(schedule, values)
+        refused = []
+        services.save_grid(schedule, values, refused=refused)
+        for problem in refused:  # Item 6: LV only on a leave/CTO day
+            messages.error(request, problem)
         schedule.notes = request.POST.get("notes", schedule.notes)[:2000]
         fields = ["notes", "updated_at"]
         if is_hr(acting) and request.POST.get("cutoff_date"):
@@ -194,7 +203,8 @@ def schedule_edit(request, pk):
         "rows": [{"id": g["row"].pk, "name": g["row"].employee.full_name, "designation": g["row"].designation,
                   "cells": [c.shift_id if c and c.shift_id else "" for c in g["cells"]],
                   # days set by an approved regular Exchange of Duty: locked (2026-11-03)
-                  "locked": [i for i, d in enumerate(schedule.days) if (g["row"].employee_id, d) in locked]}
+                  "locked": [i for i, d in enumerate(schedule.days) if (g["row"].employee_id, d) in locked],
+                  "marks": g["marks"]}
                  for g in grid],
     }
     in_schedule = set(schedule.rows.values_list("employee_id", flat=True))
@@ -203,6 +213,7 @@ def schedule_edit(request, pk):
         "addable": Employee.objects.filter(is_active=True, archived_at__isnull=True).exclude(pk__in=in_schedule),
         "conflicts": services.double_bookings(schedule), "latest_return": schedule.actions.filter(action="return").last(),
         "exchanges": approved_for_schedule(schedule),
+        "leave_conflicts": duty_on_leave(schedule),
     })
 
 
@@ -214,6 +225,7 @@ def schedule_detail(request, pk):
 
     acting, schedule = _get(request, pk)
     return render(request, "schedules/detail.html", {
+        "leave_conflicts": duty_on_leave(schedule),
         "schedule": schedule, "grid": _grid(schedule), "history": schedule.actions.select_related("acted_by__employee"),
         "changes": schedule.changes.select_related("employee", "changed_by__employee"),
         "actions": rules.available_actions(acting, request.user, schedule),

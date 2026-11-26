@@ -9,6 +9,11 @@
 {% if latest_return and schedule.status == "RETURNED" %}
 <div class="msg error">Returned by {{ latest_return.acted_by.employee.full_name|default:latest_return.acted_by.username }}: "{{ latest_return.notes }}". Fix it, then submit again — it restarts at HR review.</div>
 {% endif %}
+{% if leave_conflicts %}
+<div class="msg warning"><strong>On duty during approved leave or CTO:</strong>
+  {% for emp, day, shift, mark in leave_conflicts %}{{ emp.full_name }} on {{ day|date:"M j" }} ({{ shift }}, {{ mark }}){% if not forloop.last %}; {% endif %}{% endfor %}.
+  This is a warning only — check it before submitting.</div>
+{% endif %}
 {% if conflicts %}
 <div class="msg warning"><strong>Double-booked:</strong>
   {% for emp, day, other in conflicts %}{{ emp.full_name }} on {{ day|date:"M j" }} (also on {{ other.area_name }}){% if not forloop.last %}; {% endif %}{% endfor %}.
@@ -55,6 +60,8 @@
                   <option value=""></option>
                   <template x-for="c in codes" :key="c.id"><option :value="String(c.id)" x-text="c.code" :selected="String(c.id) === r.cells[di]"></option></template>
                 </select>
+                <template x-if="r.marks && r.marks[di]"><span class="leave-mark" x-text="r.marks[di]"
+                      :title="r.marks[di] === 'LV' ? 'Approved leave' : 'CTO (approved or pending)'"></span></template>
               </td>
             </template>
             <td class="num"><strong x-text="totals(r).hours"></strong></td>
@@ -66,6 +73,7 @@
       </tbody>
     </table>
     </div>
+<p class="field-help sched-legend">Leave and CTO: <span class="leave-mark">LV</span> approved leave · <span class="leave-mark">CTO</span> CTO (approved or pending). The codes LV and CTO can be entered only on a day with a leave or CTO request.</p>
     <template x-if="rows.length === 0"><p class="empty-note">No employees yet — add them below.</p></template>
     <div class="field-block" style="margin-top:1rem;">
       <label class="field-title" for="add_employee">Add an employee</label>
