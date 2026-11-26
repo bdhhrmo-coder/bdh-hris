@@ -17,6 +17,9 @@ class EmployeeAdmin(admin.ModelAdmin):
     list_filter = ("employment_status", "is_active", "sections")
     inlines = [RoleAssignmentInline, EducationHistoryInline]
     filter_horizontal = ("sections", "units")
+    # Pilot Item 3 (owner, Nov 25): the salary is hidden from the System
+    # Administration pages; only the HR Administrator edits it, in the HRIS.
+    exclude = ("monthly_salary",)
 
 
 @admin.register(EmployeeEditHistory)

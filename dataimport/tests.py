@@ -271,5 +271,45 @@ class BiometricIdImportTests(TestCase):
                            dict(NEW_ROW, employee_id="EMP-0104", biometric_id="777")])
         self.assertTrue(any("also on row" in e for e in plans[1].errors))
 
-    def test_template_has_the_column_last(self):
-        self.assertEqual(employee_import.COLUMNS[-1][0], "biometric_id")
+    def test_template_has_the_column_after_the_required_ones(self):
+        # Optional columns come last: Biometric ID, then Monthly Salary (Item 3).
+        self.assertEqual([c[0] for c in employee_import.COLUMNS[-2:]], ["biometric_id", "monthly_salary"])
+
+
+class SalaryImportTests(TestCase):
+    """Item 3 / audit fix F8: optional Monthly Salary column, HR Administrator only.
+    Made-up figures only."""
+
+    def setUp(self):
+        self.hradmin = make_employee("sal_hradmin", "EMP-9921", RoleAssignment.HR_ADMINISTRATOR)
+        self.hrp = make_employee("sal_hrp", "EMP-9922", RoleAssignment.HR_PROCESSOR)
+
+    def plan(self, rows, actor=None, cols=EMP_COLS):
+        return employee_import.build_plan(workbook_file(employee_import.SHEET, cols, rows), actor or self.hradmin)
+
+    def test_older_template_without_the_column_still_uploads(self):
+        old_cols = [c for c in EMP_COLS if c[0] != "monthly_salary"]
+        self.assertEqual(self.plan([NEW_ROW], cols=old_cols)[0].errors, [])
+
+    def test_hr_administrator_loads_it_and_history_hides_the_amount(self):
+        plans = self.plan([dict(NEW_ROW, monthly_salary="12,345.67")])
+        self.assertEqual(plans[0].errors, [])
+        employee_import.apply_plan(plans, self.hradmin.user, "f.xlsx")
+        emp = Employee.objects.get(employee_id="EMP-0101")
+        self.assertEqual(emp.monthly_salary, Decimal("12345.67"))
+        plans = self.plan([dict(NEW_ROW, monthly_salary=23456.5)])
+        employee_import.apply_plan(plans, self.hradmin.user, "g.xlsx")
+        emp.refresh_from_db()
+        self.assertEqual(emp.monthly_salary, Decimal("23456.50"))
+        line = EmployeeEditHistory.objects.get(employee=emp, field_name="monthly_salary")
+        self.assertEqual((line.old_value, line.new_value), ("(amount not shown)", "(amount not shown)"))
+
+    def test_hr_processor_file_with_a_salary_is_refused(self):
+        plans = self.plan([dict(NEW_ROW, monthly_salary="12345.67")], actor=self.hrp)
+        self.assertIn("Only an HR Administrator may load salaries. Leave Monthly Salary blank.", plans[0].errors)
+        self.assertEqual(self.plan([NEW_ROW], actor=self.hrp)[0].errors, [])
+
+    def test_bad_amount_is_refused(self):
+        for bad in ("abc", "-5", "0"):
+            plans = self.plan([dict(NEW_ROW, monthly_salary=bad)])
+            self.assertTrue(any("not a valid amount" in e for e in plans[0].errors), bad)

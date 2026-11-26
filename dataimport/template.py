@@ -32,6 +32,8 @@ INSTRUCTIONS = [
     ("• Section(s) may be left blank only for the Chief of Hospital and the Administrative Officer.", False),
     ("   System Administrator cannot be given by import. Imports only ADD roles; they never remove one.", False),
     ("• COSP Under: PGP or LGU - for COSP employees only (used on the dashboard).", False),
+    ("• Monthly Salary: only for an HR Administrator running the import (prints on CSC Form No. 6).", False),
+    ("   Numbers only, e.g. 25000.00. Leave blank to keep the salary on record.", False),
     ("• Username: leave blank to use the Employee ID. Staff can log in with either.", False),
     ("• New login accounts get a temporary password. After the import, print the password slips and hand", False),
     ("   them out personally. Each person must set their own password at first login.", False),

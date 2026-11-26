@@ -31,6 +31,7 @@ Safety rules built in:
 """
 
 import secrets
+from decimal import Decimal, InvalidOperation
 from dataclasses import dataclass, field
 
 from django.contrib.auth.models import User
@@ -79,9 +80,13 @@ COLUMNS = [
     ("permanent_address", "Permanent Address", False),
     ("telephone_mobile", "Telephone/Mobile", False),
     ("email", "Email", False),
-    ("biometric_id", "Biometric ID", False),  # PALMIRA ID (2026-11-03); optional column, last
+    ("biometric_id", "Biometric ID", False),  # PALMIRA ID (2026-11-03); optional column
+    # Pilot Item 3 (owner, Nov 25; audit fix F8, 2026-11-26): optional, last. Applied only
+    # when an HR Administrator uploads; the amount is never kept in the history.
+    ("monthly_salary", "Monthly Salary", False),
 ]
-OPTIONAL_COLUMNS = ("biometric_id",)  # older templates without it still upload
+OPTIONAL_COLUMNS = ("biometric_id", "monthly_salary")  # older templates without them still upload
+HIDDEN_AMOUNT_FIELDS = {"monthly_salary"}
 TEXT_FIELDS = [
     "surname", "first_name", "middle_name", "name_extension", "position", "salary_grade", "item_plantilla_no",
     "appointment_type", "sss_number", "pagibig_number", "philhealth_number", "tin_number", "gsis_number",
@@ -203,6 +208,18 @@ def build_plan(uploaded_file, actor_employee):
                     p.errors.append(f'{LABELS[key]} "{value}" is not one of: {allowed}.')
                 else:
                     p.values[key] = code
+        salary = text(raw["monthly_salary"]).replace(",", "").replace("\u20b1", "").strip()
+        if salary:
+            if not can_assign_roles:
+                p.errors.append("Only an HR Administrator may load salaries. Leave Monthly Salary blank.")
+            else:
+                try:
+                    amount = Decimal(salary).quantize(Decimal("0.01"))
+                    if amount <= 0 or amount >= Decimal("10000000000"):
+                        raise InvalidOperation
+                    p.values["monthly_salary"] = amount
+                except InvalidOperation:
+                    p.errors.append(f'Monthly Salary "{salary}" is not a valid amount (numbers only, e.g. 25000.00).')
         shift = text(raw["shift_hours"])
         if shift:
             if shift not in ("8", "12"):
@@ -354,9 +371,12 @@ def apply_plan(plans, actor_user, source_name):
         for key, value in p.values.items():
             old = getattr(emp, key)
             if old != value:
+                shown_old, shown_new = _display(old), _display(value)
+                if key in HIDDEN_AMOUNT_FIELDS:  # Item 3: amounts never kept in the history
+                    shown_old = shown_new = "(amount not shown)"
                 history.append(EmployeeEditHistory(
                     employee=emp, field_name=key, field_label=LABELS.get(key, key),
-                    old_value=_display(old), new_value=_display(value), reason=reason, changed_by=actor_user,
+                    old_value=shown_old, new_value=shown_new, reason=reason, changed_by=actor_user,
                 ))
                 setattr(emp, key, value)
         emp.save()
