@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% load documents_tags %}
+{% block title %}Performance incident — BDH HRIS{% endblock %}
+{% block content %}
+<p><a href="{% url 'performance:incidents' %}">&larr; Performance Incidents</a></p>
+<h1>{{ d.criterion }}</h1>
+<p class="muted">{{ d.employee.full_name }} · incident {{ d.incident_date|date:"M j, Y" }} · {{ d.points }} point(s) · <strong>{{ d.get_status_display }}</strong> · filed by {{ d.filed_by.full_name }}{% if d.auto_source %} (by the system: {{ d.auto_source }}){% endif %}</p>
+<div class="card"><p>{{ d.description|linebreaksbr }}</p><p class="muted">Evidence: {{ d.evidence_ref|default:"—" }}{% if d.final_decision_ref %} · Final decision: {{ d.final_decision_ref }}{% endif %}</p>
+  {% if d.explanation %}<p><strong>Explanation:</strong> {{ d.explanation|linebreaksbr }}</p>{% endif %}
+  {% if d.review_grounds %}<p><strong>Review grounds:</strong> {{ d.review_grounds|linebreaksbr }}</p>{% endif %}</div>
+{% if d.status == "FILED" and can_hr %}<form method="post" class="card" x-data="{ n: '' }">{% csrf_token %}<h2 class="mt-0">Validate</h2><label>Points <input type="text" name="points" value="{{ d.points }}"></label><label>Note (required to dismiss or change points) <input type="text" name="note" x-model="n"></label><div class="btn-row"><button name="what" value="validate">Validate</button><button name="what" value="dismiss_hr" class="btn-secondary" :disabled="!n.trim()">Dismiss</button></div></form>{% endif %}
+{% if d.status == "VALIDATED" and is_employee %}<form method="post" class="card">{% csrf_token %}<h2 class="mt-0">Your explanation</h2><p class="muted">By {{ d.explanation_due|date:"M j, Y" }}.</p><textarea name="text" rows="3">{{ d.explanation }}</textarea><button name="what" value="explain">Send</button></form>{% endif %}
+{% if d.status == "VALIDATED" and can_decide %}<form method="post" class="card" x-data="{ n: '' }">{% csrf_token %}<h2 class="mt-0">Decide</h2><input type="text" name="note" x-model="n" placeholder="Note (required to dismiss)" aria-label="Note"><div class="btn-row"><button name="what" value="approve">Approve</button><button name="what" value="dismiss" class="btn-secondary" :disabled="!n.trim()">Dismiss</button></div></form>{% endif %}
+{% if d.status == "APPROVED" and is_employee and today <= d.review_due %}<form method="post" class="card">{% csrf_token %}<h2 class="mt-0">Ask for a review</h2><p class="muted">By {{ d.review_due|date:"M j, Y" }}; otherwise it becomes final.</p><textarea name="text" rows="3" required></textarea><button name="what" value="review">Ask for a review</button></form>{% endif %}
+{% if can_review and d.status in "REVIEW_HR REVIEW_AO REVIEW_COH" and not is_employee %}<form method="post" class="card" x-data="{ n: '' }">{% csrf_token %}<h2 class="mt-0">Review</h2><input type="text" name="note" x-model="n" placeholder="Note (required)" aria-label="Note">
+  {% if d.status == "REVIEW_COH" %}<div class="btn-row"><button name="what" value="review_step" :disabled="!n.trim()">It stands</button><button name="what" value="review_dismiss" class="btn-secondary" :disabled="!n.trim()">Dismiss</button></div>{% else %}<button name="what" value="review_step" :disabled="!n.trim()">Send on</button>{% endif %}</form>{% endif %}
+<div class="card"><h2 class="mt-0">History</h2><ul>{% for e in events %}<li>{{ e.at|date:"M j, Y g:i A" }} · {{ e.action }}{% if e.user %} · {{ e.user.employee.full_name|default:e.user.username }}{% else %} · system{% endif %}{% if e.note %} — {{ e.note }}{% endif %}</li>{% endfor %}</ul>
+  <p><a href="{% documents_url d %}">Evidence files</a></p></div>
+{% endblock %}

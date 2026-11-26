@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Performance Incidents — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Performance Incidents</h1>
+{% if register %}<p><a href="{% url 'performance:register' %}">Deduction register</a></p>{% endif %}
+{% if waiting %}<div class="card"><h2 class="mt-0">Waiting for you</h2><ul>{% for d, what in waiting %}<li><a href="{% url 'performance:incident' d.pk %}">{{ d.employee.full_name }} — {{ d.criterion }}</a> · {{ what }}</li>{% endfor %}</ul></div>{% endif %}
+<div class="card"><h2 class="mt-0">About me</h2><ul>{% for d in about_me %}<li><a href="{% url 'performance:incident' d.pk %}">{{ d.criterion }} ({{ d.incident_date|date:"M j, Y" }})</a> · {{ d.get_status_display }} · filed by {{ d.filed_by.full_name }}{% if d.auto_source %} (by the system){% endif %}</li>{% empty %}<li class="empty-note">None.</li>{% endfor %}</ul></div>
+<div class="card"><h2 class="mt-0">Filed by me</h2><ul>{% for d in filed %}<li><a href="{% url 'performance:incident' d.pk %}">{{ d.employee.full_name }} — {{ d.criterion }}</a> · {{ d.get_status_display }}</li>{% empty %}<li class="empty-note">None.</li>{% endfor %}</ul></div>
+<form method="post" class="card">{% csrf_token %}
+  <h2 class="mt-0">File an incident</h2>
+  <p class="muted">Only final decisions on validated incidents count. Another HR person validates it, the employee may explain, and the AO decides. The employee sees who filed it.</p>
+  <div class="grid-2">
+    <label>Employee <select name="employee" required>{% for e in employees %}<option value="{{ e.pk }}">{{ e.full_name }}</option>{% endfor %}</select></label>
+    <label>Criterion <select name="criterion" required>{% for c in criteria %}<option value="{{ c.pk }}">{{ c }} ({{ c.points_options }}){% if c.applies_to == "SUPERVISOR" %} — supervisors{% endif %}</option>{% endfor %}</select></label>
+    <label>Incident date <input type="date" name="incident_date" max="{{ today|date:'Y-m-d' }}" required></label>
+    <label>Points <input type="text" name="points" inputmode="decimal" required></label>
+    <label>Evidence (reference) <input type="text" name="evidence_ref" maxlength="200" required></label>
+    <label>Final decision reference (if the criterion needs it) <input type="text" name="final_ref" maxlength="200"></label>
+  </div>
+  <label>What happened <textarea name="description" rows="3" required></textarea></label>
+  <button type="submit">File</button>
+</form>
+{% endblock %}

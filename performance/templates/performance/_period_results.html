@@ -1,0 +1,37 @@
+<div class="card">
+  <h2 class="mt-0">Inputs</h2>
+  {% if is_cosp %}
+  <p>COSP Performance Form: {% if cosp_form and cosp_form.submitted_at %}submitted, score {{ cosp_form.score|floatformat:2 }}{% else %}not yet submitted by the supervisor{% endif %} · <a href="{% url 'performance:cosp_form' period.pk %}">open the form</a></p>
+  {% else %}
+  <p>PHRMO-certified rating: {% if period.certified_rating is not None %}<strong>{{ period.certified_rating }}</strong> ({{ period.certificate_ref }}) — {% if period.certified_verified_by %}verified{% else %}waiting for verification{% endif %}{% else %}not encoded{% endif %}</p>
+  <form method="post" class="row-actions">{% csrf_token %}<input type="hidden" name="what" value="certified"><input type="text" name="rating" placeholder="e.g. 4.40" inputmode="decimal" aria-label="Certified rating" required><input type="text" name="ref" placeholder="Certificate reference" aria-label="Certificate reference" required><button class="btn-secondary">Encode</button></form>
+  {% if is_admin and period.certified_rating is not None and not period.certified_verified_by %}<form method="post">{% csrf_token %}<button name="what" value="verify_certified">Verify certified rating</button></form>{% endif %}
+  {% endif %}
+  {% if period.track == "RANK" %}
+  <p>DTR counts: {% if period.absence_days is not None %}{{ period.absence_days }} unauthorized absence(s), {{ period.tardy_days }} tardy day(s) — {% if period.dtr_verified_by %}verified{% else %}waiting for verification{% endif %}{% else %}not encoded{% endif %} <small class="muted">(undertime never counts)</small></p>
+  <form method="post" class="row-actions">{% csrf_token %}<input type="hidden" name="what" value="dtr"><input type="number" min="0" name="absences" placeholder="Absences" aria-label="Unauthorized absences" required><input type="number" min="0" name="tardy" placeholder="Tardy days" aria-label="Tardy days" required><button class="btn-secondary">Encode</button></form>
+  {% if is_admin and period.absence_days is not None and not period.dtr_verified_by %}<form method="post">{% csrf_token %}<button name="what" value="verify_dtr">Verify DTR counts</button></form>{% endif %}
+  {% endif %}
+  <p class="field-help">Encoded by one HR person, verified by another HR Administrator.</p>
+</div>
+<div class="card">
+  <h2 class="mt-0">Result</h2>
+  {% if components %}
+  <table><tr><th>Component</th><th>Weight used</th><th>Mean</th><th>n</th><th>Points</th><th>Note</th></tr>
+  {% for c in components %}<tr><td>{{ c.label }}</td><td>{{ c.weight_used|floatformat:1 }}</td><td>{% if c.mean is not None %}{{ c.mean|floatformat:2 }}{% else %}—{% endif %}</td><td>{{ c.n }}</td><td>{{ c.points|floatformat:1 }}</td><td>{{ c.note }}</td></tr>{% endfor %}
+  <tr><td colspan="4"><strong>TPE total</strong> (after {{ period.deduction_total|default:0 }} deduction points)</td><td><strong>{{ tpe }}</strong></td><td></td></tr></table>
+  {% endif %}
+  <form method="post">{% csrf_token %}<button name="what" value="compute">{% if components %}Compute again{% else %}Compute{% endif %}</button></form>
+</div>
+{% if is_admin %}
+{% if flagged %}<div class="card"><h2 class="mt-0">Flags to review</h2>
+  {% for a in flagged %}<form method="post" class="row-actions" x-data="{ r: '' }">{% csrf_token %}<input type="hidden" name="assignment" value="{{ a.pk }}">{{ a.get_group_display }}{% if names %} ({{ a.rater.full_name }}){% endif %}: <strong>{{ a.flags }}</strong>
+    <input type="text" name="reason" x-model="r" placeholder="Reason to void" aria-label="Reason"><button name="what" value="flag_keep" class="btn-secondary">Keep</button><button name="what" value="flag_void" :disabled="!r.trim()">Void</button></form>{% endfor %}
+  <p class="field-help">A rating is never voided just because it is low.</p></div>{% endif %}
+{% if pending_comments %}<div class="card"><h2 class="mt-0">Comments to screen</h2>
+  {% for c in pending_comments %}<form method="post" x-data="{ r: '' }">{% csrf_token %}<input type="hidden" name="comment" value="{{ c.pk }}"><p><em>{{ c.get_kind_display }}:</em> {{ c.raw_text }}</p>
+    <textarea name="text" rows="2" aria-label="Edited text">{{ c.raw_text }}</textarea><input type="text" name="reason" x-model="r" placeholder="Reason (to edit or withhold)" aria-label="Reason">
+    <div class="btn-row"><button name="what" value="c_release">Release as written</button><button name="what" value="c_edit" class="btn-secondary" :disabled="!r.trim()">Release edited</button><button name="what" value="c_withhold" class="btn-secondary" :disabled="!r.trim()">Withhold</button></div></form>{% endfor %}</div>{% endif %}
+<div class="card"><h2 class="mt-0">Release</h2>
+  {% if release_problems %}<p class="muted">Not yet: {{ release_problems|join:"; " }}.</p>{% else %}<form method="post">{% csrf_token %}<button name="what" value="release" data-confirm="Release this result to the employee and the supervisor?">Release</button></form>{% endif %}</div>
+{% endif %}

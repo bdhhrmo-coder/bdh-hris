@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}My Performance Results — BDH HRIS{% endblock %}
+{% block content %}
+<h1>My Performance Results</h1>
+<div class="card"><ul>{% for p in mine %}<li><a href="{% url 'performance:result' p.pk %}">{{ p.get_period_type_display }} {{ p.start_date|date:"M Y" }} – {{ p.end_date|date:"M Y" }}</a> · {{ p.get_status_display }}</li>{% empty %}<li class="empty-note">No released result yet.</li>{% endfor %}</ul></div>
+{% if team %}<div class="card"><h2 class="mt-0">My staff</h2>
+  {% if team_average %}<p>Average TPE of my staff (released results): <strong>{{ team_average }}</strong></p>{% endif %}
+  <ul>{% for p in team %}<li><a href="{% url 'performance:result' p.pk %}">{{ p.employee.full_name }}</a> · {{ p.get_period_type_display }} · {{ p.get_status_display }}{% if not p.conference_on %} · <span class="text-warning">conference not recorded</span>{% endif %}</li>{% endfor %}</ul></div>{% endif %}
+{% endblock %}

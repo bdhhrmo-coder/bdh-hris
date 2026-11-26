@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}COSP Performance Form — BDH HRIS{% endblock %}
+{% block content %}
+<p><a href="{% url 'performance:tasks' %}">&larr; My Rating Tasks</a></p>
+<h1>COSP Performance Form: {{ period.employee.full_name }}</h1>
+<p class="muted">{{ period.get_period_type_display }} · {{ period.start_date|date:"M j" }} – {{ period.end_date|date:"M j, Y" }}. BDH Performance Evaluation, not an SPMS rating. 5 Outstanding · 4 Very Satisfactory · 3 Satisfactory · 2 Unsatisfactory · 1 Poor.</p>
+{% if form and form.submitted_at %}<p class="card">Submitted {{ form.submitted_at|date:"M j, Y" }}. Form score <strong>{{ form.score|floatformat:2 }}</strong>.{% if pip %} <span class="text-danger">PIP under BDH-HR-PM-01 applies.</span>{% endif %}</p>{% endif %}
+<form method="post" class="card">{% csrf_token %}
+  {% for i, o in slots %}
+  <fieldset><legend>Output {{ i }}{% if i > 3 %} <small>(optional)</small>{% endif %}</legend>
+    <label>Key output <input type="text" name="output_{{ i }}" maxlength="200" value="{{ o.output|default:'' }}" {% if not editable %}disabled{% endif %}></label>
+    <label>Success indicator <input type="text" name="indicator_{{ i }}" maxlength="300" value="{{ o.success_indicator|default:'' }}" {% if not editable %}disabled{% endif %}></label>
+    <div class="grid-2">
+      <label>Quality <input type="number" min="1" max="5" name="q_{{ i }}" value="{{ o.quality|default:'' }}" {% if not editable %}disabled{% endif %}></label>
+      <label>Efficiency (blank = N/A) <input type="number" min="1" max="5" name="e_{{ i }}" value="{{ o.efficiency|default:'' }}" {% if not editable %}disabled{% endif %}></label>
+      <label>Timeliness (blank = N/A) <input type="number" min="1" max="5" name="t_{{ i }}" value="{{ o.timeliness|default:'' }}" {% if not editable %}disabled{% endif %}></label>
+    </div>
+  </fieldset>
+  {% endfor %}
+  <label>Remark (required if any output is rated 2 or below) <textarea name="remark" rows="2" {% if not editable %}disabled{% endif %}>{{ form.remark|default:'' }}</textarea></label>
+  {% if editable %}<div class="btn-row"><button name="what" value="submit" data-confirm="Submit the form? It goes to the next level up for review after the result is computed.">Submit</button><button name="what" value="save" class="btn-secondary">Save</button></div>{% endif %}
+</form>
+{% endblock %}

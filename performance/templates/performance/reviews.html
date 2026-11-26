@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Performance Reviews and Contests — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Performance Reviews and Contests</h1>
+<div class="card"><h2 class="mt-0">Next-level review (COSP)</h2>
+  {% for p, form, sup in to_review %}<form method="post" class="card" x-data="{ n: '' }">{% csrf_token %}<input type="hidden" name="period" value="{{ p.pk }}">
+    <p><strong>{{ p.employee.full_name }}</strong> · {{ p.get_period_type_display }} · TPE {{ p.tpe_total|floatformat:1 }}</p>
+    <p>COSP Performance Form: {{ form.score|floatformat:2 }} · Supervisor's Form A mean: {% if sup.mean is not None %}{{ sup.mean|floatformat:2 }}{% else %}—{% endif %}</p>
+    {% for o in form.outputs.all %}<p class="muted">{{ o.seq }}. {{ o.output }} — Q {{ o.quality }} · E {{ o.efficiency|default:"N/A" }} · T {{ o.timeliness|default:"N/A" }}</p>{% endfor %}
+    {% if form.remark %}<p>Remark: {{ form.remark }}</p>{% endif %}
+    <input type="text" name="note" x-model="n" placeholder="Note (required to return)" aria-label="Note">
+    <div class="btn-row"><button name="what" value="review_ok">Approve</button><button name="what" value="review_return" class="btn-secondary" :disabled="!n.trim()">Return to the supervisor</button></div></form>
+  {% empty %}<p class="empty-note">Nothing waiting.</p>{% endfor %}</div>
+<div class="card"><h2 class="mt-0">Contests</h2>
+  {% for c in contests %}<form method="post" class="card" x-data="{ n: '' }">{% csrf_token %}<input type="hidden" name="contest" value="{{ c.pk }}">
+    <p><strong>{{ c.period.employee.full_name }}</strong> · step: {{ c.status }} · <a href="{% url 'performance:result' c.period.pk %}">result</a></p><p>Grounds: {{ c.grounds }}</p>
+    <input type="text" name="note" x-model="n" placeholder="Note (required)" aria-label="Note">
+    {% if c.status == "COH" %}<div class="btn-row"><button name="what" value="contest_uphold" :disabled="!n.trim()">Uphold the result</button><button name="what" value="contest_return" class="btn-secondary" :disabled="!n.trim()">Return for correction</button></div>
+    {% else %}<button name="what" value="contest_next" :disabled="!n.trim()">{% if c.status == "HR" %}Send to the AO{% else %}Endorse to the COH{% endif %}</button>{% endif %}</form>
+  {% empty %}<p class="empty-note">Nothing waiting.</p>{% endfor %}</div>
+<div class="card"><h2 class="mt-0">Performance incidents</h2><ul>{% for d, what in incidents %}<li><a href="{% url 'performance:incident' d.pk %}">{{ d.employee.full_name }} — {{ d.criterion }}</a> · {{ what }}</li>{% empty %}<li class="empty-note">Nothing waiting.</li>{% endfor %}</ul></div>
+{% endblock %}
