@@ -787,7 +787,6 @@ a.kpi-card:hover, a.kpi-card:focus-visible { border-color: var(--navy-700); box-
 .sched-grid td.cell-eod { box-shadow: inset 0 0 0 2px #E5B83F; }
 .sched-grid td.cell-eod select { cursor: not-allowed; }
 .leave-mark { display: block; font-size: .62rem; font-weight: 700; line-height: 1; color: #1f6f3f; margin-top: 1px; }
-.leave-mark.pending { color: #9a6700; font-weight: 600; }
 .sched-legend .leave-mark { display: inline; font-size: .75rem; }
 .cell-eod-key { box-shadow: inset 0 0 0 2px #E5B83F; padding: 0 .3rem; border-radius: 3px; }
 .my-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; margin-top: .75rem; }

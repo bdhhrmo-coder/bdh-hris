@@ -60,8 +60,8 @@
                   <option value=""></option>
                   <template x-for="c in codes" :key="c.id"><option :value="String(c.id)" x-text="c.code" :selected="String(c.id) === r.cells[di]"></option></template>
                 </select>
-                <template x-if="r.marks && r.marks[di]"><span :class="'leave-mark' + (r.marks[di].includes('?') ? ' pending' : '')" x-text="r.marks[di]"
-                      :title="{'LV': 'Approved leave', 'LV?': 'Leave pending', 'CTO': 'Approved CTO', 'CTO?': 'CTO pending'}[r.marks[di]]"></span></template>
+                <template x-if="r.marks && r.marks[di]"><span class="leave-mark" x-text="r.marks[di]"
+                      :title="r.marks[di] === 'LV' ? 'Approved leave' : 'CTO (approved or pending)'"></span></template>
               </td>
             </template>
             <td class="num"><strong x-text="totals(r).hours"></strong></td>
@@ -73,7 +73,7 @@
       </tbody>
     </table>
     </div>
-<p class="field-help sched-legend">Leave and CTO: <span class="leave-mark">LV</span> approved leave · <span class="leave-mark pending">LV?</span> leave pending · <span class="leave-mark">CTO</span> approved CTO · <span class="leave-mark pending">CTO?</span> CTO pending. The code LV can be entered only on a day with a leave or CTO request.</p>
+<p class="field-help sched-legend">Leave and CTO: <span class="leave-mark">LV</span> approved leave · <span class="leave-mark">CTO</span> CTO (approved or pending). The codes LV and CTO can be entered only on a day with a leave or CTO request.</p>
     <template x-if="rows.length === 0"><p class="empty-note">No employees yet — add them below.</p></template>
     <div class="field-block" style="margin-top:1rem;">
       <label class="field-title" for="add_employee">Add an employee</label>

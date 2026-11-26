@@ -43,9 +43,9 @@ def _grid(schedule):
     for c in ScheduleCell.objects.filter(row__schedule=schedule).select_related("shift"):
         cells.setdefault(c.row_id, {})[c.date] = c
     out = []
-    from .leave_marks import marks
+    from .leave_marks import marks, shown
 
-    mark_map = marks(schedule, [r.employee_id for r in rows])  # Item 6: leave / CTO on the grid
+    mark_map = shown(marks(schedule, [r.employee_id for r in rows]))  # Item 6: leave / CTO on the grid
     for r in rows:
         row_cells = [cells.get(r.pk, {}).get(d) for d in schedule.days]
         hours, days = rules.row_totals([c for c in row_cells if c])

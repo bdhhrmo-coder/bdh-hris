@@ -575,9 +575,8 @@ Do not attempt to build this in one pass. Suggested phase order:
 
 ## 16. Pilot improvements (owner checklist 2026-11-24; rebuilt 2026-11-26, one branch per item, not merged)
 
-### Item 6 – Leave and CTO on the schedule (branch `item6-leave-cto-on-schedule`)
-- `schedules/leave_marks.py` reads the requests each time (nothing stored, no leave/CTO rule changed): **LV** approved leave (`counted_q`), **LV?** leave in the chain, **CTO** approved CTO, **CTO?** CTO in the chain; CTO days covering part of a COSP leave show as that leave. Returned, rejected and cancelled requests give no mark. An approved date change moves the mark (it reads the record's dates).
-- Grid (edit and detail pages): the mark shows under the cell, with a legend line.
-- **LV code** (seeded by migration `schedules 0004` if HR has none; `settings.SCHEDULE_LEAVE_CODES`): accepted only on a day with a leave or CTO request (pending or approved). Elsewhere the cell keeps its old value and the reason is listed (page message; Excel upload notes).
-- A duty shift on an approved leave/CTO day is a **warning only** on the edit and detail pages; saving and submitting still work.
-- F50 printout: approved LV / CTO printed on days with no duty shift (blank or OFF), plus a legend line; pending requests are not printed on the official form. Totals still come from the shift codes.
+### Item 6 – Leave and CTO on the schedule (branch `item6-leave-cto-on-schedule`; revised by the owner 2026-11-25)
+- `schedules/leave_marks.py` reads the requests each time (nothing stored, no leave/CTO rule changed). **Shown** on the grid, the edit screen and the F50 printout (owner-confirmed rule, 2026-11-25): **LV** = approved leave only (`counted_q`); **CTO** = approved **or pending** CTO. Pending leave shows nothing; there is **no "LV?" or "CTO?"** anywhere. CTO days covering part of a COSP leave show as that leave. Returned, rejected and cancelled requests give no mark. An approved date change moves the mark (it reads the record's dates). Internally the kinds stay apart (`LV`, `LV_PENDING`, `CTO`, `CTO_PENDING`; `shown()` maps them for display).
+- **LV and CTO codes** (seeded by migration `schedules 0004` if HR has none; `settings.SCHEDULE_LEAVE_CODES`): accepted only on a day covered by a leave or CTO request, **pending or approved**. Elsewhere the cell keeps its old value and the reason is listed (page message; the Excel upload lists the refused cells).
+- A duty shift on a day of **approved** leave or CTO is a **warning only** (edit and detail pages); saving and submitting still work. Pending requests never warn.
+- F50 printout: LV / CTO printed on days with no duty shift (blank or OFF), plus a legend line. Totals still come from the shift codes.

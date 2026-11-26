@@ -152,10 +152,10 @@ def fill_schedule_form(schedule, printed_by=None):
         cells[(c.row_id, c.date)] = c
     r = h2 + 1
     rows = list(schedule.rows.select_related("employee"))
-    from .leave_marks import APPROVED_MARKS, marks
+    from .leave_marks import marks, shown
 
-    # Item 6: approved leave / CTO shown on blank or OFF (non-duty) days; pending requests are not printed.
-    mark_map = {k: v for k, v in marks(schedule, [x.employee_id for x in rows]).items() if v in APPROVED_MARKS}
+    # Item 6 (owner, 2026-11-25): LV = approved leave, CTO = approved or pending CTO, on blank or OFF days.
+    mark_map = shown(marks(schedule, [x.employee_id for x in rows]))
     for row in rows:
         row_cells = [cells.get((row.pk, d)) for d in days]
         hours, duty_days = rules.row_totals([c for c in row_cells if c])
@@ -189,8 +189,8 @@ def fill_schedule_form(schedule, printed_by=None):
     _put(ws, r, 1, last_col, f"Shift codes:  {legend}", size=7, align="left")
     r += 1
     if mark_map:
-        _put(ws, r, 1, last_col, "LV = on approved leave   CTO = on approved CTO   (shown on days with no duty shift; "
-             "pending requests are not printed)", size=7, align="left")
+        _put(ws, r, 1, last_col, "LV = on approved leave   CTO = on CTO (approved or pending)   (shown on days with "
+             "no duty shift)", size=7, align="left")
         r += 1
     _put(ws, r, 1, last_col, f"NOTES/ REMARKS:  {schedule.notes or ''}", size=8, align="left")
     r += 1

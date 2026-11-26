@@ -265,8 +265,8 @@ CSRF_FAILURE_VIEW = "accounts.views.csrf_failure"
 # Duty schedules (Batch 5): default Exchange-of-Duty cut-off = this day of
 # the month BEFORE the schedule month; HR can change it per schedule.
 SCHEDULE_CUTOFF_DAY = 20
-# Pilot Item 6: codes that mean "on leave" on a duty schedule; allowed only on a day with a leave or CTO request.
-SCHEDULE_LEAVE_CODES = ("LV",)
+# Pilot Item 6: codes that mean "on leave / on CTO" on a duty schedule; allowed only on a day with a leave or CTO request.
+SCHEDULE_LEAVE_CODES = ("LV", "CTO")
 
 # Out-on-Pass start date (owner decision 2026-11-24, Option B): before it the
 # module's menu items are hidden and its pages say "not yet in use"; Setup stays

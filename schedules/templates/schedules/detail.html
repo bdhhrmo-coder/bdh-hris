@@ -64,12 +64,12 @@
     <tbody>
     {% for g in grid %}
       <tr><td class="sticky-col"><strong>{{ g.row.employee.full_name }}</strong><br><small>{{ g.row.designation }}</small></td>
-        {% for c, m in g.pairs %}<td class="{% if c.shift %}{% if c.shift.is_duty %}cell-duty{% else %}cell-off{% endif %}{% endif %}">{{ c.shift.code|default:"" }}{% if m %}<span class="leave-mark{% if '?' in m %} pending{% endif %}" title="{% if m == 'LV' %}Approved leave{% elif m == 'LV?' %}Leave pending{% elif m == 'CTO' %}Approved CTO{% else %}CTO pending{% endif %}">{{ m }}</span>{% endif %}</td>{% endfor %}
+        {% for c, m in g.pairs %}<td class="{% if c.shift %}{% if c.shift.is_duty %}cell-duty{% else %}cell-off{% endif %}{% endif %}">{{ c.shift.code|default:"" }}{% if m %}<span class="leave-mark" title="{% if m == 'LV' %}Approved leave{% else %}CTO (approved or pending){% endif %}">{{ m }}</span>{% endif %}</td>{% endfor %}
         <td class="num"><strong>{{ g.hours|floatformat:"-2" }}</strong></td><td class="num"><strong>{{ g.days }}</strong></td></tr>
     {% empty %}<tr><td class="empty-note" colspan="34">No employees on this schedule.</td></tr>{% endfor %}
     </tbody>
   </table>
-<p class="field-help sched-legend">Leave and CTO: <span class="leave-mark">LV</span> approved leave · <span class="leave-mark pending">LV?</span> leave pending · <span class="leave-mark">CTO</span> approved CTO · <span class="leave-mark pending">CTO?</span> CTO pending. The code LV can be entered only on a day with a leave or CTO request.</p>
+<p class="field-help sched-legend">Leave and CTO: <span class="leave-mark">LV</span> approved leave · <span class="leave-mark">CTO</span> CTO (approved or pending). The codes LV and CTO can be entered only on a day with a leave or CTO request.</p>
 
   </div>
   {% if schedule.notes %}<p class="field-help" style="margin-top:.5rem;"><strong>Notes:</strong> {{ schedule.notes }}</p>{% endif %}
