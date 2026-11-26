@@ -72,7 +72,22 @@ class LeaveMarkTests(Base):
         self.client.force_login(self.sup.user)
         r = self.client.post(reverse("schedules:edit", args=[self.s.pk]),
                              {f"c-{row.pk}-8": code("LV").pk, "then": "save"}, follow=True)
-        self.assertContains(r, "needs a leave or CTO request")
+        self.assertContains(r, "LV needs a leave request for that day")
+
+    def test_codes_must_match_the_request(self):
+        """Owner Decision 10 (2026-11-26): LV only on a leave day, CTO only on a CTO day."""
+        a, b = self.s.rows.get(employee=self.alice), self.s.rows.get(employee=self.bob)
+        set_days(self.s, self.alice, {5: "OFF"})
+        set_days(self.s, self.bob, {9: "OFF"})
+        refused = []
+        services.save_grid(self.s, {(a.pk, D(5)): code("CTO").pk, (b.pk, D(9)): code("LV").pk}, refused=refused)
+        self.assertEqual((self.cell(self.alice, 5).shift.code, self.cell(self.bob, 9).shift.code), ("OFF", "OFF"))
+        self.assertTrue(any("CTO is for CTO days; that day has a leave request" in r for r in refused), refused)
+        self.assertTrue(any("LV is for leave days; that day has a CTO request" in r for r in refused), refused)
+        refused = []
+        services.save_grid(self.s, {(a.pk, D(5)): code("LV").pk, (b.pk, D(9)): code("CTO").pk}, refused=refused)
+        self.assertEqual(refused, [])
+        self.assertEqual((self.cell(self.alice, 5).shift.code, self.cell(self.bob, 9).shift.code), ("LV", "CTO"))
 
     def test_duty_on_leave_warns_but_submits(self):
         set_days(self.s, self.alice, {5: "7A-7P"})
@@ -132,6 +147,6 @@ class ExcelUploadLeaveCodeTests(Base):
         wb.save(buf)
         buf.seek(0)
         _filled, problems = import_workbook(s, buf)
-        self.assertTrue(any("needs a leave or CTO request" in p for p in problems), problems)
+        self.assertTrue(any("LV needs a leave request" in p for p in problems), problems)
         self.assertNotEqual(getattr(ScheduleCell.objects.get(row__schedule=s, row__employee=self.alice,
                                                              date=D(7)).shift, "code", ""), "LV")
