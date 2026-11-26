@@ -502,6 +502,8 @@ class ClaimRuleTests(TestCase):
         with self.assertRaises(ValidationError):
             submit_claim(claim, self.emp.user, date(2026, 10, 6))
 
+    @override_settings(CTO_CREDIT_USABLE_AT_APPROVAL=False)  # earlier rule; Option B: test_usable_at_approval.py
+
     def test_nov_29_ot_filed_nov_30_is_credited_dec_1_as_this_years_cto(self):
         ot = approved_ot(self.org, self.emp, date(2026, 11, 29), today=date(2026, 11, 20))
         claim = filed_claim(self.org, self.emp, [(ot, "8", None, None)], date(2026, 11, 30))
@@ -512,6 +514,8 @@ class ClaimRuleTests(TestCase):
         self.assertEqual(line.year_earned, 2026)
         self.assertEqual(compute_available_cto_balance(self.emp, date(2026, 11, 30)), Decimal("0"))
         self.assertEqual(compute_available_cto_balance(self.emp, date(2026, 12, 1)), Decimal("1.00"))
+
+    @override_settings(CTO_CREDIT_USABLE_AT_APPROVAL=False)  # earlier rule; Option B: test_usable_at_approval.py
 
     def test_december_ot_is_credited_jan_1_as_next_years_cto(self):
         ot = approved_ot(self.org, self.emp, date(2026, 12, 3), today=date(2026, 12, 1))
@@ -574,6 +578,8 @@ class ClaimRuleTests(TestCase):
         claim = filed_claim(self.org, self.emp, [(ot, "8", None, None)], date(2026, 10, 6))
         with self.assertRaises(ValidationError):
             correct_day_type(claim.lines.get(), HOLIDAY, "x", self.org.hr, self.org.hr.user)
+
+    @override_settings(CTO_CREDIT_USABLE_AT_APPROVAL=False)  # earlier rule; Option B: test_usable_at_approval.py
 
     def test_one_claim_with_several_lines(self):
         ot1 = approved_ot(self.org, self.emp, date(2026, 10, 5), today=date(2026, 10, 1))
@@ -646,6 +652,8 @@ class UsageAllocationTests(TestCase):
         self.assertEqual(app.status, CTOUsageApplication.APPROVED)
         self.assertEqual(line.allocations.get().days, Decimal("1.00"))
         self.assertEqual(line.year_earned, 2026)
+
+    @override_settings(CTO_CREDIT_USABLE_AT_APPROVAL=False)  # earlier rule; Option B: test_usable_at_approval.py
 
     def test_credit_not_yet_effective_cannot_be_used(self):
         self._credit(date(2026, 11, 3), "8", date(2026, 11, 5))  # effective Dec 1
@@ -1002,6 +1010,7 @@ class DryRunChecklistTests(TestCase):
             add_line(claim, Decimal("8"), date(2026, 11, 3), ot_line=ot)
         add_line(claim, Decimal("8"), date(2026, 11, 6), ot_line=ot)  # fine once the day arrives
 
+    @override_settings(CTO_CREDIT_USABLE_AT_APPROVAL=False)
     def test_same_day_claim_is_credited_from_the_first_of_next_month(self):
         ot = approved_ot(self.org, self.emp, date(2026, 11, 3), today=date(2026, 11, 3))
         claim = filed_claim(self.org, self.emp, [(ot, "8", None, None)], date(2026, 11, 3))
@@ -1359,6 +1368,8 @@ class SeparationTests(TestCase):
         claim.refresh_from_db()
         self.assertEqual(claim.status, RoutedRecord.LAPSED)
         self.assertTrue(claim.actions.filter(action="lapse").exists())
+
+    @override_settings(CTO_CREDIT_USABLE_AT_APPROVAL=False)  # earlier rule; Option B: test_usable_at_approval.py
 
     def test_clearing_restores_normal_rules(self):
         ot = approved_ot(self.org, self.cosp, date(2026, 11, 20), today=date(2026, 11, 20))
