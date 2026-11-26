@@ -274,6 +274,14 @@ def build_plan(uploaded_file, actor_employee):
             for key, value in p.values.items():
                 if getattr(existing, key) != value:
                     p.changes.append(LABELS.get(key, key))
+            from employees.history import has_lines
+
+            moved = (p.sections and set(p.sections) != set(existing.sections.all())) or \
+                (p.units and set(p.units) != set(existing.units.all()))
+            if moved and has_lines(existing):
+                p.errors.append("Section(s)/Unit(s) differ from the HRIS, and this employee's sections and units are "
+                                "kept in the Assignment History. Change them there, or copy the current ones into "
+                                "this row.")
             if p.sections and set(p.sections) != set(existing.sections.all()):
                 p.changes.append("Section(s)")
             if p.units and set(p.units) != set(existing.units.all()):

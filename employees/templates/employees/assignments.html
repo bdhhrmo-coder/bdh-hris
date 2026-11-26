@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Assignment History — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Assignment History</h1>
+<p class="muted">The dated record of where each employee works and under what personnel action. HR encodes a line; another HR Administrator verifies it. The verified current lines become the employee's sections and units. Nobody encodes or verifies their own record.</p>
+<form method="get" class="card row-actions"><label>Find an employee <input type="search" name="q" value="{{ q }}" placeholder="Surname, first name or Employee ID"></label><button type="submit" class="btn-secondary">Search</button></form>
+{% if q %}<div class="card"><ul>{% for e in found %}<li><a href="{% url 'employees:employee_assignments' e.pk %}">{{ e.full_name }}</a> <small class="muted">{{ e.employee_id }} · {{ e.position }}</small></li>{% empty %}<li class="empty-note">No match.</li>{% endfor %}</ul></div>{% endif %}
+
+{% if is_admin %}
+<div class="card">
+  <h2 class="mt-0">Waiting for verification</h2>
+  <div class="table-scroll"><table>
+    <tr><th>Employee</th><th>What</th><th>Area</th><th>Action / date</th><th>Encoded by</th><th></th></tr>
+    {% for ln in waiting %}
+    <tr>
+      <td><a href="{% url 'employees:employee_assignments' ln.employee_id %}">{{ ln.employee.full_name }}</a></td>
+      <td>{% if ln.close_on %}Close line{% else %}New line{% endif %}</td>
+      <td>{{ ln.area }}</td>
+      <td>{% if ln.close_on %}End {{ ln.close_on|date:"M j, Y" }} — {{ ln.close_reason }}{% else %}{{ ln.action_type }} from {{ ln.effective_from|date:"M j, Y" }}{% if ln.reference %} ({{ ln.reference }}){% endif %}{% endif %}</td>
+      <td>{{ ln.encoded_by.employee.full_name|default:ln.encoded_by.username }}</td>
+      <td><form method="post" class="row-actions" x-data="{ n: '' }">{% csrf_token %}<input type="hidden" name="pk" value="{{ ln.pk }}">
+        <input type="text" name="notes" x-model="n" placeholder="Note (required to refuse)" aria-label="Note">
+        {% if ln.close_on %}<button name="what" value="close_verify">Verify</button><button name="what" value="close_reject" class="btn-secondary" :disabled="!n.trim()">Refuse</button>
+        {% else %}<button name="what" value="verify">Verify</button><button name="what" value="reject" class="btn-secondary" :disabled="!n.trim()">Refuse</button>{% endif %}</form></td>
+    </tr>
+    {% empty %}<tr><td colspan="6" class="empty-note">Nothing waiting.</td></tr>{% endfor %}
+  </table></div>
+</div>
+<form method="post" class="card">{% csrf_token %}<input type="hidden" name="what" value="opening">
+  <h2 class="mt-0">Load opening lines</h2>
+  <p class="muted">One verified line per current section and unit for every active employee who has no lines yet, dated as below and marked "opening line". It changes nobody's sections or units and can be run again for new staff. Your own record is left for another HR Administrator.</p>
+  <label>As of <input type="date" name="as_of" required></label>
+  <button type="submit" data-confirm="Load opening lines for every employee without assignment history?">Load</button>
+</form>
+<div class="card">
+  <h2 class="mt-0">Personnel action types</h2>
+  <ul>{% for t in types %}<li>{{ t.name }}{% if not t.is_active %} <small class="muted">(switched off)</small>{% endif %}
+    <form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="what" value="type_toggle"><input type="hidden" name="pk" value="{{ t.pk }}"><button type="submit" class="btn-secondary">Switch {% if t.is_active %}off{% else %}on{% endif %}</button></form></li>{% endfor %}</ul>
+  <form method="post" class="row-actions">{% csrf_token %}<input type="hidden" name="what" value="type_add"><input type="text" name="name" maxlength="60" placeholder="New action type" aria-label="New action type"><button type="submit" class="btn-secondary">Add</button></form>
+</div>
+{% endif %}
+{% endblock %}

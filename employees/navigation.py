@@ -72,6 +72,7 @@ MENU = [
     ]),
     ("admin", "HR Administration", "settings", [
         ("Data Import", "dataimport:home", "upload", "can_import_data"),
+        ("Assignment History", "employees:assignments", "user-round", "is_hr"),
         ("OIC for an Approver", "oic_hr_home", "calendar-clock", "can_hr_designate_oic"),
         ("Import Biometric Attendance", "attendance:biometric_import", "fingerprint", "is_hr"),
         ("Minor Attendance Correction", "attendance:minor_correction_create", "clipboard-check", "is_hr"),
@@ -82,6 +83,7 @@ MENU = [
         ("Out-on-Pass Setup", "outonpass:setup", "door-open", "is_hr_admin"),
         ("Shift Codes", "schedules:shift_codes", "list", "can_manage_announcements"),
         ("Schedule Cut-off Dates", "schedules:cutoff_dates", "calendar-clock", "is_hr"),
+        ("Holidays", "employees:holidays", "calendar-days", "is_hr_admin"),
         ("Positions and Exchange Groups", "exchange:positions", "repeat", "is_hr_admin"),
         ("Exchange of Duty Rules", "exchange:rules", "repeat", "is_hr_admin"),
         ("User Accounts and Roles", "admin:index", "user-cog", "is_system_admin"),

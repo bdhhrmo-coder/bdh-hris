@@ -239,6 +239,32 @@ def _rows_from_exchange_settings():
     return rows
 
 
+def _rows_from_holidays_and_history():
+    """Holiday list and assignment history (rebuilt 2026-11-26)."""
+    from employees.models import AssignmentAction, Holiday
+
+    rows = []
+    for h in Holiday.objects.select_related("created_by", "voided_by"):
+        rows.append({"timestamp": h.created_at, "module": "Holidays", "action": "Holiday added",
+                     "detail": f"{h.date:%b %d, %Y} {h.name} ({h.get_kind_display()})", "actor": h.created_by,
+                     "employee_ids": set(), "employee_display": "—"})
+        if h.voided_at:
+            rows.append({"timestamp": h.voided_at, "module": "Holidays", "action": "Holiday voided",
+                         "detail": f"{h.date:%b %d, %Y} {h.name}: {h.void_reason}", "actor": h.voided_by,
+                         "employee_ids": set(), "employee_display": "—"})
+    for a in AssignmentAction.objects.select_related("line__employee", "line__section", "line__unit",
+                                                     "line__action_type", "acted_by"):
+        ln = a.line
+        detail = f"{ln.area}: {ln.action_type} from {ln.effective_from:%b %d, %Y}"
+        if ln.effective_to:
+            detail += f" to {ln.effective_to:%b %d, %Y}"
+        if a.notes:
+            detail += f" - {a.notes}"
+        rows.append({"timestamp": a.acted_at, "module": "Assignment History", "action": a.label, "detail": detail,
+                     "actor": a.acted_by, "employee_ids": {ln.employee_id}, "employee_display": str(ln.employee)})
+    return rows
+
+
 def audit_rows(employee_id=None, module=None, date_from=None, date_to=None):
     """
     Merged, filtered, newest-first list of audit rows across all
@@ -261,6 +287,7 @@ def audit_rows(employee_id=None, module=None, date_from=None, date_to=None):
     rows += _rows_from_announcement_actions()
     rows += _rows_from_schedule_events()
     rows += _rows_from_exchange_settings()
+    rows += _rows_from_holidays_and_history()
     rows += _rows_from_oic_designations()
     from outonpass.models import MissedTapAction, OutOnPassAction
     rows += _rows_from_request_actions(OutOnPassAction.objects.all(), "Out-on-Pass", "out_on_pass")
@@ -295,4 +322,6 @@ MODULE_CHOICES = [
     "Duty Schedule",
     "OIC Designation",
     "Out-on-Pass",
+    "Holidays",
+    "Assignment History",
 ]
