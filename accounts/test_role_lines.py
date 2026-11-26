@@ -27,7 +27,7 @@ class RoleLineTests(TestCase):
     def menu_has_hr_admin(self):
         c = Client()
         c.force_login(self.owner.user)
-        return "HR Administration" in c.get("/hris/home/").content.decode()
+        return "HR Settings" in c.get("/hris/home/").content.decode()
 
     def add_line(self, **extra):
         data = {"employee": self.owner.pk, "is_active": "on", "section": "", "unit": "",

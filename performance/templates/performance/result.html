@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Performance result — BDH HRIS{% endblock %}
+{% block content %}
+<p><a href="{% url 'performance:my_results' %}">&larr; My Performance Results</a></p>
+<h1>{% if is_employee %}Your result{% else %}{{ period.employee.full_name }}{% endif %}</h1>
+<p class="muted">{{ period.get_period_type_display }} · {{ period.start_date|date:"M j, Y" }} – {{ period.end_date|date:"M j, Y" }} · {{ period.get_status_display }}</p>
+<section class="card">
+  <h2 class="mt-0">Score sheet (TPE)</h2>
+  <table><tr><th>Component</th><th>Weight used</th><th>Mean</th><th>Raters</th><th>Points</th><th>Note</th></tr>
+  {% for c in components %}<tr><td>{{ c.label }}</td><td>{% if c.skipped %}—{% else %}{{ c.weight_used|floatformat:1 }}{% endif %}</td><td>{% if c.mean is not None %}{{ c.mean|floatformat:2 }}{% else %}—{% endif %}</td><td>{{ c.n }}</td><td>{{ c.points|floatformat:1 }}</td><td>{{ c.note }}</td></tr>{% endfor %}</table>
+  {% if deductions %}<p><strong>Deductions</strong> (cap {{ cap }} per period):</p><ul>{% for r in deductions %}<li>{{ r.d.criterion }} — incident {{ r.d.incident_date|date:"M j, Y" }}, final {{ r.d.final_at|date:"M j, Y" }}: {{ r.points }} point(s){% if r.capped %} (criterion cap applied){% endif %}{% if r.note %} ({{ r.note }}){% endif %}</li>{% endfor %}</ul>{% endif %}
+  {% for d in elsewhere %}<p class="muted">Note: {{ d.criterion }} (incident {{ d.incident_date|date:"M j, Y" }}) counts in the {{ d.period.get_period_type_display|lower }} period ending {{ d.period.end_date|date:"M j, Y" }}, not here; a deduction counts in one period only.</p>{% endfor %}
+  <p class="kpi-value"><strong>TPE total: {{ total }}</strong>{% if description %} · <strong>{{ description }}</strong>{% endif %}</p>
+  {% if description_text %}<p>{{ description_text }}</p>{% endif %}
+  <p class="field-help">How it is worked out: each part's average (on 1 to 5) ÷ 5 × its weight; attendance is 100 minus points for unauthorized absences and tardy days, ÷ 100 × its weight. A part without enough raters is left out and its weight shared out among the others. Deductions come off the total, at most {{ cap }}. Shown to one decimal; the parts may not add up exactly because of rounding. This is not the official SPMS rating.</p>
+  {% if may_print %}<p><a href="{% url 'performance:score_sheet' period.pk %}" target="_blank">Print the TPE score sheet</a></p>{% endif %}
+  {% for d in late %}<p class="muted">Note: a deduction ({{ d.criterion }}) became final after release; it does not change this result.</p>{% endfor %}
+</section>
+<section class="card">
+  <h2 class="mt-0">Your feedback</h2>
+  <h3>Your strengths</h3><ul>{% for s in report.strengths %}<li>{{ s.text }} <small class="muted">({{ s.mean|floatformat:1 }})</small></li>{% empty %}<li class="empty-note">Not enough ratings to show.</li>{% endfor %}</ul>
+  <h3>Room to grow</h3><ul>{% for s in report.growth %}<li>{{ s.text }} <small class="muted">({{ s.mean|floatformat:1 }})</small></li>{% empty %}<li class="empty-note">—</li>{% endfor %}</ul>
+  <h3>Suggested priorities</h3>
+  <p class="field-help">To confirm with your supervisor at the feedback conference; they start your development plan.</p>
+  <ul>{% for s in report.growth|slice:":2" %}<li>{{ s.text }}</li>{% endfor %}
+    {% if report.self_c.C3 %}<li><em>Your own choice:</em> {{ report.self_c.C3 }}</li>{% endif %}
+    {% if report.self_c.C4 %}<li><em>Support you asked for:</em> {{ report.self_c.C4 }}</li>{% endif %}</ul>
+  <h3>You and others</h3>
+  <table><tr><th>Competency</th><th>You</th>{% for g in report.competencies.0.groups %}<th>{{ g.group }} (n={{ g.n }})</th>{% endfor %}</tr>
+  {% for c in report.competencies %}<tr><td>{{ c.name }}</td><td>{{ c.self|default:"—" }}</td>{% for g in c.groups %}<td{% if g.gap %} class="text-warning"{% endif %}>{% if g.mean is not None %}{{ g.mean|floatformat:1 }}{% if g.gap %} <small>(gap of 1 or more)</small>{% endif %}{% else %}—{% endif %}</td>{% endfor %}</tr>{% endfor %}</table>
+  <p class="field-help">Each group is shown separately and never blended. A group of fewer than 3 people is not shown at all, together with its comments.</p>
+  {% if report.leader_q %}<h3>From your staff</h3><ul>{% for q in report.leader_q %}<li>{{ q.text }} — {% if q.mean is not None %}{{ q.mean|floatformat:1 }}{% else %}—{% endif %}</li>{% endfor %}</ul>{% endif %}
+  {% if report.comments_strength or report.comments_improve %}<h3>Comments</h3>
+  <ul>{% for c in report.comments_strength %}<li><em>Strength:</em> {{ c }}</li>{% endfor %}{% for c in report.comments_improve %}<li><em>To improve:</em> {{ c }}</li>{% endfor %}</ul>{% endif %}
+</section>
+{% if is_employee %}
+<form method="post" class="card">{% csrf_token %}<input type="hidden" name="what" value="reflection"><h2 class="mt-0">Your reflection</h2><label>After reading your feedback: what surprised you, and what will you act on?<textarea name="text" rows="3">{{ period.reflection }}</textarea></label><button class="btn-secondary">Save</button></form>
+{% if not period.acknowledged_at %}<form method="post" class="card">{% csrf_token %}<input type="hidden" name="what" value="acknowledge"><label>Disagreement note (optional)<textarea name="note" rows="2"></textarea></label><button>I received this result</button><p class="field-help">Receiving it does not mean you agree.</p></form>{% else %}<p class="card">Received {{ period.acknowledged_at|date:"M j, Y" }}.{% if period.disagreement_note %} Your note: {{ period.disagreement_note }}{% endif %}</p>{% endif %}
+{% if period.status == "RELEASED" and contest_until and today <= contest_until %}<form method="post" class="card" x-data="{ g: '' }">{% csrf_token %}<input type="hidden" name="what" value="contest"><h2 class="mt-0">Contest this result</h2><p class="muted">Until {{ contest_until|date:"M j, Y" }} (5 working days).</p><textarea name="grounds" x-model="g" rows="3" aria-label="Grounds"></textarea><button :disabled="!g.trim()">Contest</button></form>{% endif %}
+{% endif %}
+{% if is_supervisor %}
+<form method="post" class="card">{% csrf_token %}<input type="hidden" name="what" value="conference"><h2 class="mt-0">Feedback conference</h2>
+  <details><summary>Conference guide ({% if period.period_type == "MONTH1" or period.period_type == "QUARTER" %}10-minute check-in{% else %}20 minutes{% endif %})</summary>
+  {% if period.period_type == "MONTH1" or period.period_type == "QUARTER" %}
+  <ol><li><strong>Strengths (3 min):</strong> read the top strengths; ask which one they want to use more.</li>
+    <li><strong>One growth area (4 min):</strong> ask "What gets in the way here?" and listen first.</li>
+    <li><strong>Plan on track? (3 min):</strong> confirm the existing development plan, or agree two commitments.</li></ol>
+  {% else %}
+  <ol><li><strong>Open (2 min):</strong> "This is about how your work came across this period and what would help next. It's a conversation, not a verdict."</li>
+    <li><strong>Strengths first (5 min):</strong> read the top strengths; ask "Which of these do you want to use more?"</li>
+    <li><strong>Room to grow (6 min):</strong> go through 2–3 items; ask "What gets in the way here?" Listen before suggesting anything.</li>
+    <li><strong>Two commitments (5 min):</strong> fill in the development plan together.</li>
+    <li><strong>Close (2 min):</strong> explain the 5-working-day contest window; the employee acknowledges receipt; write any disagreement word for word.</li></ol>
+  {% endif %}
+  <p class="field-help">Talk about behaviors and examples, and let the employee speak first on each area. Don't guess or hint who wrote a comment, compare them with named co-workers, bring in an open administrative case, or announce a personnel decision.</p></details>{% if period.conference_on %}<p>Held {{ period.conference_on|date:"M j, Y" }}.</p>{% endif %}<label>Date held <input type="date" name="day" max="{{ today|date:'Y-m-d' }}" required></label><button class="btn-secondary">Record</button></form>
+{% endif %}
+{% if is_supervisor or is_employee %}<div class="card"><h2 class="mt-0">Development plan</h2>{% if plan_shown %}<p>{{ plan.get_status_display }}{% if plan.status == "DRAFT" and plan.sent_at %} (sent for agreement){% endif %} · <a href="{% url 'performance:plan' period.pk %}">open</a></p>{% elif is_supervisor %}<p><a href="{% url 'performance:plan' period.pk %}">Start the plan</a></p>{% else %}<p class="muted">Your supervisor prepares it after the conference.</p>{% endif %}</div>{% endif %}
+{% endblock %}

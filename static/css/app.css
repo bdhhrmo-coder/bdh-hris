@@ -911,6 +911,7 @@ a.kpi-card:hover, a.kpi-card:focus-visible { border-color: var(--navy-700); box-
 .m-0 { margin: 0 !important; }
 .muted { color: var(--gray-600); }
 .text-danger { color: var(--red-700); }
+.text-warning { color: var(--amber-600); }
 .text-primary { color: var(--navy-900); }
 .spread { justify-content: space-between; }
 

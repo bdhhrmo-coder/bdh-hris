@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}My Performance Results — BDH HRIS{% endblock %}
+{% block content %}
+<h1>My Performance Results</h1>
+<div class="card"><ul>{% for p in mine %}<li><a href="{% url 'performance:result' p.pk %}">{{ p.get_period_type_display }} {{ p.start_date|date:"M Y" }} – {{ p.end_date|date:"M Y" }}</a> · {{ p.get_status_display }}</li>{% empty %}<li class="empty-note">No released result yet.</li>{% endfor %}</ul></div>
+{% if team %}<div class="card"><h2 class="mt-0">My staff</h2>
+  {% if team_average %}<p>Average TPE of my staff (released results): <strong>{{ team_average }}</strong></p>{% endif %}
+  {% if given %}<p>Your average rating given: <strong>{{ given.mean }}</strong> ({{ given.n }} form(s)){% if given.peer_mean is not None %} · the peers' average for the same staff: <strong>{{ given.peer_mean }}</strong>{% endif %}. <small class="muted">A big gap is a prompt to check your own leniency or strictness.</small></p>{% endif %}
+  <div class="table-scroll"><table><tr><th>Employee</th><th>Period</th><th>Status</th><th>Your form</th><th>Self-assessment</th><th>Conference</th><th>Development plan</th></tr>
+  {% for r in team %}<tr><td>{% if r.shown %}<a href="{% url 'performance:result' r.p.pk %}">{{ r.p.employee.full_name }}</a>{% else %}{{ r.p.employee.full_name }}{% endif %}</td>
+    <td>{{ r.p.get_period_type_display }} {{ r.p.start_date|date:"M Y" }}</td><td>{{ r.p.get_status_display }}</td>
+    <td>{% if r.my_form %}{% if r.my_form.status == "ASSIGNED" or r.my_form.status == "IN_PROGRESS" %}<a href="{% url 'performance:rate' r.my_form.pk %}">{{ r.my_form.get_status_display }}</a>{% else %}{{ r.my_form.get_status_display }}{% endif %}{% else %}—{% endif %}</td>
+    <td>{{ r.self_form.get_status_display|default:"—" }}</td>
+    <td>{% if r.shown %}{% if r.p.conference_on %}{{ r.p.conference_on|date:"M j" }}{% else %}<span class="text-warning">not recorded</span>{% endif %}{% else %}—{% endif %}</td>
+    <td>{% if r.plan %}<a href="{% url 'performance:plan' r.p.pk %}">{{ r.plan.get_status_display }}</a>{% elif r.shown %}<a href="{% url 'performance:plan' r.p.pk %}">Start</a>{% else %}—{% endif %}</td></tr>{% endfor %}</table></div></div>{% endif %}
+{% endblock %}

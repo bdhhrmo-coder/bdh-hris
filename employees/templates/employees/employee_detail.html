@@ -78,6 +78,8 @@
   </div></div>
 </section>
 
+<p><a href="{% url 'employees:employee_assignments' employee.pk %}">Assignment history (personnel actions)</a></p>
+
 <section class="card accordion" x-data="{ open: false }">
   <h2 class="accordion-head"><button type="button" id="acc-history-btn" aria-controls="acc-history"
       aria-expanded="false" :aria-expanded="open.toString()" @click="open = !open">Edit history<svg class="accordion-chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg></button></h2>

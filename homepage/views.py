@@ -96,6 +96,9 @@ def _role_cards(acting, scope):
     personal = scope == "self"
     ctx = {"show_waiting": can_act, "show_headcount": scope == "all", "show_personal": personal,
            "show_accounts": acting is not None and acting.has_role(RoleAssignment.SYSTEM_ADMINISTRATOR)}
+    from performance.home import todo
+
+    ctx["performance_todo"] = todo(acting)
     if personal and acting is not None:
         from leave.balance_cards import balance_cards
 

@@ -125,6 +125,18 @@ class EmployeeForm(forms.ModelForm):
             else:
                 self.fields[name].disabled = not is_hr_admin
 
+        # Assignment history (2026-11-26): once an employee has lines, their
+        # sections and units change only through a verified line.
+        if self.is_editing_existing:
+            from .history import has_lines
+
+            if has_lines(self.instance):
+                for name in ("sections", "units"):
+                    if name in self.fields:
+                        self.fields[name].disabled = True
+                        self.fields[name].help_text = ("Kept in the Assignment History: add or close a line there "
+                                                       "to change it.")
+
         if self.is_editing_existing and not self_locked:
             self.fields["reason"].required = True
         else:

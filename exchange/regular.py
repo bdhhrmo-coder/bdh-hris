@@ -128,28 +128,52 @@ def overlap_errors(employee_a, date_a, employee_b, date_b, exclude=None):
 # -- the draft schedule ----------------------------------------------------------------
 
 def _moves(x):
-    """[(employee, day, shift)] an approved regular exchange puts in the draft."""
+    """[(employee, day, shift, area employee)] an approved regular exchange
+    puts in the draft. Each day belongs to the GIVER's schedule: the giver is
+    OFF there and the taker works the shift there, so on a cross-unit
+    exchange (owner decision 2026-11-26) the taker is added as a row to the
+    giver's unit schedule for that day; their own schedule keeps them OFF."""
     from schedules.services import off_code
 
     off = off_code()
-    return [(x.employee_a, x.date_a, off), (x.employee_b, x.date_a, x.shift_a),
-            (x.employee_b, x.date_b, off), (x.employee_a, x.date_b, x.shift_b)]
+    a, b = x.employee_a, x.employee_b
+    return [(a, x.date_a, off, a), (b, x.date_a, x.shift_a, a),
+            (b, x.date_b, off, b), (a, x.date_b, x.shift_b, b)]
+
+
+def giver_schedules(employee, day):
+    """The schedules of this month that hold the GIVER's own duty days: the
+    schedule of their unit, or of their section when it has no units. Only
+    when there is none, a schedule that lists them (e.g. float staff).
+    A row added to another unit's schedule by an exchange never counts."""
+    from schedules.models import DutySchedule
+
+    year, month = _month(day)
+    month_qs = DutySchedule.objects.filter(year=year, month=month)
+    own = month_qs.filter(Q(unit__in=employee.units.all())
+                          | Q(section__in=employee.sections.all(), unit__isnull=True)).distinct()
+    return own if own.exists() else month_qs.filter(rows__employee=employee).distinct()
 
 
 def _drafts_for(employee, day):
     from schedules.models import DutySchedule as S
 
-    return [s for s in area_schedules(employee, day).filter(status=S.DRAFT)]
+    return list(giver_schedules(employee, day).filter(status=S.DRAFT))
+
+
+def _covers(schedule, employee, day):
+    return giver_schedules(employee, day).filter(pk=schedule.pk).exists()
 
 
 def apply_to_drafts(x, user):
-    """Write an approved regular exchange into the month's draft schedule(s).
-    Nothing to do when no draft exists yet: create_schedule applies it."""
+    """Write an approved regular exchange into the month's draft schedule(s)
+    of the giver's unit for each date. Nothing to do when no draft exists
+    yet: create_schedule applies it."""
     from schedules.services import add_row, log
 
     touched = set()
-    for emp, day, shift in _moves(x):
-        for schedule in _drafts_for(emp, day):
+    for emp, day, shift, area in _moves(x):
+        for schedule in _drafts_for(area, day):
             row = schedule.rows.filter(employee=emp).first() or add_row(schedule, emp)
             row.cells.filter(date=day).update(shift=shift)
             touched.add(schedule)
@@ -172,28 +196,33 @@ def approved_for_schedule(schedule):
 
 
 def locked_cells(schedule):
-    """{(employee_id, date): shift_id} set by approved regular exchanges."""
+    """{(employee_id, date): shift_id} set by approved regular exchanges in
+    this schedule (the giver's schedule for each date; the taker may not
+    have a row yet)."""
     days = set(schedule.days)
-    emp_ids = set(schedule.rows.values_list("employee_id", flat=True))
     out = {}
     for x in approved_for_schedule(schedule):
-        for emp, day, shift in _moves(x):
-            if day in days and emp.pk in emp_ids:
+        for emp, day, shift, area in _moves(x):
+            if day in days and _covers(schedule, area, day):
                 out[(emp.pk, day)] = shift.pk if shift else None
     return out
 
 
 def apply_all_to_new_draft(schedule, user):
     """Called when a draft is created or a row is added: fill in every
-    approved regular exchange for its month."""
-    from schedules.services import log
+    approved regular exchange for its month (adding the taker's row on a
+    cross-unit exchange)."""
+    from employees.models import Employee
+    from schedules.services import add_row, log
 
     locked = locked_cells(schedule)
     if not locked:
         return 0
     rows = {r.employee_id: r for r in schedule.rows.all()}
     for (emp_id, day), shift_id in locked.items():
-        rows[emp_id].cells.filter(date=day).update(shift_id=shift_id)
+        row = rows.get(emp_id) or add_row(schedule, Employee.objects.get(pk=emp_id))
+        rows[emp_id] = row
+        row.cells.filter(date=day).update(shift_id=shift_id)
     log(schedule, "exchange", user, f"{len(locked)} day(s) filled in from approved Exchanges of Duty; locked.")
     return len(locked)
 

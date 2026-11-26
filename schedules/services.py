@@ -100,11 +100,18 @@ def submit(schedule, user):
     if not schedule.is_editable:
         raise ValidationError("Only a draft or returned schedule can be submitted.")
     _check_exchanges_before_submit(schedule, user)
+    # Rest / straight duty / PM-to-AM next to approved exchange days:
+    # flagged, not blocked (owner decision 2026-11-26, D6 Option A).
+    from exchange.duty_checks import flags_for_schedule
+
+    flags = flags_for_schedule(schedule)
     resubmit = schedule.status == S.RETURNED
     schedule.status = S.SUBMITTED
     schedule.save(update_fields=["status", "updated_at"])
-    log(schedule, "resubmit" if resubmit else "submit", user)
+    log(schedule, "resubmit" if resubmit else "submit", user,
+        ("Flagged: " + " ".join(flags)) if flags else "")
     _notify_next(schedule)
+    return flags
 
 
 def _check_exchanges_before_submit(schedule, user):

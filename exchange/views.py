@@ -172,7 +172,47 @@ def exchange_action(request, pk):
 
     allowed = False
 
-    if status == DutyExchangeRequest.SUBMITTED and can_endorse(acting_employee, filers):
+    from .permissions import can_endorse_remaining_side, second_endorsers_for, unit_sides
+
+    sides = unit_sides(exchange_request) if status in (DutyExchangeRequest.SUBMITTED,
+                                                       DutyExchangeRequest.ENDORSED_BY_ONE_UNIT_HEAD) else {}
+
+    def after_both_unit_heads():
+        """Both unit heads have endorsed: on to the section head, if any."""
+        if second_endorsers_for(filers):
+            apply_transition(DutyExchangeRequest.ENDORSED_BY_UNIT_HEAD, "endorse_unit")
+        else:
+            apply_transition(DutyExchangeRequest.ENDORSED_BY_SUPERVISOR, "endorse")
+
+    if status == DutyExchangeRequest.SUBMITTED and sides and can_endorse(acting_employee, filers):
+        # Cross-unit (2026-11-26): each party's unit head endorses, in either order.
+        mine = [side for side, heads in sides.items() if acting_employee.pk in {h.pk for h in heads}]
+        if not mine:
+            raise PermissionDenied("You are not the unit head of either employee.")
+        if action == "endorse":
+            allowed = True
+            if len(mine) == 2:  # heads both units (e.g. an OIC of both)
+                after_both_unit_heads()
+            else:
+                exchange_request.first_unit_side = mine[0]
+                exchange_request.save(update_fields=["first_unit_side", "updated_at"])
+                apply_transition(DutyExchangeRequest.ENDORSED_BY_ONE_UNIT_HEAD, "endorse_unit_first")
+        elif action in ("reject", "return"):
+            allowed = True
+            apply_transition(
+                DutyExchangeRequest.REJECTED if action == "reject" else DutyExchangeRequest.RETURNED, action
+            )
+    elif status == DutyExchangeRequest.ENDORSED_BY_ONE_UNIT_HEAD and can_endorse_remaining_side(
+            acting_employee, exchange_request):
+        if action == "endorse":
+            allowed = True
+            after_both_unit_heads()
+        elif action in ("reject", "return"):
+            allowed = True
+            apply_transition(
+                DutyExchangeRequest.REJECTED if action == "reject" else DutyExchangeRequest.RETURNED, action
+            )
+    elif status == DutyExchangeRequest.SUBMITTED and can_endorse(acting_employee, filers):
         if action == "endorse":
             allowed = True
             # Two-level endorsement (2026-10-27): the unit head first, then the section head.

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Period: {{ period.employee.full_name }} — BDH HRIS{% endblock %}
+{% block content %}
+<p><a href="{% url 'performance:periods' %}">&larr; Performance Periods</a></p>
+<h1>{{ period.employee.full_name }}</h1>
+<p class="muted">{{ period.get_period_type_display }} · {{ period.get_track_display }} track · {{ period.start_date|date:"M j, Y" }} – {{ period.end_date|date:"M j, Y" }} · <strong>{{ period.get_status_display }}</strong></p>
+{% if period.status == "PLANNED" %}<form method="post" class="card">{% csrf_token %}<input type="hidden" name="what" value="open"><p>This COSP period is planned. The daily job opens it on {{ opens_on|date:"M j, Y" }} and assigns the raters; you may open it now.</p><button type="submit" class="btn-secondary">Open now</button></form>{% endif %}
+{% if is_admin and period.status in "PLANNED OPEN" %}<form method="post" class="card" x-data="{ r: '' }">{% csrf_token %}<input type="hidden" name="what" value="cancel"><details><summary>Cancel this period</summary><p class="field-help">For example a contract ended early, or a period planned in error. Forms still open are voided. Nothing is deleted.</p><input type="text" name="reason" x-model="r" placeholder="Reason (required)" aria-label="Reason"><button class="btn-secondary" :disabled="!r.trim()" data-confirm="Cancel this period?">Cancel the period</button></details></form>{% endif %}
+<div class="card">
+  <h2 class="mt-0">Raters</h2>
+  {% if names %}
+  <div class="table-scroll"><table><tr><th>Group</th><th>Rater</th><th>Form</th><th>Status</th><th>Due</th><th>Flags</th><th>Assignment history</th><th></th></tr>
+  {% for a in assignments %}<tr><td>{{ a.get_group_display }}{% if a.nominated %} <small>(proposed)</small>{% endif %}</td><td>{{ a.rater.full_name }}</td><td>{{ a.form }}</td><td>{{ a.get_status_display }}</td><td>{{ a.due_on|date:"M j"|default:"—" }}</td><td>{{ a.flags|default:"" }}</td><td><small>{{ a.history_note }}</small></td>
+    <td>{% if a.status in "ASSIGNED IN_PROGRESS PROPOSED" %}<form method="post" class="row-actions" x-data="{ r: '' }">{% csrf_token %}<input type="hidden" name="what" value="remove"><input type="hidden" name="assignment" value="{{ a.pk }}"><input type="text" name="reason" x-model="r" placeholder="Reason" aria-label="Reason"><button class="btn-secondary" :disabled="!r.trim()">Remove</button></form>{% endif %}</td></tr>{% endfor %}
+  </table></div>
+  {% if history_left_off %}<p><strong>Left off by the assignment history:</strong></p><ul>{% for e, note in history_left_off %}<li>{{ e.full_name }} — {{ note }}</li>{% endfor %}</ul>{% endif %}
+  {% if history_suggestions %}<p><strong>Former staff the history shows for most of the period</strong> (add them as Subordinate if they reported to this supervisor):</p><ul>{% for e, note in history_suggestions %}<li>{{ e.full_name }} — {{ note }}</li>{% endfor %}</ul>{% endif %}
+  {% if pool_hint %}<p><strong>Fewer than {{ pool_hint.need }} peers.</strong> Pool from the nearest larger group (they must pass the contact question). Suggested: {% for e in pool_hint.names %}{{ e.full_name }}{% if not forloop.last %}, {% endif %}{% empty %}no one in the same section is free; pick from a section that works with this one regularly{% endfor %}.</p>{% endif %}
+  <form method="post" class="row-actions">{% csrf_token %}<input type="hidden" name="what" value="add">
+    <select name="group" aria-label="Group">{% for v, l in groups %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select>
+    <select name="rater" aria-label="Rater">{% for e in employees %}<option value="{{ e.pk }}">{{ e.full_name }}</option>{% endfor %}</select>
+    <input type="text" name="reason" placeholder="Reason (e.g. replacement, pooled peer)" required aria-label="Reason"><button type="submit" class="btn-secondary">Add rater</button></form>
+  {% else %}
+  <p class="muted">Rater names are shown only to HR Administrators. Counts:</p>
+  <ul>{% for c in counts %}<li>{{ c.group }} · {{ c.status }}: {{ c.n }}</li>{% endfor %}</ul>
+  {% endif %}
+</div>
+{% block results %}{% if results_template %}{% include results_template %}{% endif %}{% endblock %}
+{% endblock %}

@@ -37,6 +37,8 @@ check — there is no field anywhere on this model that could create
 additional hours.
 """
 
+import datetime
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -46,6 +48,9 @@ class DutyExchangeRequest(models.Model):
     PENDING_CONSENT = "PENDING_CONSENT"
     CONSENT_DECLINED = "CONSENT_DECLINED"
     SUBMITTED = "SUBMITTED"
+    # Cross-unit exchange (owner decision 2026-11-26): both unit heads endorse;
+    # the first of the two leaves it here.
+    ENDORSED_BY_ONE_UNIT_HEAD = "ENDORSED_BY_ONE_UNIT_HEAD"
     ENDORSED_BY_UNIT_HEAD = "ENDORSED_BY_UNIT_HEAD"  # two-level endorsement (2026-10-27)
     ENDORSED_BY_SUPERVISOR = "ENDORSED_BY_SUPERVISOR"
     PROCESSED_BY_HR = "PROCESSED_BY_HR"
@@ -58,6 +63,7 @@ class DutyExchangeRequest(models.Model):
         (PENDING_CONSENT, "Pending consent from other employee"),
         (CONSENT_DECLINED, "Consent declined"),
         (SUBMITTED, "Submitted"),
+        (ENDORSED_BY_ONE_UNIT_HEAD, "Endorsed by one of the two unit heads"),
         (ENDORSED_BY_UNIT_HEAD, "Endorsed by Unit Head"),
         (ENDORSED_BY_SUPERVISOR, "Endorsed by Supervisor"),
         (PROCESSED_BY_HR, "Processed by HR"),
@@ -117,10 +123,21 @@ class DutyExchangeRequest(models.Model):
                                 related_name="+", verbose_name="Shift on their date")
 
     # Still waiting somewhere in the chain (consent included).
-    LIVE_STATUSES = {PENDING_CONSENT, SUBMITTED, ENDORSED_BY_UNIT_HEAD, ENDORSED_BY_SUPERVISOR,
+    LIVE_STATUSES = {PENDING_CONSENT, SUBMITTED, ENDORSED_BY_ONE_UNIT_HEAD, ENDORSED_BY_UNIT_HEAD, ENDORSED_BY_SUPERVISOR,
                      PROCESSED_BY_HR, RECOMMENDED_BY_AO}
 
-    status = models.CharField(max_length=25, choices=STATUS_CHOICES, default=PENDING_CONSENT)
+    # Owner decisions 2026-11-26 (same section, Exchange groups, equal length,
+    # rest / straight duty / PM-to-AM checks, both unit heads on a cross-unit
+    # exchange). Set on requests filed from then on; older requests keep the
+    # rules they were filed under.
+    new_rules = models.BooleanField(default=False, editable=False)
+    # Cross-unit (new rules only): which party's unit head endorsed first, "A" or "B".
+    first_unit_side = models.CharField(max_length=1, blank=True, editable=False)
+    # Warnings shown to the unit heads and the Chief Nurse (e.g. more duty days
+    # in a row than the employee's pattern). Information only.
+    warnings = models.TextField(blank=True, editable=False)
+
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default=PENDING_CONSENT)
     filed_at = models.DateTimeField(auto_now_add=True)
     consented_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -147,6 +164,16 @@ class DutyExchangeRequest(models.Model):
         return f"{self.shift_a.code if self.shift_a_id else '?'} / {self.shift_b.code if self.shift_b_id else '?'}"
 
     @property
+    def is_cross_unit(self):
+        from .schedule_checks import is_cross_unit
+
+        return self.new_rules and is_cross_unit(self.employee_a, self.employee_b)
+
+    @property
+    def warning_list(self):
+        return [w for w in self.warnings.splitlines() if w.strip()]
+
+    @property
     def earliest_affected_date(self):
         return min(self.date_a, self.date_b)
 
@@ -157,7 +184,7 @@ class DutyExchangeRequestAction(models.Model):
 
     request = models.ForeignKey(DutyExchangeRequest, on_delete=models.CASCADE, related_name="actions")
     action = models.CharField(max_length=30)
-    resulting_status = models.CharField(max_length=25, choices=DutyExchangeRequest.STATUS_CHOICES)
+    resulting_status = models.CharField(max_length=30, choices=DutyExchangeRequest.STATUS_CHOICES)
     notes = models.CharField(max_length=255, blank=True)
     acted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     acted_at = models.DateTimeField(auto_now_add=True)
@@ -167,3 +194,46 @@ class DutyExchangeRequestAction(models.Model):
 
     def __str__(self):
         return f"{self.request} — {self.action} @ {self.acted_at:%Y-%m-%d %H:%M}"
+
+
+class ExchangeRules(models.Model):
+    """The Exchange of Duty duty checks (owner decisions 2026-11-26), kept by
+    the HR Administrator on HR Administration -> Exchange of Duty Rules.
+    One row. Every change is logged (ExchangeRulesChange, Audit Log)."""
+
+    rest_after_8 = models.DecimalField("Rest after an 8-hour duty (hours)", max_digits=4, decimal_places=1,
+                                       default=8)
+    rest_after_12 = models.DecimalField("Rest after a 12-hour duty (hours)", max_digits=4, decimal_places=1,
+                                        default=12)
+    pm_from = models.TimeField("A duty starting at or after this time is a PM duty", default=datetime.time(12, 0))
+    consecutive_8 = models.PositiveSmallIntegerField("Most duty days in a row, 8-hour pattern", default=5)
+    consecutive_12 = models.PositiveSmallIntegerField("Most duty days in a row, 12-hour pattern", default=3)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    FIELDS = ["rest_after_8", "rest_after_12", "pm_from", "consecutive_8", "consecutive_12"]
+
+    class Meta:
+        verbose_name = "Exchange of Duty rules"
+        verbose_name_plural = "Exchange of Duty rules"
+
+    def __str__(self):
+        return "Exchange of Duty rules"
+
+    @classmethod
+    def get(cls):
+        obj = cls.objects.order_by("pk").first()
+        if obj is None:
+            cls.objects.create()
+            obj = cls.objects.order_by("pk").first()  # read back so every field has its stored type
+        return obj
+
+
+class ExchangeRulesChange(models.Model):
+    field = models.CharField(max_length=40)
+    old_value = models.CharField(max_length=40)
+    new_value = models.CharField(max_length=40)
+    changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    changed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["changed_at", "pk"]

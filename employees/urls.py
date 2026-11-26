@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import history_views, views
 
 app_name = "employees"
 
@@ -14,6 +14,9 @@ urlpatterns = [
         views.profile_edit_request_review,
         name="profile_edit_request_review",
     ),
+    path("holidays/", history_views.holidays, name="holidays"),
+    path("assignments/", history_views.assignments, name="assignments"),
+    path("<int:pk>/assignments/", history_views.employee_assignments, name="employee_assignments"),
     path("<int:pk>/", views.employee_detail, name="employee_detail"),
     path("<int:pk>/edit/", views.employee_edit, name="employee_edit"),
     path("<int:pk>/archive/", views.employee_archive, name="employee_archive"),

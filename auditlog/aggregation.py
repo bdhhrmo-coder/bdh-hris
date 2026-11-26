@@ -32,6 +32,7 @@ ACTION_LABELS = {
     "opening_line_voided": "Opening CTO line voided",
     "correct_day_type": "Day type corrected",
     "skip": "Step skipped",
+    "endorse_unit_first": "Endorsed by the first of two unit heads",
     "cancel": "Cancelled by the filer",
     "hr_close": "Closed by HR (time in entered)",
     "hr_not_used": "Marked not used by HR",
@@ -231,6 +232,114 @@ def _rows_from_date_changes():
     return rows
 
 
+def _rows_from_exchange_settings():
+    """Exchange groups given to positions, and the Exchange of Duty rules
+    (owner decisions 2026-11-26)."""
+    from employees.models import PositionGroupChange
+    from exchange.models import ExchangeRulesChange
+
+    rows = []
+    for ch in PositionGroupChange.objects.select_related("position", "changed_by"):
+        rows.append({"timestamp": ch.changed_at, "module": "Exchange of Duty", "action": "Exchange group changed",
+                     "detail": f"{ch.position}: {ch.old_group or 'none'} -> {ch.new_group or 'none'}",
+                     "actor": ch.changed_by, "employee_ids": set(), "employee_display": "—"})
+    for ch in ExchangeRulesChange.objects.select_related("changed_by"):
+        rows.append({"timestamp": ch.changed_at, "module": "Exchange of Duty", "action": "Rule changed",
+                     "detail": f"{ch.field}: {ch.old_value} -> {ch.new_value}",
+                     "actor": ch.changed_by, "employee_ids": set(), "employee_display": "—"})
+    return rows
+
+
+def _rows_from_holidays_and_history():
+    """Holiday list and assignment history (rebuilt 2026-11-26)."""
+    from employees.models import AssignmentAction, Holiday
+
+    rows = []
+    for h in Holiday.objects.select_related("created_by", "voided_by"):
+        rows.append({"timestamp": h.created_at, "module": "Holidays", "action": "Holiday added",
+                     "detail": f"{h.date:%b %d, %Y} {h.name} ({h.get_kind_display()})", "actor": h.created_by,
+                     "employee_ids": set(), "employee_display": "—"})
+        if h.voided_at:
+            rows.append({"timestamp": h.voided_at, "module": "Holidays", "action": "Holiday voided",
+                         "detail": f"{h.date:%b %d, %Y} {h.name}: {h.void_reason}", "actor": h.voided_by,
+                         "employee_ids": set(), "employee_display": "—"})
+    for a in AssignmentAction.objects.select_related("line__employee", "line__section", "line__unit",
+                                                     "line__action_type", "acted_by"):
+        ln = a.line
+        detail = f"{ln.area}: {ln.action_type} from {ln.effective_from:%b %d, %Y}"
+        if ln.effective_to:
+            detail += f" to {ln.effective_to:%b %d, %Y}"
+        if a.notes:
+            detail += f" - {a.notes}"
+        rows.append({"timestamp": a.acted_at, "module": "Assignment History", "action": a.label, "detail": detail,
+                     "actor": a.acted_by, "employee_ids": {ln.employee_id}, "employee_display": str(ln.employee)})
+    return rows
+
+
+# Performance (gap 1, 2026-11-26). Rows never show a score, a rating, a
+# comment or which rater did what: the Audit Log is also open to the AO, the
+# COH and the System Administrator, and rater identity is for HR
+# Administrators only (Design Package v1.1 §7.1). Notes are shown only where
+# they are a reason someone typed for a step.
+PM_PERIOD_ACTIONS = {
+    "created": ("Period created", False), "opened": ("Period opened", False),
+    "planned": ("Period planned", False), "cancelled": ("Period cancelled", True),
+    "rater_added": ("Rater added", True), "rater_removed": ("Rater removed", True),
+    "rater_left_off": ("Subordinate left off the list (assignment history)", True),
+    "peers_finalized": ("Peers picked", False), "form_closed": ("Rating form closed without counting", False),
+    "certified_encoded": ("PHRMO-certified rating encoded", False), "certified_verified": ("Certified rating verified", False),
+    "dtr_encoded": ("DTR counts encoded", False), "dtr_verified": ("DTR counts verified", False),
+    "cosp_form": ("COSP Performance Form submitted", False), "computed": ("Result computed", False),
+    "flag_kept": ("Flagged form kept", False), "flag_voided": ("Flagged form voided", False),
+    "comment_release": ("Comment released", False), "comment_edit": ("Comment edited before release", True),
+    "comment_withhold": ("Comment withheld", True), "viewed_raw": ("Raw comments or flagged forms viewed", False),
+    "review_approved": ("Next-level review: approved", False), "review_returned": ("Next-level review: returned", True),
+    "released": ("Result released", False), "conference": ("Feedback conference recorded", False),
+    "acknowledged": ("Receipt acknowledged", False), "contest": ("Result contested", False),
+    "contest_ao": ("Contest: HR reviewed, sent to the AO", True),
+    "contest_coh": ("Contest: endorsed to the COH", True), "contest_upheld": ("Contest decided: result upheld", True),
+    "contest_returned": ("Contest decided: returned for correction", True), "final": ("Result final", False), "reopened": ("Period reopened", True),
+    "plan_sent": ("Development plan sent", False), "plan_agreed": ("Development plan agreed", False),
+    "plan_changes_asked": ("Development plan: changes asked", False),
+    "plan_checkin": ("Development plan check-in recorded", True),
+    "plan_checkin_missed": ("Development plan check-in marked missed by the system", True),
+    "plan_closed": ("Development plan closed", False),
+}
+
+
+def _rows_from_performance():
+    from performance.models import CriterionChange, DeductionEvent, PeriodEvent, PMSetting
+
+    rows = []
+    for e in PeriodEvent.objects.select_related("period__employee", "user"):
+        label, with_note = PM_PERIOD_ACTIONS.get(e.action, (e.action.replace("_", " ").capitalize(), False))
+        emp = e.period.employee
+        detail = f"{e.period.get_period_type_display()} {e.period.start_date:%b %d, %Y} - {e.period.end_date:%b %d, %Y}"
+        if with_note and e.note:
+            detail += f": {e.note}"
+        # a closed form's actor is the rater; never shown
+        actor = "Rater (confidential)" if e.action == "form_closed" else e.user
+        rows.append({"timestamp": e.at, "module": "Performance", "action": label, "detail": detail, "actor": actor,
+                     "employee_ids": {emp.pk}, "employee_display": str(emp)})
+    for e in DeductionEvent.objects.select_related("deduction__employee", "deduction__criterion", "user"):
+        d = e.deduction
+        detail = f"{d.criterion.code} {d.criterion.name}, incident {d.incident_date:%b %d, %Y}"
+        if e.note:
+            detail += f": {e.note}"
+        rows.append({"timestamp": e.at, "module": "Performance", "action": f"Incident: {e.action.replace('_', ' ')}",
+                     "detail": detail, "actor": e.user, "employee_ids": {d.employee_id},
+                     "employee_display": str(d.employee)})
+    for s in PMSetting.objects.exclude(entered_by=None).select_related("entered_by"):
+        rows.append({"timestamp": s.entered_at, "module": "Performance", "action": "Setting changed",
+                     "detail": f"{s.key} = {s.value} from {s.effective_from:%b %d, %Y} ({s.approval_ref})",
+                     "actor": s.entered_by, "employee_ids": set(), "employee_display": "—"})
+    for c in CriterionChange.objects.select_related("criterion", "changed_by"):
+        rows.append({"timestamp": c.changed_at, "module": "Performance", "action": "Deduction criterion changed",
+                     "detail": f"{c.criterion.code} {c.field}: {c.old_value} -> {c.new_value} ({c.approval_ref})",
+                     "actor": c.changed_by, "employee_ids": set(), "employee_display": "—"})
+    return rows
+
+
 def audit_rows(employee_id=None, module=None, date_from=None, date_to=None):
     """
     Merged, filtered, newest-first list of audit rows across all
@@ -252,6 +361,9 @@ def audit_rows(employee_id=None, module=None, date_from=None, date_to=None):
     rows += _rows_from_document_events(UploadedDocumentEvent.objects.all())
     rows += _rows_from_announcement_actions()
     rows += _rows_from_schedule_events()
+    rows += _rows_from_exchange_settings()
+    rows += _rows_from_holidays_and_history()
+    rows += _rows_from_performance()
     rows += _rows_from_oic_designations()
     from outonpass.models import MissedTapAction, OutOnPassAction
     rows += _rows_from_request_actions(OutOnPassAction.objects.all(), "Out-on-Pass", "out_on_pass")
@@ -286,4 +398,7 @@ MODULE_CHOICES = [
     "Duty Schedule",
     "OIC Designation",
     "Out-on-Pass",
+    "Holidays",
+    "Assignment History",
+    "Performance",
 ]

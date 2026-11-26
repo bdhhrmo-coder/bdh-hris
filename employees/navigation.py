@@ -7,7 +7,7 @@ decides whether the person SEES it; every page still checks permission on
 the server - hiding a link is never the security.
 
 Groups (in this order; a group is shown only if the person has an item in it):
-  Home | My Requests | Approvals | Workforce | Reports | HR Administration
+  Home | My Requests | Performance | Approvals | Workforce | Reports | HR Records | HR Settings
 
 Notifications are reached from the bell in the header (no duplicate menu
 item). "File for a Group" stays under My Requests (owner decision, Batch 2).
@@ -48,6 +48,14 @@ MENU = [
         ("My Schedule", "schedules:mine", "calendar-days", "all"),
         ("My Profile", "employees:my_profile_edit_request", "user-round", "has_employee"),
     ]),
+    ("performance", "Performance", "award", [
+        ("My Rating Tasks", "performance:tasks", "clipboard-check", "has_employee"),
+        ("My Performance Results", "performance:my_results", "chart-column", "has_employee"),
+        ("Development Plans", "performance:plans", "file-text", "has_employee"),
+        ("Performance Incidents", "performance:incidents", "shield-check", "has_employee"),
+        ("Performance Monitoring", "performance:monitoring", "chart-column", "is_hr"),
+        ("Performance Setup", "performance:setup", "settings", "is_hr"),
+    ]),
     ("approvals", "Approvals", "inbox", [
         ("Leave", "leave:leave_queue", "file-text", "approver"),
         ("CTO", "cto:cto_queue", "clock-3", "approver"),
@@ -55,6 +63,7 @@ MENU = [
         ("Attendance Correction", "attendance:correction_queue", "fingerprint", "correction_validator"),
         ("Official Business / Errand / OT", "official_requests:request_queue", "briefcase", "approver"),
         ("Out-on-Pass", "outonpass:queue", "door-open", "oop_approver"),
+        ("Performance Reviews and Contests", "performance:reviews", "award", "pm_reviewer"),
         ("Profile Changes", "employees:profile_edit_request_queue", "clipboard-check", "can_review_profile_requests"),
         ("Officer-in-Charge (OIC)", "oic_home", "calendar-clock", "can_designate_oic"),
         ("CTO Year-end Carry-over", "cto:carry_over", "calendar-days", "approver"),
@@ -68,28 +77,39 @@ MENU = [
     ("reports", "Reports", "chart-column", [
         ("Dashboard", "dashboard:dashboard_home", "chart-column", "can_view_dashboard"),
         ("Out-on-Pass Monthly Report", "outonpass:report", "door-open", "oop_report"),
+        ("Performance Report", "performance:report", "award", "pm_report"),
         ("Audit Log", "auditlog:audit_log", "shield-check", "can_view_audit_log"),
     ]),
-    ("admin", "HR Administration", "settings", [
+    # HR Administration split in two (menu plan approved 2026-11-25, Option B); item names unchanged.
+    ("hr_records", "HR Records", "folder-open", [
         ("Data Import", "dataimport:home", "upload", "can_import_data"),
-        ("OIC for an Approver", "oic_hr_home", "calendar-clock", "can_hr_designate_oic"),
+        ("Assignment History", "employees:assignments", "user-round", "is_hr"),
         ("Import Biometric Attendance", "attendance:biometric_import", "fingerprint", "is_hr"),
         ("Minor Attendance Correction", "attendance:minor_correction_create", "clipboard-check", "is_hr"),
         ("CTO Opening Balances", "cto:opening_balances", "clock-3", "can_enter_opening"),
         ("Exception CTO Claim", "cto:exception_claim_new", "clock-3", "can_file_exception"),
         ("CTO Separation Status", "cto:separation", "user-round", "can_set_separation"),
+    ]),
+    ("admin", "HR Settings", "settings", [
+        ("OIC for an Approver", "oic_hr_home", "calendar-clock", "can_hr_designate_oic"),
         ("Manage Announcements", "announcements:manage", "megaphone", "can_manage_announcements"),
         ("Out-on-Pass Setup", "outonpass:setup", "door-open", "is_hr_admin"),
         ("Shift Codes", "schedules:shift_codes", "list", "can_manage_announcements"),
         ("Schedule Cut-off Dates", "schedules:cutoff_dates", "calendar-clock", "is_hr"),
+        ("Holidays", "employees:holidays", "calendar-days", "is_hr_admin"),
+        ("Positions and Exchange Groups", "exchange:positions", "repeat", "is_hr_admin"),
+        ("Exchange of Duty Rules", "exchange:rules", "repeat", "is_hr_admin"),
         ("User Accounts and Roles", "admin:index", "user-cog", "is_system_admin"),
     ]),
 ]
 
+# Pages that light up another item (tabs of one page): Performance Setup.
+ALSO_CURRENT = {"performance:setup": ["performance:periods", "performance:deduction_criteria"]}
+
 # Queue url name -> label used by homepage.kpis.waiting_for_me (for the counts).
 QUEUE_COUNT_URLS = {"leave:leave_queue", "cto:cto_queue", "exchange:exchange_queue",
                     "attendance:correction_queue", "official_requests:request_queue",
-                    "outonpass:queue"}
+                    "outonpass:queue", "performance:reviews"}
 
 
 def _flags(request, acting):
@@ -127,6 +147,10 @@ def _flags(request, acting):
     f["oop_approver"] = oop and f["approver"]
     f["oop_gate"] = oop and f["can_view_gate"]
     f["oop_report"] = oop and f["can_view_oop_report"]
+    f["pm_report"] = acting is not None and (f["is_hr"] or acting.has_role(RoleAssignment.ADMINISTRATIVE_OFFICER,
+                                                                             viewing=True)
+                                             or acting.has_role(RoleAssignment.CHIEF_OF_HOSPITAL, viewing=True))
+    f["pm_reviewer"] = f["approver"] or f["is_hr"]
     f["all"] = True
     return f
 
@@ -167,8 +191,9 @@ def sidebar_menu(request):
             item = {"label": item_label, "url": url, "icon": item_icon, "count": counts.get(url_name, 0),
                     "current": False}
             items.append(item)
-            if url != "/" and path.startswith(url) and len(url) > best[1]:
-                best = (item, len(url))
+            for u in [url] + [reverse(n) for n in ALSO_CURRENT.get(url_name, [])]:
+                if u != "/" and path.startswith(u) and len(u) > best[1]:
+                    best = (item, len(u))
         if items:
             groups.append({"key": key, "label": label, "icon": icon, "items": items, "open": False,
                            "count": sum(i["count"] for i in items)})

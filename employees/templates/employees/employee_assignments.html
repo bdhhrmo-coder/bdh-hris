@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Assignment history: {{ employee.full_name }} — BDH HRIS{% endblock %}
+{% block content %}
+<p><a href="{% url 'employees:assignments' %}">&larr; Assignment History</a></p>
+<h1>Assignment history: {{ employee.full_name }}</h1>
+<p class="muted">Current sections/units: {% for s in employee.sections.all %}{{ s }}{% if not forloop.last %}, {% endif %}{% empty %}none{% endfor %}{% if employee.units.exists %} · Units: {% for u in employee.units.all %}{{ u.name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</p>
+<div class="card"><div class="table-scroll"><table>
+  <tr><th>Area</th><th>Action</th><th>From</th><th>To</th><th>Position</th><th>Reference</th><th>Status</th>{% if can_edit %}<th></th>{% endif %}</tr>
+  {% for ln in lines %}
+  <tr>
+    <td>{{ ln.area }}</td><td>{{ ln.action_type }}{% if ln.is_opening %} <small class="muted">(opening line)</small>{% endif %}</td>
+    <td>{{ ln.effective_from|date:"M j, Y" }}</td><td>{{ ln.effective_to|date:"M j, Y"|default:"current" }}</td>
+    <td>{{ ln.position|default:"—" }}</td><td>{{ ln.reference|default:"—" }}{% if ln.remarks %}<br><small>{{ ln.remarks }}</small>{% endif %}</td>
+    <td>{{ ln.get_status_display }}{% if ln.close_on %}<br><small class="text-warning">Closing on {{ ln.close_on|date:"M j, Y" }} waits for verification</small>{% endif %}</td>
+    {% if can_edit %}<td>{% if ln.is_current and not ln.close_on %}
+      <form method="post" class="row-actions">{% csrf_token %}<input type="hidden" name="what" value="close"><input type="hidden" name="pk" value="{{ ln.pk }}">
+        <input type="date" name="close_on" max="{{ today|date:'Y-m-d' }}" required aria-label="End date"><input type="text" name="reason" placeholder="Reason / office order" required aria-label="Reason"><button type="submit" class="btn-secondary">Close line</button></form>{% endif %}</td>{% endif %}
+  </tr>
+  {% empty %}<tr><td colspan="8" class="empty-note">No assignment history yet.</td></tr>{% endfor %}
+</table></div></div>
+{% if can_edit %}
+<form method="post" class="card">{% csrf_token %}<input type="hidden" name="what" value="encode">
+  <h2 class="mt-0">Add a personnel action</h2>
+  <div class="grid-2">
+    <label>Section <select name="section" required><option value="">—</option>{% for s in sections %}<option value="{{ s.pk }}">{{ s }}</option>{% endfor %}</select></label>
+    <label>Unit (optional) <select name="unit"><option value="">—</option>{% for u in units %}<option value="{{ u.pk }}">{{ u }}</option>{% endfor %}</select></label>
+    <label>Personnel action <select name="action_type" required><option value="">—</option>{% for t in types %}<option value="{{ t.pk }}">{{ t }}</option>{% endfor %}</select></label>
+    <label>Effective from <input type="date" name="effective_from" max="{{ today|date:'Y-m-d' }}" required></label>
+    <label>Position <input type="text" name="position" maxlength="150" value="{{ employee.position }}"></label>
+    <label>Reference (appointment, office order or contract no.) <input type="text" name="reference" maxlength="120"></label>
+  </div>
+  <label>Remarks <textarea name="remarks" rows="2"></textarea></label>
+  <p class="field-help">A move to another area is two steps: close the old line, then add the new one. Both are verified by another HR Administrator, and the employee's sections and units change only then.</p>
+  <button type="submit">Encode</button>
+</form>
+{% endif %}
+{% endblock %}

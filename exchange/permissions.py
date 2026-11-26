@@ -21,6 +21,47 @@ from leave.permissions import (  # noqa: F401 (re-exported for exchange callers)
 )
 
 
+# -- Cross-unit exchange: both unit heads endorse (owner decision 2026-11-26) --
+# Each side's unit head comes from the shared lookup (leave.permissions,
+# so OIC and next-level-up rules apply), run for that party alone. A party
+# who is a unit head has no unit step on their side (their side goes to the
+# section head, as before); a side whose unit has no head has none either.
+# Only when BOTH sides have a unit head does the unit step need two
+# endorsements; otherwise the existing single-endorsement route applies.
+
+def unit_sides(request):
+    """{"A": [unit heads], "B": [unit heads]} for a cross-unit request filed
+    under the new rules where both sides have a unit head; else {}."""
+    from leave.permissions import _unit_level_endorsers
+
+    from .schedule_checks import is_cross_unit
+
+    a, b = request.employee_a, request.employee_b
+    if not request.new_rules or not is_cross_unit(a, b):
+        return {}
+    sides = {}
+    for side, party, other in (("A", a, b), ("B", b, a)):
+        heads = [s for s in _unit_level_endorsers([party]) if s.pk != other.pk]
+        if heads:
+            sides[side] = heads
+    return sides if len(sides) == 2 else {}
+
+
+def side_heads_ids(request, side):
+    return {e.pk for e in unit_sides(request).get(side, [])}
+
+
+def remaining_side(request):
+    return {"A": "B", "B": "A"}.get(request.first_unit_side, "")
+
+
+def can_endorse_remaining_side(acting_employee, request):
+    """May give the second unit-head endorsement of a cross-unit request."""
+    if acting_employee is None or is_party_to(acting_employee, request):
+        return False
+    return acting_employee.pk in side_heads_ids(request, remaining_side(request))
+
+
 def is_party_to(acting_employee, request):
     return acting_employee is not None and acting_employee.pk in (request.employee_a_id, request.employee_b_id)
 
@@ -79,6 +120,14 @@ def visible_exchange_requests_for(acting_employee):
         req.pk for req in supervisor_candidates if can_endorse(acting_employee, [req.employee_a, req.employee_b])
     ]
     qs = qs | DutyExchangeRequest.objects.filter(pk__in=supervisor_ids)
+
+    # Cross-unit: the other side's unit head, after the first one (2026-11-26).
+    other_side = [
+        req.pk for req in DutyExchangeRequest.objects.filter(status=DutyExchangeRequest.ENDORSED_BY_ONE_UNIT_HEAD)
+        .select_related("employee_a", "employee_b")
+        if can_endorse_remaining_side(acting_employee, req)
+    ]
+    qs = qs | DutyExchangeRequest.objects.filter(pk__in=other_side)
 
     # Second endorsement (section head), after the unit head - 2026-10-27.
     second_ids = [

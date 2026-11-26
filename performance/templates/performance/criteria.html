@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Deduction Criteria — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Deduction Criteria</h1>
+{% include "performance/_setup_tabs.html" %}
+<p class="muted">The approved deduction matrices. Only final decisions count, capped per period. Supervisor lines apply to the supervisor track; the rank-and-file lines apply to everyone. A deduction keeps the points it was given, so later changes here never change history.</p>
+<div class="card"><div class="table-scroll"><table>
+  <tr><th>Code</th><th>Criterion</th><th>Applies to</th><th>Points</th><th>Cap</th><th>Status</th><th>Approval</th>{% if is_admin %}<th></th>{% endif %}</tr>
+  {% for c in rows %}<tr><td>{{ c.code }}</td><td>{{ c.name }}{% if c.needs_final_ref %} <small>(final decision reference required)</small>{% endif %}</td><td>{{ c.get_applies_to_display }}</td><td>{{ c.points_options|default:"not set" }}</td><td>{{ c.cap|default:"—" }}</td><td>{% if c.is_active %}On{% else %}Off{% endif %}</td><td><small>{{ c.approval_ref }}</small></td>
+  {% if is_admin %}<td><form method="post" class="row-actions">{% csrf_token %}<input type="hidden" name="pk" value="{{ c.pk }}">
+    <input type="text" name="points_options" value="{{ c.points_options }}" aria-label="Points" size="12"><input type="text" name="cap" value="{{ c.cap|default:'' }}" aria-label="Cap" size="4">
+    <select name="is_active" aria-label="On or off"><option value="1" {% if c.is_active %}selected{% endif %}>On</option><option value="0" {% if not c.is_active %}selected{% endif %}>Off</option></select>
+    <input type="text" name="approval_ref" placeholder="PMT/COH approval ref." required aria-label="Approval reference"><button class="btn-secondary">Save</button></form></td>{% endif %}</tr>{% endfor %}
+</table></div></div>
+{% endblock %}

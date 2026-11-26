@@ -33,25 +33,21 @@ class ExchangeScheduleTests(Base):
         self.assertEqual(errors, [])
         self.assertTrue(notes)  # told it was not checked
 
-    def test_partners_must_share_a_unit_or_a_section_without_units(self):
-        # Owner decision 2026-11-03: same unit (or same section with no units), positions may differ.
+    def test_partners_must_share_a_section(self):
+        # Owner decision 2026-11-26: same section, any unit (was: same unit, 2026-11-03).
         from orgstructure.models import Section, Unit
 
         services.submit(self.s, self.sup.user)
         errors, _ = check(self.alice, self.d10, self.carl, self.d11, date(2027, 2, 1), False)
-        self.assertTrue(any("same unit" in e for e in errors))
-        self.bob.position = "Laboratory Aide"
-        self.bob.save()
-        errors, _ = check(self.alice, self.d10, self.bob, self.d11, date(2027, 2, 1), False)
-        self.assertFalse(any("same unit" in e for e in errors))   # Laboratory has no units
-        from .schedule_checks import same_work_area
+        self.assertTrue(any("same section" in e for e in errors))
         nursing = Section.objects.get(name="Nursing Service Section")
         er, opd = Unit.objects.get(section=nursing, name="ER"), Unit.objects.get(section=nursing, name="OPD")
+        from .schedule_checks import location_errors, same_work_area
         self.alice.sections.set([nursing]); self.bob.sections.set([nursing])
         self.alice.units.set([er]); self.bob.units.set([opd])
-        self.assertFalse(same_work_area(self.alice, self.bob))   # Nursing has units: different units refused
-        self.bob.units.set([er])
-        self.assertTrue(same_work_area(self.alice, self.bob))
+        self.assertEqual(location_errors(self.alice, self.bob), [])        # different units, same section
+        self.assertTrue(location_errors(self.alice, self.bob, new_rules=False))   # older requests: old rule
+        self.assertFalse(same_work_area(self.alice, self.bob))
 
     def test_both_dates_must_be_duty_days_and_partner_off(self):
         services.submit(self.s, self.sup.user)

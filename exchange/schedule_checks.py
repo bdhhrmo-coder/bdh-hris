@@ -4,9 +4,10 @@ decisions 2026-10-09). The rules already in rules.py (24-hour notice,
 3 per month, consent, routing) stay as they are.
 
 For employee A giving up date A and taking B's date B:
-  - A and B must be in the same unit, or in the same section where that
-    section has no units; their positions may differ (owner decision
-    2026-11-03, replaces the same-position rule).
+  - Who may exchange (location_errors): requests filed from 2026-11-26
+    must share a section (any unit) and hold positions in the same Exchange
+    group; older requests keep the earlier rule (same unit, or the same
+    section where it has no units).
   - A must be on duty on date A and B on date B, and A must be off on date B
     and B off on date A (no one ends up with two shifts in one day).
   - Timing:
@@ -48,14 +49,46 @@ def same_work_area(employee_a, employee_b):
     return shared.filter(units__isnull=True).exists()
 
 
-def check(employee_a, date_a, employee_b, date_b, filed_on, is_emergency, with_timing=True):
+def same_section(employee_a, employee_b):
+    """Owner decision 2026-11-26: the partners share a section, in any unit
+    (float staff qualify when any of their sections match)."""
+    return employee_a.sections.filter(pk__in=employee_b.sections.values("pk")).exists()
+
+
+def is_cross_unit(employee_a, employee_b):
+    """Same section but no shared unit, in a section that has units."""
+    if set(employee_a.units.values_list("pk", flat=True)) & set(employee_b.units.values_list("pk", flat=True)):
+        return False
+    shared = employee_a.sections.filter(pk__in=employee_b.sections.values("pk"))
+    return shared.exists() and not shared.filter(units__isnull=True).exists()
+
+
+def location_errors(employee_a, employee_b, new_rules=True):
+    """Who may exchange with whom. New rules (2026-11-26): same section, and
+    positions in the same Exchange group (employees/positions.py). Older
+    requests: same unit, or the same section where it has no units."""
+    from employees.positions import group_error
+
+    if not new_rules:
+        if same_work_area(employee_a, employee_b):
+            return []
+        return [f"Exchange partners must be in the same unit, or the same section where the section has no "
+                f"units ({employee_a} and {employee_b} are not)."]
+    errors = []
+    if not same_section(employee_a, employee_b):
+        errors.append(f"Exchange partners must be in the same section ({employee_a} and {employee_b} are not).")
+    msg = group_error(employee_a, employee_b)
+    if msg:
+        errors.append(msg)
+    return errors
+
+
+def check(employee_a, date_a, employee_b, date_b, filed_on, is_emergency, with_timing=True, new_rules=True):
     """Returns (errors, notes)."""
     from schedules.services import cell_for
 
     errors, notes = [], []
-    if not same_work_area(employee_a, employee_b):
-        errors.append(f"Exchange partners must be in the same unit, or the same section where the section has no "
-                      f"units ({employee_a} and {employee_b} are not).")
+    errors += location_errors(employee_a, employee_b, new_rules)
 
     pairs = [(employee_a, date_a, employee_b, "your"), (employee_b, date_b, employee_a, "their")]
     for who, day, other, _ in pairs:
@@ -88,8 +121,9 @@ def apply_to_schedules(exchange_request, user):
     from schedules.services import cell_for, change_cell, off_code
 
     a, b = exchange_request.employee_a, exchange_request.employee_b
-    errors, _ = check(a, exchange_request.date_a, b, exchange_request.date_b, None, True, with_timing=False)
-    errors = [e for e in errors if "position" not in e]  # position was checked at filing
+    errors, _ = check(a, exchange_request.date_a, b, exchange_request.date_b, None, True, with_timing=False,
+                      new_rules=exchange_request.new_rules)
+    errors = [e for e in errors if "Exchange group" not in e]  # positions were checked at filing
     if errors:
         raise ValidationError(errors)
     off = off_code()

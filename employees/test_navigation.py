@@ -29,7 +29,7 @@ class MenuTests(TestCase):
 
     def test_employee_sees_only_home_and_my_requests(self):
         menu, _ = self.menu(person("navemp"))
-        self.assertEqual(list(menu), ["Home", "My Requests"])
+        self.assertEqual(list(menu), ["Home", "My Requests", "Performance"])  # menu plan 2026-11-25
         self.assertNotIn("File for a Group", menu["My Requests"])
         self.assertIn("My Schedule", menu["My Requests"])
 
@@ -38,7 +38,8 @@ class MenuTests(TestCase):
         urls = [i["url"] for g in groups for i in g["items"]]
         self.assertEqual(len(urls), len(set(urls)))
         self.assertNotIn(reverse("notifications:notification_list"), urls)
-        self.assertEqual(list(menu), ["Home", "My Requests", "Approvals", "Workforce", "Reports", "HR Administration"])
+        self.assertEqual(list(menu), ["Home", "My Requests", "Performance", "Approvals", "Workforce", "Reports",
+                                      "HR Records", "HR Settings"])
 
     def test_ictu_sees_only_the_correction_queue(self):
         menu, _ = self.menu(person("navictu", R.ICTU_STAFF))
@@ -47,7 +48,7 @@ class MenuTests(TestCase):
 
     def test_system_admin_gets_accounts_link_but_no_approvals(self):
         menu, _ = self.menu(person("navsys", R.SYSTEM_ADMINISTRATOR))
-        self.assertIn("User Accounts and Roles", menu["HR Administration"])
+        self.assertIn("User Accounts and Roles", menu["HR Settings"])
         self.assertNotIn("Approvals", menu)
 
     def test_supervisor_has_group_filing_and_schedules(self):
@@ -55,7 +56,8 @@ class MenuTests(TestCase):
         menu, _ = self.menu(person("navsup", R.SUPERVISOR, section=lab))
         self.assertIn("File for a Group", menu["My Requests"])
         self.assertEqual(menu["Workforce"], ["Duty Schedules", "Approved Exchanges of Duty"])
-        self.assertNotIn("HR Administration", menu)
+        self.assertNotIn("HR Settings", menu)
+        self.assertNotIn("HR Records", menu)
 
     def test_current_page_marked_and_its_group_open(self):
         _, groups = self.menu(person("navcur"), path=reverse("leave:leave_apply"))

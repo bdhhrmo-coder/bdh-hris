@@ -82,6 +82,11 @@ class Employee(models.Model):
         help_text="The ID this employee has in PALMIRA (the biometric system), as printed on its report.",
     )
     position = models.CharField(max_length=150, blank=True)
+    # The position record for this title (owner decision 2026-11-26): kept in
+    # step with `position` on every save (employees/positions.py), so the
+    # Exchange of Duty rule compares records, not typed text.
+    position_ref = models.ForeignKey("Position", on_delete=models.PROTECT, null=True, blank=True,
+                                     related_name="employees", editable=False)
     item_plantilla_no = models.CharField("Item/Plantilla No.", max_length=50, blank=True)
     salary_grade = models.CharField(max_length=10, blank=True)
     # Pilot Item 3 (owner request 2026-11-24): the actual monthly salary printed on CSC Form No. 6.
@@ -199,6 +204,15 @@ class Employee(models.Model):
                                     violation_error_message="Another employee already has this Biometric ID."),
         ]
 
+    def save(self, *args, **kwargs):
+        from .positions import position_for
+
+        self.position_ref = position_for(self.position)
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None and "position" in update_fields:
+            kwargs["update_fields"] = set(update_fields) | {"position_ref"}
+        super().save(*args, **kwargs)
+
     def __str__(self):
         full = f"{self.surname}, {self.first_name}"
         if self.middle_name:
@@ -256,6 +270,50 @@ class Employee(models.Model):
         from accounts.models import RoleAssignment
 
         return self.has_role(RoleAssignment.HR_ADMINISTRATOR)
+
+
+class ExchangeGroup(models.Model):
+    """Positions that may exchange duty with each other (owner decision
+    2026-11-26). Kept by the HR Administrator on HR Administration ->
+    Positions and Exchange Groups."""
+
+    name = models.CharField(max_length=60, unique=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class Position(models.Model):
+    """One position title used in the HRIS. Created automatically from the
+    titles typed on employee records (employees/positions.py)."""
+
+    title = models.CharField(max_length=150)
+    title_key = models.CharField(max_length=150, unique=True, editable=False,
+                                 help_text="The title in lower case with single spaces, for matching.")
+    exchange_group = models.ForeignKey(ExchangeGroup, on_delete=models.PROTECT, null=True, blank=True,
+                                       related_name="positions")
+
+    class Meta:
+        ordering = ["title"]
+
+    def __str__(self):
+        return self.title
+
+
+class PositionGroupChange(models.Model):
+    """Every change of a position's Exchange group (Audit Log)."""
+
+    position = models.ForeignKey(Position, on_delete=models.CASCADE, related_name="group_changes")
+    old_group = models.CharField(max_length=60, blank=True)
+    new_group = models.CharField(max_length=60, blank=True)
+    changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    changed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["changed_at", "pk"]
 
 
 class EducationHistory(models.Model):
@@ -380,3 +438,117 @@ class EmployeeProfileEditRequest(models.Model):
     def __str__(self):
         label = dict(self.SELF_SERVICE_FIELDS).get(self.field_name, self.field_name)
         return f"{self.employee} — {label} ({self.get_status_display()})"
+
+
+# -- Performance Management prerequisites, HRIS-wide (owner decisions N3, N4,
+# 2026-11-22; rebuilt 2026-11-26). See employees/holidays.py and history.py.
+
+class Holiday(models.Model):
+    """A non-working day, kept by the HR Administrator. Used for working-day
+    counts (Performance Management windows); leave and CTO do not use it."""
+
+    REGULAR = "REGULAR"
+    SPECIAL = "SPECIAL"
+    LOCAL = "LOCAL"
+    KIND_CHOICES = [(REGULAR, "Regular holiday"), (SPECIAL, "Special non-working day"), (LOCAL, "Local holiday")]
+
+    date = models.DateField()
+    name = models.CharField(max_length=120)
+    kind = models.CharField(max_length=10, choices=KIND_CHOICES, default=REGULAR)
+    basis_ref = models.CharField("Basis (proclamation or ordinance no.)", max_length=120, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    voided_at = models.DateTimeField(null=True, blank=True)
+    voided_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True,
+                                  related_name="+")
+    void_reason = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["date"]
+        constraints = [models.UniqueConstraint(fields=["date"], condition=models.Q(voided_at__isnull=True),
+                                               name="one_active_holiday_per_date")]
+
+    def __str__(self):
+        return f"{self.date:%b %d, %Y} {self.name}"
+
+
+class PersonnelActionType(models.Model):
+    """HR-kept list of personnel actions for the assignment history."""
+
+    name = models.CharField(max_length=60, unique=True)
+    is_active = models.BooleanField(default=True)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+
+    def __str__(self):
+        return self.name
+
+
+class AssignmentLine(models.Model):
+    """One dated line of where an employee works and under what personnel
+    action. The verified lines with no end date are the employee's current
+    sections and units (employees/history.py sync_membership)."""
+
+    PENDING = "PENDING"
+    VERIFIED = "VERIFIED"
+    REJECTED = "REJECTED"
+    STATUS_CHOICES = [(PENDING, "Waiting for verification"), (VERIFIED, "Verified"), (REJECTED, "Not verified")]
+
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="assignment_lines")
+    section = models.ForeignKey("orgstructure.Section", on_delete=models.PROTECT, related_name="+")
+    unit = models.ForeignKey("orgstructure.Unit", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    position = models.CharField(max_length=150, blank=True)
+    employment_status = models.CharField(max_length=10, blank=True)
+    action_type = models.ForeignKey(PersonnelActionType, on_delete=models.PROTECT, related_name="lines")
+    effective_from = models.DateField()
+    effective_to = models.DateField(null=True, blank=True, help_text="Blank = current.")
+    reference = models.CharField("Reference (appointment, office order or contract no.)", max_length=120,
+                                 blank=True)
+    remarks = models.TextField(blank=True)
+    is_opening = models.BooleanField(default=False)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=PENDING)
+    encoded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    encoded_at = models.DateTimeField(auto_now_add=True)
+    verified_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True,
+                                    related_name="+")
+    verified_at = models.DateTimeField(null=True, blank=True)
+    # A request to close the line (end date), verified like a new line.
+    close_on = models.DateField(null=True, blank=True)
+    close_reason = models.CharField(max_length=255, blank=True)
+    close_requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True,
+                                           blank=True, related_name="+")
+
+    class Meta:
+        ordering = ["employee", "-effective_from", "pk"]
+
+    def __str__(self):
+        return f"{self.employee}: {self.area} from {self.effective_from}"
+
+    @property
+    def area(self):
+        return str(self.unit) if self.unit_id else self.section.name
+
+    @property
+    def is_current(self):
+        return self.status == self.VERIFIED and self.effective_to is None
+
+
+class AssignmentAction(models.Model):
+    line = models.ForeignKey(AssignmentLine, on_delete=models.CASCADE, related_name="actions")
+    action = models.CharField(max_length=20)
+    notes = models.CharField(max_length=255, blank=True)
+    acted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    acted_at = models.DateTimeField(auto_now_add=True)
+
+    LABELS = {"encode": "Line encoded", "verify": "Line verified", "reject": "Line not verified",
+              "close_request": "Closing requested", "close_verify": "Closing verified",
+              "close_reject": "Closing not verified", "opening": "Opening line loaded"}
+
+    class Meta:
+        ordering = ["acted_at", "pk"]
+
+    @property
+    def label(self):
+        return self.LABELS.get(self.action, self.action)

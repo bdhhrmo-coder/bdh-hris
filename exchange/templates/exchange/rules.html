@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Exchange of Duty Rules — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Exchange of Duty Rules</h1>
+<p class="muted">Checked for each employee on the duty they take over and their nearest duties before and after it. An exchange is refused for: straight duty (no gap or an overlap); a PM duty followed by an AM duty the next day; or less rest than set below after the duty just finished (for any other duty length, rest equal to its length). More duty days in a row than the employee's pattern is a warning only. Both duties must be the same length. Changes apply to requests filed from then on.</p>
+<form method="post" class="card">
+  {% csrf_token %}
+  {% for name, label, value in fields %}
+  <label>{{ label }}
+    {% if name == "pm_from" %}<input type="time" name="{{ name }}" value="{{ value|time:'H:i' }}" required>
+    {% else %}<input type="number" name="{{ name }}" value="{{ value }}" step="{% if 'consecutive' in name %}1{% else %}0.5{% endif %}" min="{% if 'consecutive' in name %}1{% else %}0{% endif %}" required>{% endif %}
+  </label>
+  {% endfor %}
+  <button type="submit">Save</button>
+</form>
+{% if history %}
+<div class="card">
+  <h2 class="mt-0">Recent changes</h2>
+  <table><tr><th>When</th><th>Setting</th><th>From</th><th>To</th><th>By</th></tr>
+  {% for h in history %}<tr><td>{{ h.changed_at|date:"M j, Y g:i A" }}</td><td>{{ h.field }}</td><td>{{ h.old_value }}</td><td>{{ h.new_value }}</td><td>{{ h.changed_by.employee.full_name|default:h.changed_by.username }}</td></tr>{% endfor %}
+  </table>
+</div>
+{% endif %}
+{% endblock %}

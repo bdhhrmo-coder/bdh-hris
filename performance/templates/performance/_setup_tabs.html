@@ -1,0 +1,1 @@
+<nav class="tabs" aria-label="Performance Setup">{% for url_name, label in tabs %}<a href="{% url url_name %}" class="tab{% if request.resolver_match.view_name == url_name %} is-current{% endif %}"{% if request.resolver_match.view_name == url_name %} aria-current="page"{% endif %}>{{ label }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</nav>
