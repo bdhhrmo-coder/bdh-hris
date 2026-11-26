@@ -22,6 +22,7 @@ date (so a returned claim does not expire while being corrected).
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
+from django.conf import settings
 from django.db import transaction
 from django.db.models import F, Sum
 
@@ -30,7 +31,13 @@ from notifications.services import notify
 
 from . import routing
 from .carryover import initial_use_deadline
-from .balances import compute_credit, effective_date_for, filing_deadline_for, violates_filing_deadline
+from .balances import (
+    compute_credit,
+    effective_date_for,
+    filing_deadline_for,
+    violates_filing_deadline,
+    year_earned_for,
+)
 from official_requests.models import OfficialRequest, OfficialRequestBatch
 
 from .models import HOLIDAY, REST_DAY, WEEKDAY, CTOClaim, CTOClaimLine, CTOMultiplierRate, RoutedRecord
@@ -168,13 +175,16 @@ def credit_lines(claim):
     for line in claim.lines.select_for_update():
         _preview(line, claim.employee)
         line.effective_date = effective_date_for(line.work_date, claim.approved_on)
-        line.year_earned = line.effective_date.year
+        # Year earned follows the workday (December work = next year's CTO); with the earlier rule this
+        # equalled the effective date's year whenever the claim was approved by Dec 31.
+        line.year_earned = max(year_earned_for(line.work_date), line.effective_date.year)
         line.use_deadline = initial_use_deadline(line.effective_date, line.year_earned)
         line.state = CTOClaimLine.CREDITED
         line.save()
     total = sum((line.credited_days for line in claim.lines.all()), Decimal("0"))
-    notify(claim.employee, f"{claim} was approved: {total} CTO day(s), usable from each line's effective date.",
-           claim.get_absolute_url())
+    usable = ("usable now" if getattr(settings, "CTO_CREDIT_USABLE_AT_APPROVAL", False)
+              else "usable from each line's effective date")
+    notify(claim.employee, f"{claim} was approved: {total} CTO day(s), {usable}.", claim.get_absolute_url())
 
 
 @transaction.atomic
