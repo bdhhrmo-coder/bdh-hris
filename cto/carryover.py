@@ -145,6 +145,17 @@ def decide_reason(coh, record, approve, note, today):
         raise ValidationError("Only the Chief of Hospital decides carry-over reasons.")
     if record.status != CTOCarryOverReason.PENDING:
         raise ValidationError("This reason was already decided.")
+    # Item 5 / audit fix F3: an OIC for the COH never decides their own reason, and types a remark
+    # when they submitted the reason themselves (owner Decision 1, 2026-11-26).
+    if record.employee_id == coh.pk:
+        raise ValidationError("You cannot decide the carry-over reason for your own CTO. Nothing was changed.")
+    from leave.permissions import oic_repeat_guard
+
+    error, note = oic_repeat_guard(coh, record, RoleAssignment.CHIEF_OF_HOSPITAL, note,
+                                   action="approve" if approve else "reject",
+                                   acted_earlier=record.submitted_by_id == coh.pk, earlier_verb="submitting")
+    if error:
+        raise ValidationError(error)
     record.status = CTOCarryOverReason.APPROVED if approve else CTOCarryOverReason.REJECTED
     record.decided_by = coh
     record.decided_at = timezone.now()

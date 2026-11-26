@@ -8,6 +8,7 @@
     {% if can_create %}<a class="btn" href="{% url 'schedules:new' %}">+ New schedule</a>{% endif %}
   </div>
 </div>
+{% include "components/oic_queue_label.html" %}
 <p class="muted">Monthly Personnel Work Schedule (F50). Route: Prepared &rarr; Reviewed (HR) &rarr; Recommending approval (AO) &rarr; Approved (COH) &rarr; Recorded (HR). Staff see it in "My Schedule" once HR records it.</p>
 
 {% if waiting %}

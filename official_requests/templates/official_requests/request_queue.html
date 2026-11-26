@@ -6,6 +6,7 @@
   <h1>Requests awaiting my action</h1>
   {% if can_file_batch %}<a href="{% url 'official_requests:batch_file' %}" class="btn">+ File for a group</a>{% endif %}
 </div>
+{% include "components/oic_queue_label.html" %}
 
 {% if batches %}
 <div class="card">

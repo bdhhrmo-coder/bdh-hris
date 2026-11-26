@@ -3,6 +3,7 @@
 {% block title %}CTO queue — BDH HRIS{% endblock %}
 {% block content %}
 <h1>CTO queue</h1>
+{% include "components/oic_queue_label.html" %}
 <p>
   {% if can_file_exception %}<a href="{% url 'cto:exception_claim_new' %}" class="btn">+ Exception CTO claim</a>{% endif %}
   {% if can_enter_opening %}<a href="{% url 'cto:opening_balances' %}" class="btn">Opening CTO balances</a>{% endif %}
