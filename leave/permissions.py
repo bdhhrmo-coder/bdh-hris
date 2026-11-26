@@ -309,37 +309,70 @@ def holds_only_as_oic(acting_employee, role):
     return bool(lines) and all(ra.is_oic for ra in lines)
 
 
-def acted_this_cycle_ids(obj):
-    """Employee ids of everyone who took an action on `obj` since it was last (re)submitted."""
+def _cycle_actions(obj):
+    """Actions on `obj` since it was last (re)submitted, oldest first."""
     if obj is None or getattr(obj, "pk", None) is None:
-        return set()
+        return []
     actions = list(obj.actions.select_related("acted_by__employee").order_by("acted_at", "pk"))
     start = 0
     for i, a in enumerate(actions):
         if getattr(a, "resulting_status", None) == "SUBMITTED" or a.action in _CYCLE_START_ACTIONS:
             start = i + 1
+    return actions[start:]
+
+
+def acted_this_cycle_ids(obj):
+    """Employee ids of everyone who took an action on `obj` since it was last (re)submitted."""
     ids = set()
-    for a in actions[start:]:
+    for a in _cycle_actions(obj):
         emp = getattr(a.acted_by, "employee", None) if a.acted_by_id else None
         if emp is not None:
             ids.add(emp.pk)
     return ids
 
 
-def oic_repeat_guard(acting_employee, obj, step_role, notes):
-    """(error, notes to log). error is always None (kept so callers stay simple). Only for
-    the AO and COH steps, only for an OIC who acted earlier in this cycle: the automatic
-    remark goes first, then whatever they typed."""
+# Audit fix F2 (owner Decision 1, 2026-11-26): wording of the remark an OIC types to act again.
+_DONE_VERB = {"approve": "Approved", "recommend": "Recommended", "recommend_capitol": "Recommended",
+              "review": "Reviewed", "return": "Returned", "reject": "Rejected", "endorse": "Endorsed",
+              "validate": "Validated", "process": "Processed", "record": "Recorded"}
+_EARLIER_VERB = {"approve": "approving", "endorse": "endorsing", "endorse_unit": "endorsing", "endorse_unit_first": "endorsing",
+                 "record": "recording", "process": "processing", "validate": "validating", "review": "reviewing",
+                 "recommend": "recommending", "submit_reason": "submitting the carry-over reason for"}
+OIC_REMARK_NEEDED = ("You acted on this request earlier. To act on it again as OIC for {who}, type a remark "
+                     "first (it is shown on the request). Nothing was changed.")
+
+
+def _earlier_verb(obj, employee_pk):
+    for a in reversed(_cycle_actions(obj)):
+        emp = getattr(a.acted_by, "employee", None) if a.acted_by_id else None
+        if emp is not None and emp.pk == employee_pk:
+            return _EARLIER_VERB.get(a.action, "acting on")
+    return "acting on"
+
+
+def oic_repeat_guard(acting_employee, obj, step_role, notes, action=None, acted_earlier=None, earlier_verb=None):
+    """(error, notes to log). Only for the AO and COH steps, only for a person who holds that role
+    right now just as OIC and already acted on this request in this cycle (Item 5; owner Decision 1,
+    2026-11-26: a typed remark is required). The logged remark reads, e.g.:
+    "[OIC - acted earlier on this request] Approved as OIC for the COH, after recommending it earlier: <remark>".
+    `acted_earlier`/`earlier_verb` let records without an action log (carry-over reasons) use it."""
     from accounts.models import RoleAssignment as RA
 
     notes = (notes or "").strip()
     if step_role not in (RA.ADMINISTRATIVE_OFFICER, RA.CHIEF_OF_HOSPITAL) or acting_employee is None:
         return None, notes
-    if not holds_only_as_oic(acting_employee, step_role) or acting_employee.pk not in acted_this_cycle_ids(obj):
+    if not holds_only_as_oic(acting_employee, step_role):
         return None, notes
-    auto = (f"{OIC_REPEAT_TAG} Acted as OIC for {OIC_LABELS.get(step_role, step_role)}; "
-            "this person also acted at an earlier step.")
-    return None, (f"{auto} {notes}" if notes else auto)[:255]
+    if acted_earlier is None:
+        acted_earlier = acting_employee.pk in acted_this_cycle_ids(obj)
+    if not acted_earlier:
+        return None, notes
+    who = OIC_LABELS.get(step_role, step_role)
+    if not notes:
+        return OIC_REMARK_NEEDED.format(who=who), notes
+    done = _DONE_VERB.get(action, "Acted")
+    earlier = earlier_verb or _earlier_verb(obj, acting_employee.pk)
+    return None, f"{OIC_REPEAT_TAG} {done} as OIC for {who}, after {earlier} it earlier: {notes}"[:255]
 
 
 def exclude_own_endorsements(qs, acting_employee, hr_status="ENDORSED_BY_SUPERVISOR"):
@@ -359,14 +392,16 @@ def remark_suffix(obj):
 
 
 def strip_oic_tag(notes):
-    """The remark as the approver typed it, without the automatic OIC note (Item 5): the note
-    stays on the request and in the Audit Log, but is not quoted in the filer's notice."""
+    """The remark as the approver typed it, without the OIC wording (Item 5): the full text
+    stays on the request and in the Audit Log, but the filer's notice quotes only the remark."""
     import re
 
     notes = notes or ""
     if notes.startswith(OIC_REPEAT_TAG):
-        notes = re.sub(r"^" + re.escape(OIC_REPEAT_TAG) + r" Acted as OIC for [^;]*; this person also acted at an "
-                       r"earlier step\.\s*", "", notes)
+        notes = re.sub(r"^" + re.escape(OIC_REPEAT_TAG) + r" [^:]*?: ", "", notes, count=1)
+        # older automatic form (before Decision 1): "... Acted as OIC for X; this person also acted ..."
+        notes = re.sub(r"^" + re.escape(OIC_REPEAT_TAG) + r" Acted as OIC for [^;]*; this person also acted at "
+                       r"an earlier step\.\s*", "", notes)
     return notes.strip()
 
 

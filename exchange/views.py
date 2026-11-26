@@ -156,7 +156,7 @@ def exchange_action(request, pk):
 
     oic_error, notes = oic_repeat_guard(acting_employee, exchange_request, {
         DutyExchangeRequest.PROCESSED_BY_HR: RA.ADMINISTRATIVE_OFFICER,
-        DutyExchangeRequest.RECOMMENDED_BY_AO: RA.CHIEF_OF_HOSPITAL}.get(status), notes)
+        DutyExchangeRequest.RECOMMENDED_BY_AO: RA.CHIEF_OF_HOSPITAL}.get(status), notes, action=action)
     if oic_error:  # Item 5
         messages.error(request, oic_error)
         return redirect("exchange:exchange_queue")

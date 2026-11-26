@@ -7,8 +7,10 @@ Rules: CLAUDE.md §7.1 (decided 2026-11-01, pending approved HR memo).
     vs rest day/holiday), from the CTOMultiplierRate in force on the
     workday. credited_days = credited_hours / employee.shift_hours (8- and
     12-hour shifts both normalize to the same "day" unit).
-  - Effective date = later of the 1st of the month after the workday and
-    the COH approval date. Year earned = year of the effective date. The
+  - Effective date = the COH approval date (owner decision 2026-11-26,
+    settings.CTO_CREDIT_USABLE_AT_APPROVAL; off = the later of the 1st of the
+    month after the workday and the approval date). Year earned = the year of
+    the 1st of the month after the workday (or a later approval year). The
     balance counts only credit lines whose effective date has arrived.
   - Filing deadline for a line = Nov 30 (settings) of the year containing
     the 1st of the month after its workday.
@@ -75,7 +77,18 @@ def violates_filing_deadline(work_date, filed_date):
 
 
 def effective_date_for(work_date, approved_on):
+    """The day a credited line can first be used. Owner decision 2026-11-26 (Option B): the COH
+    approval date (settings.CTO_CREDIT_USABLE_AT_APPROVAL); otherwise the earlier rule, the later of
+    the 1st of the month after the workday and the approval date."""
+    if getattr(settings, "CTO_CREDIT_USABLE_AT_APPROVAL", False):
+        return approved_on
     return max(first_of_next_month(work_date), approved_on)
+
+
+def year_earned_for(work_date):
+    """The CTO year a line belongs to: the year of the 1st of the month after the workday, so
+    December work counts as next year's CTO (CLAUDE.md §7.1), whenever it becomes usable."""
+    return first_of_next_month(work_date).year
 
 
 def _remaining_days(line):

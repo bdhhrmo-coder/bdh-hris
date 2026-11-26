@@ -5,7 +5,7 @@ follows the unchanged effective-date rule (§7.1). Made-up data only."""
 from datetime import date
 from decimal import Decimal
 
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from accounts.models import RoleAssignment
@@ -16,6 +16,7 @@ from . import tests as t
 from .balances import compute_available_cto_balance, upcoming_credit, upcoming_text
 
 
+@override_settings(CTO_CREDIT_USABLE_AT_APPROVAL=False)  # the earlier rule; Option B makes credit usable at once
 class UpcomingCreditTests(TestCase):
     def setUp(self):
         self.org = t.Org()

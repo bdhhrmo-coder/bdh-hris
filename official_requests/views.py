@@ -106,7 +106,7 @@ def request_action(request, pk):
 
     step_role = {"AO": RA.ADMINISTRATIVE_OFFICER, "COH": RA.CHIEF_OF_HOSPITAL}.get(
         approver_role(official_request.request_type, target_status) if target_status else None)
-    oic_error, notes = oic_repeat_guard(acting_employee, official_request, step_role, notes)
+    oic_error, notes = oic_repeat_guard(acting_employee, official_request, step_role, notes, action=action)
     if oic_error:  # Item 5
         messages.error(request, oic_error)
         return redirect("official_requests:request_queue")

@@ -54,3 +54,12 @@ def filed(obj, short=False):
     if short:
         return format_html('<span class="filed-at">{} <small class="muted">· resubmitted {}</small></span>', when, again_s)
     return format_html('<span class="filed-at">{}<br><small class="muted">Resubmitted {}</small></span>', when, again_s)
+
+
+@register.simple_tag
+def schedule_submitted(schedule):
+    """Item 2 / audit fix F5: "Submitted: <date, time>" for a duty schedule, or "Not yet submitted"."""
+    first, _ = filing_times(schedule)
+    if first is None:
+        return format_html('<span class="muted">Not yet submitted</span>')
+    return format_html("Submitted: {}", filed(schedule, short=True))

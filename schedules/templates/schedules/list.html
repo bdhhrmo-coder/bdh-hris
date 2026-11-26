@@ -9,6 +9,7 @@
     {% if can_create %}<a class="btn" href="{% url 'schedules:new' %}">+ New schedule</a>{% endif %}
   </div>
 </div>
+{% include "components/oic_queue_label.html" %}
 <p class="muted">Monthly Personnel Work Schedule (F50). Route: Prepared &rarr; Reviewed (HR) &rarr; Recommending approval (AO) &rarr; Approved (COH) &rarr; Recorded (HR). Staff see it in "My Schedule" once HR records it.</p>
 
 {% if waiting %}
@@ -33,7 +34,7 @@
     <td><a href="{% url 'schedules:detail' s.pk %}">{{ s.area_full_name }}</a></td>
     <td>{% include "schedules/_status_badge.html" %}</td>
     <td>{{ s.prepared_by.employee.full_name|default:s.prepared_by.username }} <small>({{ s.get_preparer_role_display }})</small></td>
-    <td>{% filed s short=1 %}</td>
+    <td>{% schedule_submitted s %}</td>
     <td><a href="{% url 'schedules:print' s.pk %}" target="_blank" rel="noopener">Print</a></td>
   </tr>
   {% empty %}<tr><td colspan="6" class="empty-note">No duty schedules yet.</td></tr>{% endfor %}

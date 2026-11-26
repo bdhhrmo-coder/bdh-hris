@@ -12,9 +12,10 @@ Shown (grid, edit screen, F50 printout):
 Leave still in the chain shows nothing. There is no "?" mark anywhere.
 CTO days that only cover part of a COSP leave are shown as that leave (LV).
 
-The leave codes (settings.SCHEDULE_LEAVE_CODES, default "LV" and "CTO") may be put in
-a schedule only on a day covered by a leave or CTO request (pending or approved);
-anywhere else the cell keeps its old value and the reason is listed.
+The leave codes (settings.SCHEDULE_LEAVE_CODES = (leave code, CTO code), default "LV" and
+"CTO") may be put in a schedule only on a day with a MATCHING request, pending or approved:
+LV on a leave day, CTO on a CTO day (owner Decision 10, 2026-11-26). Anywhere else the
+cell keeps its old value and the reason is listed.
 A duty shift on a day of APPROVED leave or CTO is a warning only.
 """
 
@@ -28,6 +29,23 @@ SHOWN = {LV: "LV", LV_PENDING: "", CTO: "CTO", CTO_PENDING: "CTO"}
 
 def leave_codes():
     return {c.upper() for c in getattr(settings, "SCHEDULE_LEAVE_CODES", ("LV", "CTO"))}
+
+
+def code_kinds():
+    """{"LV": (LV, LV_PENDING), "CTO": (CTO, CTO_PENDING)} from settings (leave code first)."""
+    leave_code, cto_code = (c.upper() for c in getattr(settings, "SCHEDULE_LEAVE_CODES", ("LV", "CTO")))
+    return {leave_code: (LV, LV_PENDING), cto_code: (CTO, CTO_PENDING)}
+
+
+def code_error(code, mark):
+    """Why `code` may not go on a day with `mark` (None when it may)."""
+    kinds = code_kinds().get(code.upper())
+    if kinds is None or mark in kinds:
+        return None
+    if mark is None:
+        return f"{code} needs a {'leave' if LV in kinds else 'CTO'} request for that day"
+    other = "leave" if mark in (LV, LV_PENDING) else "CTO"
+    return f"{code} is for {'leave' if LV in kinds else 'CTO'} days; that day has a {other} request"
 
 
 def shown(mark_map):

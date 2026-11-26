@@ -95,6 +95,11 @@ RECORD_RETENTION_YEARS = int(os.environ.get("BDH_HRIS_RECORD_RETENTION_YEARS", "
 # separately, in the CTOMultiplierRate table.
 CTO_FILING_DEADLINE_MONTH_DAY = (11, 30)  # last day to file a CTO claim for that year's work
 CTO_USAGE_CUTOFF_MONTH_DAY = (12, 15)  # each credit's use deadline: Dec 15 of its year (moves on carry-over)
+# Owner decision 2026-11-26 (CTO balance, Option B): approved CTO credit is usable from the day the
+# COH approves the claim. False = the earlier rule (the later of the 1st of the month after the
+# workday and the approval date). Year earned and the use deadline still follow the month after
+# the workday either way, so the year-end carry-over rules are unchanged.
+CTO_CREDIT_USABLE_AT_APPROVAL = True
 CTO_CARRYOVER_REASON_DEADLINE_MONTH_DAY = (12, 16)  # last day a carry-over reason can be submitted
 # Days the carry-over reminder job (cto_carryover_reminders) sends its lists.
 CTO_CARRYOVER_REMINDER_DATES = [(12, 1), (12, 10), (12, 16)]
@@ -268,7 +273,7 @@ CSRF_FAILURE_VIEW = "accounts.views.csrf_failure"
 # the month BEFORE the schedule month; HR can change it per schedule.
 SCHEDULE_CUTOFF_DAY = 20
 # Pilot Item 6: codes that mean "on leave / on CTO" on a duty schedule; allowed only on a day with a leave or CTO request.
-SCHEDULE_LEAVE_CODES = ("LV", "CTO")
+SCHEDULE_LEAVE_CODES = ("LV", "CTO")  # (code for a leave day, code for a CTO day): owner Decision 10, 2026-11-26
 
 # Out-on-Pass start date (owner decision 2026-11-24, Option B): before it the
 # module's menu items are hidden and its pages say "not yet in use"; Setup stays

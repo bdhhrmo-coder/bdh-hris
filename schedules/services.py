@@ -57,14 +57,14 @@ def add_row(schedule, employee, sort_order=None):
 @transaction.atomic
 def save_grid(schedule, values, refused=None):
     """values: {(row_id, date): shift_id or None}. Only while editable.
-    Item 6: the leave code (LV) goes only on a day with a leave or CTO request;
+    Item 6: LV goes only on a leave day and CTO only on a CTO day (pending or approved request);
     anywhere else the cell keeps its old value and the reason is added to
     `refused` (a list), when given."""
     if not schedule.is_editable:
         raise ValidationError("This schedule can no longer be edited.")
     from exchange.regular import locked_cells
 
-    from .leave_marks import leave_codes, marks
+    from .leave_marks import code_error, leave_codes, marks
 
     locked = locked_cells(schedule)  # days set by approved regular exchanges stay as they are
     codes = {c.pk: c for c in ShiftCode.objects.all()}
@@ -81,10 +81,10 @@ def save_grid(schedule, values, refused=None):
         if (cell.shift_id or None) != (new.pk if new else None):
             if new is not None and new.code.upper() in lv:
                 mark_map = marks(schedule) if mark_map is None else mark_map
-                if (cell.row.employee_id, cell.date) not in mark_map:
+                error = code_error(new.code, mark_map.get((cell.row.employee_id, cell.date)))
+                if error:
                     if refused is not None:
-                        refused.append(f"{cell.row.employee} on {cell.date:%b %d}: {new.code} needs a leave or CTO "
-                                       "request for that day (kept the old value)")
+                        refused.append(f"{cell.row.employee} on {cell.date:%b %d}: {error} (kept the old value)")
                     continue
             cell.shift = new
             changed.append(cell)
@@ -108,9 +108,13 @@ def submit(schedule, user):
     resubmit = schedule.status == S.RETURNED
     schedule.status = S.SUBMITTED
     schedule.save(update_fields=["status", "updated_at"])
-    log(schedule, "resubmit" if resubmit else "submit", user,
-        ("Flagged: " + " ".join(flags)) if flags else "")
-    _notify_next(schedule)
+    # Item 1 / audit fix F4: a resubmission after the cut-off is allowed but shown to HR.
+    late = ""
+    if resubmit and schedule.cutoff_date and timezone.localdate() > schedule.cutoff_date:
+        late = f"Resubmitted after cut-off ({schedule.cutoff_date:%b %d, %Y})."
+    notes = " ".join(x for x in (late, ("Flagged: " + " ".join(flags)) if flags else "") if x)
+    log(schedule, "resubmit" if resubmit else "submit", user, notes)
+    _notify_next(schedule, late)
     return flags
 
 
@@ -145,8 +149,23 @@ def _check_exchanges_before_submit(schedule, user):
         apply_all_to_new_draft(schedule, user)  # put back anything missing (e.g. a re-added row)
 
 
+def _oic_repeat(schedule, user, action, notes):
+    """Item 5 / audit fix F3: an OIC for the AO or COH who already acted on this schedule in this
+    cycle must type a remark to act again (owner Decision 1, 2026-11-26)."""
+    from leave.permissions import oic_repeat_guard
+
+    who = rules.STEPS.get(schedule.status, (None, None, None, None))[3]
+    step_role = {"Administrative Officer": RoleAssignment.ADMINISTRATIVE_OFFICER,
+                 "Chief of Hospital": RoleAssignment.CHIEF_OF_HOSPITAL}.get(who)
+    error, notes = oic_repeat_guard(getattr(user, "employee", None), schedule, step_role, notes, action=action)
+    if error:
+        raise ValidationError(error)
+    return notes
+
+
 @transaction.atomic
 def act(schedule, user, action, notes=""):
+    notes = _oic_repeat(schedule, user, action, notes)
     if action == "return":
         if not notes.strip():
             raise ValidationError("Type the reason for returning it, so the preparer knows what to fix.")
@@ -179,7 +198,7 @@ def act(schedule, user, action, notes=""):
         _notify_next(schedule)
 
 
-def _notify_next(schedule):
+def _notify_next(schedule, extra=""):
     who = rules.STEPS.get(schedule.status, (None, None, None, None))[3]
     people = {"HR": lambda: hr_employees(),
               "Administrative Officer": lambda: employees_with_role(RoleAssignment.ADMINISTRATIVE_OFFICER),
@@ -188,7 +207,8 @@ def _notify_next(schedule):
         return
     preparer = getattr(schedule.prepared_by, "employee", None)
     notify([p for p in people() if preparer is None or p.pk != preparer.pk],
-           f"Duty schedule for {schedule} is waiting for your action.", _url(schedule))
+           f"Duty schedule for {schedule} is waiting for your action." + (f" {extra}" if extra else ""),
+           _url(schedule))
 
 
 # -- after approval ------------------------------------------------------------------------

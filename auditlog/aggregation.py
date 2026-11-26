@@ -168,7 +168,7 @@ def _rows_from_schedule_events():
     rows = []
     for row in ScheduleAction.objects.select_related("schedule__section", "schedule__unit", "acted_by"):
         rows.append({
-            "timestamp": row.acted_at, "module": "Duty Schedule", "action": row.action,
+            "timestamp": row.acted_at, "module": "Duty Schedule", "action": row.action + _oic_flag(row.notes),
             "detail": f"{row.schedule}" + (f" — {row.notes}" if row.notes else ""),
             "actor": row.acted_by, "employee_ids": set(), "employee_display": "—",
         })
@@ -180,6 +180,25 @@ def _rows_from_schedule_events():
             "actor": ch.changed_by, "employee_ids": {ch.employee_id},
             "employee_display": ch.employee.full_name,
         })
+    return rows
+
+
+def _rows_from_carryover_reasons():
+    """CTO year-end carry-over reasons: who submitted each and how the COH (or an OIC) decided it
+    (audit fix F3, 2026-11-26, so an OIC deciding a reason they submitted is flagged)."""
+    from cto.models import CTOCarryOverReason
+
+    rows = []
+    for r in CTOCarryOverReason.objects.select_related("employee", "submitted_by__user", "decided_by__user"):
+        base = {"module": "CTO Carry-over", "employee_ids": {r.employee_id},
+                "employee_display": r.employee.full_name}
+        rows.append(dict(base, timestamp=r.submitted_at, action="submit reason",
+                         detail=f"{r.year} carry-over reason — {r.reason}", actor=r.submitted_by.user or r.submitted_by))
+        if r.decided_at:
+            rows.append(dict(base, timestamp=r.decided_at,
+                             action=("approve" if r.status == r.APPROVED else "reject") + _oic_flag(r.decision_note),
+                             detail=f"{r.year} carry-over reason" + (f" — {r.decision_note}" if r.decision_note else ""),
+                             actor=(r.decided_by.user or r.decided_by) if r.decided_by_id else None))
     return rows
 
 
@@ -364,6 +383,7 @@ def audit_rows(employee_id=None, module=None, date_from=None, date_to=None):
     rows += _rows_from_exchange_settings()
     rows += _rows_from_holidays_and_history()
     rows += _rows_from_performance()
+    rows += _rows_from_carryover_reasons()
     rows += _rows_from_oic_designations()
     from outonpass.models import MissedTapAction, OutOnPassAction
     rows += _rows_from_request_actions(OutOnPassAction.objects.all(), "Out-on-Pass", "out_on_pass")
@@ -396,6 +416,7 @@ MODULE_CHOICES = [
     "Documents",
     "Announcements",
     "Duty Schedule",
+    "CTO Carry-over",
     "OIC Designation",
     "Out-on-Pass",
     "Holidays",
