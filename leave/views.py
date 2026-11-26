@@ -21,6 +21,7 @@ from .models import LeaveApplication, LeaveApplicationAction, LeaveCreditTransac
 from .notifications import notify_status_change
 from .permissions import (
     can_act_ao_step,
+    oic_repeat_guard,
     can_act_coh_step,
     can_act_hr_step,
     UNIT_STEP,
@@ -283,6 +284,14 @@ def leave_action(request, pk):
     regular = application.route == A.ROUTE_REGULAR
     status = application.status
     filers = [application.employee]  # never acts on their own (owner decision 2026-10-26)
+    # Item 5: an OIC for the AO / COH who acted earlier on this request types a remark to act again.
+    from accounts.models import RoleAssignment as RA
+
+    step_role = {A.PROCESSED_BY_HR: RA.ADMINISTRATIVE_OFFICER, A.RECOMMENDED_BY_AO: RA.CHIEF_OF_HOSPITAL}.get(status)
+    oic_error, notes = oic_repeat_guard(acting_employee, application, step_role, notes)
+    if oic_error:
+        messages.error(request, oic_error)
+        return done()
 
     def apply_transition(new_status, action_name):
         application.status = new_status

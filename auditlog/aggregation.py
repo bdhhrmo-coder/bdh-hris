@@ -98,6 +98,13 @@ def _rows_from_employee_edit_history(qs):
     return rows
 
 
+def _oic_flag(notes):
+    """Item 5: an OIC acting again on a request they already acted on is flagged."""
+    from leave.permissions import OIC_REPEAT_TAG
+
+    return " (OIC, acted earlier)" if (notes or "").startswith(OIC_REPEAT_TAG) else ""
+
+
 def _rows_from_request_actions(qs, module_label, request_field):
     rows = []
     for row in qs.select_related(request_field, "acted_by"):
@@ -107,7 +114,7 @@ def _rows_from_request_actions(qs, module_label, request_field):
             {
                 "timestamp": row.acted_at,
                 "module": module_label,
-                "action": ACTION_LABELS.get(row.action, row.action),
+                "action": ACTION_LABELS.get(row.action, row.action) + _oic_flag(row.notes),
                 "detail": f"{request_obj} — {row.notes}" if row.notes else str(request_obj),
                 "actor": row.acted_by,
                 "employee_ids": {e.pk for e in employees},
@@ -187,8 +194,11 @@ def _rows_from_oic_designations():
         detail = (f"{ra.employee.full_name} as OIC, {ra.scope_label}, "
                   f"{ra.start_date or '—'} to {ra.end_date or 'open'}, for {ra.delegated_by.full_name if ra.delegated_by else '—'}")
         if ra.designated_by_hr_id:
-            detail += (f". Designated by HR Administrator {ra.designated_by_hr.full_name} on the approver's behalf. "
+            detail += (f". Entered by HR Administrator {ra.designated_by_hr.full_name} from a signed written "
+                       f"designation{' ref. no. ' + ra.designation_reference if ra.designation_reference else ''}. "
                        f"Reason: {ra.designation_reason}. Written instruction attached")
+        else:
+            detail += ". Designated by the approver in the system"
         actor = ra.created_by or (ra.delegated_by.user if ra.delegated_by else None)
         rows.append({
             "timestamp": ra.created_at, "module": "OIC Designation", "action": "designate (by HR)" if ra.designated_by_hr_id else "designate", "detail": detail,
@@ -214,7 +224,8 @@ def _rows_from_date_changes():
         elif row.notes:
             detail += f" - {row.notes}"
         rows.append({
-            "timestamp": row.acted_at, "module": "Date Change", "action": row.label, "detail": detail,
+            "timestamp": row.acted_at, "module": "Date Change", "action": row.label + _oic_flag(row.notes),
+            "detail": detail,
             "actor": row.acted_by, "employee_ids": {r.employee_id}, "employee_display": str(r.employee),
         })
     return rows

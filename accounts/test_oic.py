@@ -284,7 +284,8 @@ class HRDesignatesOICTests(TestCase):
         self.client.force_login(user.user)
         pdf = self.SimpleUploadedFile("memo.pdf", b"%PDF-1.4 test", content_type="application/pdf")
         data = {"scope": self.scope.pk, "oic": self.cand.pk, "start_date": self.today,
-                "end_date": self.today + timedelta(days=2), "reason": "On emergency leave", "instruction": pdf}
+                "end_date": self.today + timedelta(days=2), "reason": "On emergency leave", "instruction": pdf,
+                "reference": "OO-TEST-001"}
         data.update(over)
         return self.client.post(reverse("oic_hr_home"), data)
 

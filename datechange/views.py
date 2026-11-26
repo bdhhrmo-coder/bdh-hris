@@ -111,6 +111,15 @@ def change_action(request, pk):
     if action in ("return", "reject") and not notes:
         messages.error(request, RETURN_NEEDS_REMARK)
         return redirect("datechange:detail", pk=pk)
+    from accounts.models import RoleAssignment as RA
+    from leave.permissions import oic_repeat_guard
+
+    oic_error, notes = oic_repeat_guard(acting_employee, change, {
+        DC.PROCESSED_BY_HR: RA.ADMINISTRATIVE_OFFICER, DC.RECOMMENDED_BY_AO: RA.CHIEF_OF_HOSPITAL}.get(change.status),
+        notes)
+    if oic_error:  # Item 5
+        messages.error(request, oic_error)
+        return redirect("datechange:detail", pk=pk)
     if action == "reject" and not may_reject(change):
         raise PermissionDenied("HR may return a regular leave, not reject it.")
 

@@ -203,10 +203,19 @@ def claim_action(request, pk):
                     claim.status = RoutedRecord.CANCELLED
                     claim.save(update_fields=["status", "updated_at"])
                     claim.actions.create(action="cancel", acted_by=request.user)
-            elif action == "approve":
-                approve_claim(claim, employee, request.user, notes)
-            elif action == "return":
-                routing.return_record(claim, employee, request.user, notes)
+            elif action in ("approve", "return"):
+                from accounts.models import RoleAssignment as RA
+                from leave.permissions import oic_repeat_guard
+
+                oic_error, notes = oic_repeat_guard(employee, claim, {
+                    routing.STEP_AO: RA.ADMINISTRATIVE_OFFICER, routing.STEP_COH: RA.CHIEF_OF_HOSPITAL}.get(
+                    claim.current_step), notes)
+                if oic_error:  # Item 5
+                    raise ValidationError(oic_error)
+                if action == "approve":
+                    approve_claim(claim, employee, request.user, notes)
+                else:
+                    routing.return_record(claim, employee, request.user, notes)
             elif action == "correct_day_type":
                 line = get_object_or_404(CTOClaimLine, pk=request.POST.get("line"), claim=claim)
                 correct_day_type(line, request.POST.get("day_type"), notes, employee, request.user)
@@ -437,6 +446,15 @@ def cto_action(request, pk):
 
     status = application.status
     filers = [application.employee]  # never acts on their own (owner decision 2026-10-26)
+    from accounts.models import RoleAssignment as RA
+    from leave.permissions import oic_repeat_guard
+
+    oic_error, notes = oic_repeat_guard(acting_employee, application, {
+        CTOUsageApplication.PROCESSED_BY_HR: RA.ADMINISTRATIVE_OFFICER,
+        CTOUsageApplication.RECOMMENDED_BY_AO: RA.CHIEF_OF_HOSPITAL}.get(status), notes)
+    if oic_error:  # Item 5
+        messages.error(request, oic_error)
+        return redirect("cto:cto_queue")
     # (may act, step action, status it leads to) - next level up and two-level
     # endorsement from leave.permissions (owner decisions 2026-10-26/27).
     if status == CTOUsageApplication.SUBMITTED:

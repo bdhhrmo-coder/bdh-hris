@@ -33,7 +33,10 @@ def notify(employees, message, url=""):
             continue
         seen_ids.add(employee.pk)
         # message is a 255-char column; long remarks would fail on PostgreSQL.
-        to_create.append(Notification(recipient=employee, message=message[:255], url=url))
+        # Item 5: a notice for the AO / COH step sent to the OIC starts "As OIC for the AO: ".
+        prefix = getattr(employee, "oic_notice_prefix", "")
+        text = message if not prefix or message.startswith(prefix) else prefix + message
+        to_create.append(Notification(recipient=employee, message=text[:255], url=url))
 
     if to_create:
         Notification.objects.bulk_create(to_create)

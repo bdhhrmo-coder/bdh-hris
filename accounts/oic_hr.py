@@ -21,7 +21,7 @@ from employees.permissions import get_acting_employee
 from notifications.services import notify
 
 from .models import RoleAssignment as R
-from .oic import _cosp_in_area, _status, _supervisor_ids, oic_candidates
+from .oic import OIC_NOT_ALLOWED, _status, may_be_oic
 
 
 def can_hr_designate_oic(employee):
@@ -43,6 +43,10 @@ class HROICForm(forms.Form):
     oic = forms.ModelChoiceField(queryset=R.objects.none(), label="Officer-in-Charge")
     start_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     end_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    reference = forms.CharField(
+        max_length=100, label="Reference no. of the signed designation",
+        help_text="The number of the signed Office Order, memo or designation (required).",
+    )
     reason = forms.CharField(
         widget=forms.Textarea(attrs={"rows": 3}), label="Why the approver cannot designate",
         help_text="For example: on emergency leave, unreachable, hospitalised.",
@@ -67,6 +71,8 @@ class HROICForm(forms.Form):
     def clean(self):
         cleaned = super().clean()
         scope, oic = cleaned.get("scope"), cleaned.get("oic")
+        if "reference" in cleaned and not cleaned["reference"].strip():
+            self.add_error("reference", "Type the reference number of the signed designation.")
         start, end = cleaned.get("start_date"), cleaned.get("end_date")
         if start and start < timezone.localdate():
             self.add_error("start_date", "The start date cannot be in the past.")
@@ -76,10 +82,8 @@ class HROICForm(forms.Form):
             delegator = scope.employee
             if oic.pk == delegator.pk:
                 self.add_error("oic", "The approver cannot be their own OIC.")
-            elif not oic_candidates(delegator).filter(pk=oic.pk).exists():
-                self.add_error("oic", "This person cannot be OIC for this area. Only a Supervisor, or a COSP "
-                                      "employee of that unit (or of a section without units), can be OIC, "
-                                      "and never for the Chief Nurse, the AO or the COH as COSP.")
+            elif not may_be_oic(oic, scope):
+                self.add_error("oic", OIC_NOT_ALLOWED)
         if start and end and scope:
             overlap = R.objects.filter(
                 is_oic=True, is_active=True, delegated_by=scope.employee, role=scope.role,
@@ -110,6 +114,7 @@ def oic_hr_home(request):
                 employee=d["oic"], role=scope.role, section=scope.section, unit=scope.unit, is_oic=True,
                 delegated_by=scope.employee, start_date=d["start_date"], end_date=d["end_date"],
                 created_by=request.user, designated_by_hr=acting, designation_reason=d["reason"].strip(),
+                designation_reference=d["reference"].strip(),
                 instruction=d["instruction"], instruction_name=d["instruction"].name[:255],
             )
             ra.full_clean()

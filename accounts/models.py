@@ -102,6 +102,8 @@ class RoleAssignment(models.Model):
         help_text="HR Administrator who designated this OIC on the approver's behalf.",
     )
     designation_reason = models.TextField(blank=True)
+    # Pilot Item 5 (owner decision 2026-11-24): the signed written designation's reference number.
+    designation_reference = models.CharField("Reference no. of the signed designation", max_length=100, blank=True)
     instruction = models.FileField(upload_to=_instruction_path, max_length=300, blank=True)
     instruction_name = models.CharField(max_length=255, blank=True)
 
