@@ -14,22 +14,23 @@
 </form>
 {% elif step == "conflict" %}
 <form method="post" class="card">{% csrf_token %}<input type="hidden" name="what" value="conflict">
-  <p><strong>Do any of these apply?</strong> Family relationship · an open administrative case between you · a reporting line that makes this rating inappropriate.</p>
+  <p><strong>Do any of these apply?</strong> Family relationship · open administrative case between you · a reporting line that makes this rating inappropriate.</p>
   <div class="btn-row"><button name="answer" value="none">None apply</button><button name="answer" value="applies" class="btn-secondary">Applies</button></div>
   <p class="field-help">"Applies" closes this form and alerts HR. You are not asked which one.</p>
 </form>
 {% elif step == "orientation" %}
 <form method="post" class="card">{% csrf_token %}<input type="hidden" name="what" value="orientation">
   <h2 class="mt-0">Before you rate — four things to keep in mind</h2>
-  <ol><li><strong>Rate each item on its own.</strong> Don't let one good or bad trait color every answer.</li>
+  <ol><li><strong>Rate each item on its own.</strong> Don't let one good or bad trait color every answer. Avoid rating everyone high, or everyone low.</li>
     <li><strong>Think about the whole period,</strong> not just the last few weeks.</li>
     <li><strong>Rate what you saw them do.</strong> Friendship, a grudge, or getting even has no place here.</li>
-    <li><strong>Didn't see it? Choose N/O.</strong> That is an honest answer, not a bad one.</li></ol>
+    <li><strong>Didn't see it? Choose N/O.</strong> If you haven't worked with them closely enough, say so. That is an honest answer, not a bad one.</li></ol>
   <p>Your ratings are <strong>confidential, not anonymous.</strong> HR keeps a record of who rated whom so the process can be checked. Results are shown only as group averages of at least 3 people. Ratings are used for feedback, for awards, and as <em>supplementary</em> input to personnel decisions, never as the only basis for one.</p>
   <button type="submit">I understand — start rating</button>
 </form>
 {% else %}
-<form method="post">{% csrf_token %}
+<form method="post" hx-post="{% url 'performance:rate_autosave' a.pk %}" hx-trigger="change delay:400ms" hx-target="#autosave" hx-swap="innerHTML">{% csrf_token %}
+  {% if a.group == "SUBORDINATE" %}<p class="card">Some items describe work you may not see day to day. <strong>If you haven't seen this, choose N/O.</strong></p>{% endif %}
   {% for comp, items in groups %}
   <fieldset class="card"><legend><strong>{{ comp.name }}</strong></legend>
     {% for ind, text, ans in items %}
@@ -51,6 +52,7 @@
     <p class="field-help">Describe what you saw them do. Avoid personal remarks. HR screens comments before release.</p>
   </fieldset>
   {% endif %}
+  <p class="field-help" id="autosave" aria-live="polite">Your answers are saved as you go.</p>
   <div class="btn-row"><button name="what" value="submit" data-confirm="Submit? The form is locked after this.">Submit</button><button name="what" value="save" class="btn-secondary" formnovalidate>Save and finish later</button></div>
 </form>
 {% endif %}

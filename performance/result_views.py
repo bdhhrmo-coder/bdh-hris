@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from . import deductions, raters, results, rules, scoring
-from .models import Contest, EvaluationPeriod as P
+from .models import Contest, EvaluationPeriod as P, RaterAssignment as A
 from .views import _acting, _date, _run
 
 SHOWN = [P.RELEASED, P.DISPUTED, P.FINAL]
@@ -29,12 +29,24 @@ def my_results(request):
     acting = _acting(request)
     results.finalize_due()
     mine = P.objects.filter(employee=acting, status__in=SHOWN)
-    team = [p for p in P.objects.filter(status__in=SHOWN).select_related("employee")
-            if results.is_conference_supervisor(acting, p)]
+    from datetime import timedelta
+
     from . import monitoring
 
-    return render(request, "performance/my_results.html", {"mine": mine, "team": team, "show": scoring.show,
-                                                           "team_average": monitoring.team_average(acting)})
+    # Team view (v1.1 §7.4; gap 12): every current or recent period of my staff, with where it stands.
+    since = timezone.localdate() - timedelta(days=400)
+    team = []
+    for p in (P.objects.exclude(status__in=[P.PLANNED, P.CANCELLED]).filter(end_date__gte=since)
+              .select_related("employee").order_by("employee__surname", "-end_date")):
+        if not results.is_conference_supervisor(acting, p):
+            continue
+        my_form = p.raters.filter(rater=acting, group=A.SUPERVISOR).first()
+        self_form = p.raters.filter(group=A.SELF).first()
+        team.append({"p": p, "shown": p.status in SHOWN, "my_form": my_form, "self_form": self_form,
+                     "plan": getattr(p, "dev_plan", None)})
+    return render(request, "performance/my_results.html", {
+        "mine": mine, "team": team, "show": scoring.show, "team_average": monitoring.team_average(acting),
+        "given": monitoring.my_given(acting)})
 
 
 @login_required
@@ -60,11 +72,15 @@ def result_detail(request, pk):
     ctx = {"period": period, "components": period.components.all(), "show": scoring.show,
            "total": scoring.show(total), "description": desc, "description_text": scoring.DESCRIPTIONS.get(desc, ""),
            "deductions": deductions.period_deductions(period)[0], "late": deductions.late_notes(period),
+           "elsewhere": deductions.elsewhere_notes(period),
            "cap": rules.num("deduction_cap", period), "report": results.report(period),
            "is_employee": acting.pk == period.employee_id,
            "is_supervisor": results.is_conference_supervisor(acting, period),
            "contest_until": results.contest_deadline(period) if period.released_at else None,
            "today": timezone.localdate(), "plan_shown": False}
+    from .score_sheet import may_print
+
+    ctx["may_print"] = may_print(acting, period)
     plan = getattr(period, "dev_plan", None)
     if plan is not None and (not ctx["is_employee"] or plan.sent_at or plan.status != "DRAFT"):
         ctx["plan_shown"], ctx["plan"] = True, plan
@@ -126,3 +142,18 @@ def waiting_count(acting):
              if results.contest_actor_ok(acting, c))
     n += len([1 for _, what in deductions.waiting_for(acting) if what != "Explain"])
     return n
+
+
+@login_required
+def score_sheet(request, pk):
+    """Printable TPE score sheet (v1.1 §5.5)."""
+    from printouts.http import pdf_response
+
+    from . import score_sheet as sheet
+
+    acting = _acting(request)
+    period = get_object_or_404(P.objects.select_related("employee"), pk=pk)
+    if not sheet.may_print(acting, period):
+        raise PermissionDenied("This score sheet cannot be printed.")
+    return pdf_response(request, lambda: sheet.render_pdf(period, printed_by=request.user),
+                        f"TPE-Score-Sheet_{period.employee.surname}_{period.pk}.pdf", "performance:my_results")

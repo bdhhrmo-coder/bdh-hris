@@ -12,7 +12,7 @@ SETTINGS = {
     "w_rank_perf": "50", "w_rank_sup": "30", "w_rank_peer": "10", "w_rank_att": "10",
     "w_sup_obj": "40", "w_sup_top": "20", "w_sup_sub": "30", "w_sup_peer": "10",
     # attendance and deductions
-    "absence_points": "15", "tardy_points": "3", "deduction_cap": "15", "undertime_counts": "0",
+    "absence_points": "15", "tardy_points": "3", "deduction_cap": "15",
     # fairness (decision 3)
     "min_confidential_n": "3", "trim_threshold": "0", "outlier_gap": "1.5", "max_no_share": "0.5",
     "peer_cap": "4", "peers_per_ratee": "3", "peer_proposals": "5", "contact_share": "0.5",
@@ -21,6 +21,7 @@ SETTINGS = {
     "dispute_days": "5", "explanation_days": "5", "deduction_review_days": "5", "cosp_rating_days": "5",
     # periods (decision 5)
     "pre_expiry_days": "60", "pre_expiry_replace_days": "30", "regular_track_enabled": "0",
+    "cosp_open_days_before_end": "5",
     # performance description bands (2026-11-24)
     "band_exemplary": "90", "band_strong": "80", "band_solid": "70", "band_developing": "60",
     # development plans (step 6) and missed check-ins (D11, 2026-11-26)
@@ -37,7 +38,7 @@ SETTING_LABELS = {
     "w_sup_obj": "Supervisor weight: Objective performance", "w_sup_top": "Supervisor weight: Top management",
     "w_sup_sub": "Supervisor weight: Subordinates", "w_sup_peer": "Supervisor weight: Peers",
     "absence_points": "Points off attendance per unauthorized absence", "tardy_points": "Points off per tardy day",
-    "deduction_cap": "Deduction cap per period", "undertime_counts": "Undertime lowers attendance (1 = yes)",
+    "deduction_cap": "Deduction cap per period",
     "min_confidential_n": "Minimum raters for a confidential group", "trim_threshold":
     "Trim highest and lowest from this many raters (0 = never)", "outlier_gap": "Outlier gap (points)",
     "max_no_share": "Most N/O allowed on a form (share)", "peer_cap": "Most peer forms per rater per window",
@@ -48,6 +49,7 @@ SETTING_LABELS = {
     "COSP forms due after the period ends (working days)", "pre_expiry_days": "Pre-expiry period: days before the contract ends",
     "pre_expiry_replace_days": "A COSP period ending this close to pre-expiry is replaced by it (days)",
     "regular_track_enabled": "Regular employees included (1 = yes; waits for CSC FO and PHRMO)",
+    "cosp_open_days_before_end": "COSP periods open this many days before they end (daily job)",
     "band_exemplary": "Exemplary from", "band_strong": "Strong from", "band_solid": "Solid from",
     "band_developing": "Developing from", "dev_commitments": "Commitments per development plan",
     "dev_checkins_min": "Fewest check-in dates", "dev_checkins_max": "Most check-in dates",

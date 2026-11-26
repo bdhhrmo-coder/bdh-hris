@@ -65,7 +65,9 @@ def plan(request, pk):
             _run(request, lambda: dp.close(acting, request.user, the_plan, request.POST.get("note")), "Plan closed.")
         return redirect("performance:plan", pk=pk)
     editing = dp.can_start(acting, period) and (the_plan is None or dp.can_edit(acting, the_plan))
-    pre = {"strengths": the_plan.strengths, "growth_areas": the_plan.growth_areas} if the_plan else dp.prefill(period)
+    pre = dp.prefill(period)
+    if the_plan:
+        pre.update(strengths=the_plan.strengths, growth_areas=the_plan.growth_areas)
     goals = list(the_plan.goals.all()) if the_plan else []
     form_goals = [{"i": i, "g": goals[i - 1] if i <= len(goals) else None} for i in range(1, need + 1)]
     dates = sorted({c.planned_on for g in goals for c in g.checkins.all()})

@@ -245,31 +245,87 @@ def cosp_plan(contract):
 
 @transaction.atomic
 def plan_cosp_periods(acting, user, contract):
+    """HR may plan a contract's periods at once; otherwise the daily job does it."""
     if not is_hr(acting):
         raise ValidationError("Only HR plans COSP periods.")
-    emp = contract.employee
-    track = track_for(emp, contract.start_date)
-    if track is None:
+    if track_for(contract.employee, contract.start_date) is None:
         raise ValidationError("This employee is not evaluated.")
-    made = 0
-    for kind, start, end in cosp_plan(contract):
-        _, created = P.objects.get_or_create(employee=emp, contract=contract, period_type=kind, start_date=start,
-                                             defaults=dict(track=track, end_date=end, status=P.PLANNED))
-        made += created
-    return made
+    return _plan(contract, user)
 
 
 @transaction.atomic
 def open_planned(acting, user, period):
-    from . import raters
-
+    """HR may open a planned period early; otherwise the daily job opens it."""
     if not is_hr(acting):
         raise ValidationError("Only HR opens COSP periods.")
     if acting.pk == period.employee_id:
         raise ValidationError("You cannot open your own period.")
     if period.status != P.PLANNED:
         raise ValidationError("Only a planned period can be opened.")
+    _open(period, user)
+
+
+# -- automatic COSP periods (decision 1, owner 2026-11-26, Option B) ----------------------------
+
+def _plan(contract, user=None):
+    """Creates the contract's planned periods that have not ended yet."""
+    emp = contract.employee
+    track = track_for(emp, contract.start_date)
+    if track is None:
+        return 0
+    today, made = timezone.localdate(), 0
+    for kind, start, end in cosp_plan(contract):
+        if end < today:
+            continue  # never back-filled: a period that already ended is not created by the job
+        period, created = P.objects.get_or_create(employee=emp, contract=contract, period_type=kind, start_date=start,
+                                                  defaults=dict(track=track, end_date=end, status=P.PLANNED))
+        if created:
+            log(period, "planned", user, "planned from the contract")
+            made += 1
+    return made
+
+
+def _open(period, user=None):
+    from . import raters
+
     period.status = P.OPEN
     period.save(update_fields=["status"])
-    log(period, "opened", user)
+    log(period, "opened", user, "" if user else "opened by the daily job")
     raters.build_assignments(period, user)
+
+
+def auto_cosp_periods(today=None):
+    """Daily job: plan the periods of every live COSP contract, and open each
+    planned period `cosp_open_days_before_end` days before it ends (raters are
+    assigned and told then; forms are due `cosp_rating_days` working days after
+    the end). HR may plan or open earlier by hand, or cancel with a reason."""
+    from outonpass.models import CospContractPeriod
+
+    today = today or timezone.localdate()
+    planned = opened = 0
+    for c in CospContractPeriod.objects.filter(voided_at__isnull=True, end_date__gte=today).select_related("employee"):
+        emp = c.employee
+        if is_cosp(emp) and emp.is_active and emp.archived_at is None:
+            planned += _plan(c)
+    for p in P.objects.filter(status=P.PLANNED).select_related("employee"):
+        lead = timedelta(days=int(number_for("cosp_open_days_before_end", p.end_date)))
+        if today >= p.end_date - lead and p.employee.is_active and p.employee.archived_at is None:
+            _open(p)
+            opened += 1
+    return planned, opened
+
+
+@transaction.atomic
+def cancel_period(acting, user, period, reason):
+    from .models import RaterAssignment as A
+
+    if not is_hr_admin(acting) or acting.pk == period.employee_id:
+        raise ValidationError("An HR Administrator cancels a period (never their own).")
+    if period.status not in (P.PLANNED, P.OPEN):
+        raise ValidationError("Only a planned or open period can be cancelled.")
+    if not (reason or "").strip():
+        raise ValidationError("Type the reason.")
+    period.raters.filter(status__in=A.LIVE | {A.PROPOSED}).update(status=A.VOID)
+    period.status = P.CANCELLED
+    period.save(update_fields=["status"])
+    log(period, "cancelled", user, reason.strip())

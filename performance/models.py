@@ -187,6 +187,9 @@ class RaterAssignment(models.Model):
     nominated = models.BooleanField(default=False)
     status = models.CharField(max_length=12, choices=STATUSES, default=ASSIGNED)
     contact_ok = models.BooleanField(null=True)
+    conflict_cleared = models.BooleanField(default=False, help_text="The rater answered 'None apply'.")
+    history_note = models.CharField(max_length=255, blank=True,
+                                    help_text="What the assignment history shows about the working contact (N4).")
     due_on = models.DateField(null=True, blank=True)
     first_shown_at = models.DateTimeField(null=True, blank=True)
     submitted_at = models.DateTimeField(null=True, blank=True)
@@ -333,6 +336,12 @@ class Deduction(models.Model):
     review_due = models.DateField(null=True, blank=True)
     review_grounds = models.TextField(blank=True)
     final_at = models.DateTimeField(null=True, blank=True)
+    # Decision 3 (2026-11-26, Option B): a Final deduction counts in one period only, the
+    # earliest unreleased period covering its date; it is claimed when that period is computed.
+    period = models.ForeignKey("EvaluationPeriod", on_delete=models.SET_NULL, null=True, blank=True,
+                               related_name="claimed_deductions")
+    # v1.1 §5.4: R7 resting on absences already counted under Attendance is not deducted again.
+    in_attendance = models.BooleanField("Rests on absences already counted under Attendance", default=False)
 
     class Meta:
         ordering = ["-filed_at"]

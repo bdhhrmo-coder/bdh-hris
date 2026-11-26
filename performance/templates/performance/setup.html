@@ -25,9 +25,9 @@
   <h2 class="mt-0">Form A wording</h2>
   <p class="muted">Staff of these sections get the clinical wording by default: {% for c in clinical %}{{ c.section }}{% if not forloop.last %}, {% endif %}{% endfor %}. Everyone else gets the non-clinical wording. Exceptions:</p>
   <ul>{% for o in overrides %}<li>{{ o.employee.full_name }}: {{ o.get_track_display }} — {{ o.reason }}</li>{% empty %}<li class="empty-note">None.</li>{% endfor %}</ul>
-  {% if is_admin %}<form method="post" class="row-actions">{% csrf_token %}<input type="hidden" name="what" value="wording">
+  <form method="post" class="row-actions">{% csrf_token %}<input type="hidden" name="what" value="wording">
     <select name="employee" aria-label="Employee">{% for e in employees %}<option value="{{ e.pk }}">{{ e.full_name }}</option>{% endfor %}</select>
     <select name="track" aria-label="Wording"><option value="1">Clinical</option><option value="2">Non-clinical</option><option value="">Section default</option></select>
-    <input type="text" name="reason" placeholder="Reason" aria-label="Reason"><button type="submit" class="btn-secondary">Set</button></form>{% endif %}
+    <input type="text" name="reason" placeholder="Reason" aria-label="Reason"><button type="submit" class="btn-secondary">Set</button></form>
 </div>
 {% endblock %}

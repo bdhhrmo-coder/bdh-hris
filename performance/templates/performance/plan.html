@@ -10,29 +10,30 @@
 <form method="post" class="card">{% csrf_token %}
   {% if not period.conference_on %}<p class="text-danger">Record the feedback conference on the result page before sending the plan. You can save a draft now.</p>{% endif %}
   {% if problems %}<p class="field-help">Still needed before sending: {{ problems|join:" " }}</p>{% endif %}
-  <label>Strengths to leverage<textarea name="strengths" rows="2">{{ pre.strengths }}</textarea></label>
-  <label>Priority growth areas<textarea name="growth_areas" rows="2">{{ pre.growth_areas }}</textarea></label>
+  <label>Strengths to leverage<textarea name="strengths" rows="3">{{ pre.strengths }}</textarea></label>
+  <label>Priority growth areas<textarea name="growth_areas" rows="3">{{ pre.growth_areas }}</textarea></label>
+  {% if pre.support %}<p class="card"><strong>Support the employee asked for</strong> (self-assessment): {{ pre.support }}</p>{% endif %}
   {% for row in form_goals %}<fieldset class="card"><legend><strong>Commitment {{ row.i }}</strong> <span class="muted">(specific action, how it is measured, by when)</span></legend>
     <label>Commitment<textarea name="commitment_{{ row.i }}" rows="2">{{ row.g.commitment }}</textarea></label>
     <div class="grid-2"><label>Intervention<select name="intervention_type_{{ row.i }}"><option value="">—</option>{% for v, l in interventions %}<option value="{{ v }}" {% if row.g.intervention_type == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
       <label>Responsible<select name="responsible_{{ row.i }}"><option value="">—</option>{% for v, l in responsibles %}<option value="{{ v }}" {% if row.g.responsible == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></label></div>
-    <label>Intervention details (optional)<input type="text" name="intervention_{{ row.i }}" maxlength="200" value="{{ row.g.intervention }}"></label>
+    <label>Intervention details (optional)<input type="text" name="intervention_{{ row.i }}" maxlength="200" value="{% if row.g %}{{ row.g.intervention }}{% elif row.i == 1 %}{{ pre.support|truncatechars:200 }}{% endif %}"></label>
     <div class="grid-2"><label>Target date<input type="date" name="target_date_{{ row.i }}" min="{{ today|date:'Y-m-d' }}" value="{{ row.g.target_date|date:'Y-m-d' }}"></label>
       <label>Training Request (BDH-ADM-AO-01F54) ref. no.<input type="text" name="training_request_ref_{{ row.i }}" maxlength="80" value="{{ row.g.training_request_ref }}"></label></div></fieldset>{% endfor %}
   <div class="grid-2">{% for d in date_slots %}<label>Check-in date {{ forloop.counter }}{% if forloop.counter > low %} (optional){% endif %}<input type="date" name="checkin_{{ forloop.counter }}" min="{{ today|date:'Y-m-d' }}" value="{{ d|date:'Y-m-d' }}"></label>{% endfor %}</div>
   <div class="btn-row"><button name="what" value="send" data-confirm="Send this plan to the employee for agreement?">Save and send to the employee</button><button name="what" value="draft" class="btn-secondary">Save draft</button></div>
 </form>
 {% elif plan %}
-<div class="card"><p><strong>Strengths to leverage:</strong> {{ plan.strengths|default:"—" }}</p><p><strong>Priority growth areas:</strong> {{ plan.growth_areas|default:"—" }}</p>
+<div class="card"><p><strong>Strengths to leverage:</strong><br>{{ plan.strengths|default:"—"|linebreaksbr }}</p><p><strong>Priority growth areas:</strong><br>{{ plan.growth_areas|default:"—"|linebreaksbr }}</p>
   {% for g in goals %}<div class="card"><h3 class="mt-0">Commitment {{ g.seq }}</h3><p>{{ g.commitment|linebreaksbr }}</p><p class="muted">{{ g.get_intervention_type_display }}{% if g.intervention %}: {{ g.intervention }}{% endif %} · Responsible: {{ g.get_responsible_display }} · Target {{ g.target_date|date:"M j, Y" }}{% if g.intervention_type == "TRAINING" %} · F54: {{ g.training_request_ref|default:"not yet filed" }}{% endif %}</p>{% if g.evidence %}<p><strong>Evidence of improvement:</strong> {{ g.evidence }}</p>{% endif %}</div>{% endfor %}
   {% if plan.status == "CLOSED" %}<p><strong>Closed</strong> {{ plan.closed_at|date:"M j, Y" }}.{% if plan.close_note %} {{ plan.close_note }}{% endif %}</p>{% endif %}</div>
 {% if is_employee and plan.status == "DRAFT" and plan.sent_at %}<form method="post" class="card" x-data="{ n: '' }">{% csrf_token %}<h2 class="mt-0">Your answer</h2><label>Note (required only to ask for changes)<textarea name="note" rows="2" x-model="n"></textarea></label><div class="btn-row"><button name="what" value="agree">I agree with this plan</button><button name="what" value="changes" class="btn-secondary" :disabled="!n.trim()">Ask for changes</button></div></form>{% endif %}
 {% if checkins %}<div class="card"><h2 class="mt-0">Check-ins</h2>
-  {% for c in checkins %}<h3>{{ c.date|date:"M j, Y" }}{% if c.auto_missed %} <span class="text-danger">(marked missed by the system)</span>{% elif c.planned and c.date < today %} <span class="text-warning">(overdue)</span>{% endif %}</h3>
+  {% for c in checkins %}<h3>{{ c.date|date:"M j, Y" }}{% if c.auto_missed %} <span class="text-danger">(marked missed by the system)</span>{% elif c.planned and c.date < today %} <span class="text-warning">(overdue)</span>{% elif c.planned and c.date > today %} <span class="muted">(coming)</span>{% endif %}</h3>
   {% if is_supervisor and plan.status == "AGREED" and c.planned or is_supervisor and plan.status == "AGREED" and c.auto_missed %}
   <form method="post" x-data="{ o: 'held' }">{% csrf_token %}<input type="hidden" name="what" value="checkin"><input type="hidden" name="planned_on" value="{{ c.date|date:'Y-m-d' }}">
     <div class="btn-row"><label><input type="radio" name="outcome" value="held" x-model="o"> Held</label>{% if not c.auto_missed %}<label><input type="radio" name="outcome" value="missed" x-model="o"> Missed</label>{% endif %}</div>
-    <label x-show="o === 'held'">Held on<input type="date" name="held_on" max="{{ today|date:'Y-m-d' }}" value="{{ today|date:'Y-m-d' }}"></label>
+    <label x-show="o === 'held'">Held on<input type="date" name="held_on" max="{{ today|date:'Y-m-d' }}" value="{% if c.date <= today %}{{ c.date|date:'Y-m-d' }}{% endif %}"></label>
     {% for r in c.rows %}<fieldset><legend>Commitment {{ r.goal.seq }}</legend><label>Note<textarea name="note_{{ r.goal.seq }}" rows="2"></textarea></label><label x-show="o === 'held'">Evidence of improvement<textarea name="evidence_{{ r.goal.seq }}" rows="2">{{ r.goal.evidence }}</textarea></label></fieldset>{% endfor %}
     <button type="submit">Record check-in{% if c.auto_missed %} (late){% endif %}</button></form>
   {% else %}<ul>{% for r in c.rows %}<li>Commitment {{ r.goal.seq }}: <strong>{{ r.get_status_display }}</strong>{% if r.late %} (late){% endif %}{% if r.held_on %} {{ r.held_on|date:"M j, Y" }}{% endif %}{% if r.note %} — {{ r.note }}{% endif %}</li>{% endfor %}</ul>{% endif %}

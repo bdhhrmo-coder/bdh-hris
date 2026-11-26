@@ -25,7 +25,8 @@ def _date(raw):
 @login_required
 def holidays(request):
     acting = get_acting_employee(request.user)
-    if not H.is_hr_admin(acting):
+    can_edit = H.is_hr_admin(acting)  # v1.1 §7.1: everyone views, the HR Administrator keeps it
+    if request.method == "POST" and not can_edit:
         raise PermissionDenied("The holiday list is kept by the HR Administrator.")
     try:
         year = int(request.GET.get("year") or date.today().year)
@@ -46,9 +47,12 @@ def holidays(request):
             messages.error(request, " ".join(exc.messages))
         return redirect(f"{request.path}?year={year}")
     rows = Holiday.objects.filter(date__year=year).select_related("created_by__employee", "voided_by__employee")
+    if not can_edit:
+        rows = rows.filter(voided_at__isnull=True)
     return render(request, "employees/holidays.html", {
         "rows": rows, "year": year, "years": range(date.today().year - 1, date.today().year + 3),
-        "kinds": Holiday.KIND_CHOICES, "next_year_empty": not year_has_holidays(date.today().year + 1)})
+        "kinds": Holiday.KIND_CHOICES, "next_year_empty": not year_has_holidays(date.today().year + 1),
+        "can_edit": can_edit})
 
 
 @login_required
@@ -99,11 +103,25 @@ def assignments(request):
         "types": PersonnelActionType.objects.all()})
 
 
+def may_view_history(acting, employee):
+    """v1.1 §7.1: the employee (own), their supervisor (own staff), HR, the AO and the COH."""
+    from accounts.models import RoleAssignment as R
+    from leave.permissions import endorsers_for
+
+    if acting is None:
+        return False
+    if acting.pk == employee.pk or H.is_hr(acting):
+        return True
+    if acting.has_role(R.ADMINISTRATIVE_OFFICER, viewing=True) or acting.has_role(R.CHIEF_OF_HOSPITAL, viewing=True):
+        return True
+    return acting in endorsers_for([employee])
+
+
 @login_required
 def employee_assignments(request, pk):
     acting = get_acting_employee(request.user)
     employee = get_object_or_404(Employee, pk=pk)
-    if not (H.is_hr(acting) or (acting is not None and acting.pk == employee.pk)):
+    if not may_view_history(acting, employee):
         raise PermissionDenied("You may see only your own assignment history.")
     can_edit = H.is_hr(acting) and acting.pk != employee.pk
     if request.method == "POST":

@@ -86,6 +86,98 @@ def hr_admins(exclude=None):
     return [e for e in employees_with_role(R.HR_ADMINISTRATOR) if exclude is None or e.pk != exclude.pk]
 
 
+# -- assignment history (N4; gap 3, 2026-11-26) ------------------------------------------------
+#
+# Who rates is still decided by the shared approver lookup above. The history
+# is the check v1.1 §2 and §7.3 ask for: did the employee work in an area the
+# supervisor covered (by the supervisor's own role line) for at least the
+# contact share of the period? Subordinates below it are left off the list
+# (with a note for HR); a supervisor below it is kept but flagged for HR, who
+# may replace them. An opening line ("as of" go-live) means "there since at
+# least then", so it counts from the start of the period.
+
+def _days(start, end):
+    from datetime import timedelta
+
+    out, day = set(), start
+    while day <= end:
+        out.add(day)
+        day += timedelta(days=1)
+    return out
+
+
+def _covers(role, line):
+    if role.role in (R.ADMINISTRATIVE_OFFICER, R.CHIEF_OF_HOSPITAL):
+        return True  # hospital-wide
+    if role.unit_id:
+        return line.unit_id == role.unit_id
+    return role.section_id is not None and line.section_id == role.section_id
+
+
+def history_share(emp, sup, start, end):
+    """Share (0 to 1) of [start, end] the verified history puts `emp` in an area
+    `sup` covered, or None when `emp` has no assignment history yet."""
+    from employees.history import has_lines
+    from employees.models import AssignmentLine as L
+
+    if not has_lines(emp):
+        return None
+    lines = list(L.objects.filter(employee=emp, status=L.VERIFIED, effective_from__lte=end)
+                 .filter(Q(effective_to__isnull=True) | Q(effective_to__gte=start)))
+    roles = list(sup.role_assignments.filter(is_active=True, is_oic=False, role__in=[
+        R.SUPERVISOR, R.ADMINISTRATIVE_OFFICER, R.CHIEF_OF_HOSPITAL]))
+    covered = set()
+    for line in lines:
+        l_from = start if line.is_opening else max(start, line.effective_from)
+        l_to = min(end, line.effective_to or end)
+        for role in roles:
+            if not _covers(role, line):
+                continue
+            r_from, r_to = max(l_from, role.start_date or l_from), min(l_to, role.end_date or l_to)
+            if r_from <= r_to:
+                covered |= _days(r_from, r_to)
+    total = (end - start).days + 1
+    return len(covered) / total if total > 0 else 0
+
+
+def history_check(emp, sup, period):
+    """(passes, note) for the contact-share test against the history."""
+    share = history_share(emp, sup, period.start_date, period.end_date)
+    need = float(rules.num("contact_share", period))
+    if share is None:
+        return True, "no assignment history yet; the contact question is the check"
+    pct = round(share * 100)
+    if share + 1e-9 >= need:
+        return True, f"history: {pct}% of the period"
+    return False, f"history: only {pct}% of the period (needs {round(need * 100)}%); HR to check"
+
+
+def history_suggestions(period):
+    """Former reports of a supervisor-track ratee that the history shows for
+    at least the contact share, but who are not on the list (HR may add them)."""
+    from employees.models import AssignmentLine as L, Employee
+
+    if period.track != P.SUPERVISOR:
+        return []
+    sup = period.employee
+    on_list = set(period.raters.values_list("rater_id", flat=True))
+    roles = list(sup.role_assignments.filter(is_active=True, is_oic=False, role=R.SUPERVISOR))
+    ids = set()
+    for role in roles:
+        qs = L.objects.filter(status=L.VERIFIED, effective_from__lte=period.end_date).filter(
+            Q(effective_to__isnull=True) | Q(effective_to__gte=period.start_date))
+        qs = qs.filter(unit=role.unit) if role.unit_id else qs.filter(section=role.section)
+        ids |= set(qs.values_list("employee_id", flat=True))
+    out = []
+    for e in Employee.objects.filter(pk__in=ids - on_list - {sup.pk}, is_active=True):
+        if R.objects.filter(employee=e, role=R.SUPERVISOR, is_oic=False, is_active=True).exists():
+            continue  # fellow heads are supervisor peers, not subordinates
+        ok, note = history_check(e, sup, period)
+        if ok and "no assignment history" not in note:
+            out.append((e, note))
+    return out
+
+
 # -- building the list ---------------------------------------------------------------------
 
 def due_date(period):
@@ -109,13 +201,20 @@ def build_assignments(period, user):
     _add(period, emp, A.SELF, "C", "1")
     if period.track == P.RANK:
         for s in immediate_supervisors(emp, day):
-            _add(period, s, A.SUPERVISOR, "A", form_a_wording(emp))
+            a = _add(period, s, A.SUPERVISOR, "A", form_a_wording(emp))
+            _, note = history_check(emp, s, period)
+            A.objects.filter(pk=a.pk).update(history_note=note[:255])
     else:
         wording = form_b_wording(emp)
         for t in top_management(emp, day):
             _add(period, t, A.TOP, "B", wording)
         for r in direct_reports(emp, day):
-            _add(period, r, A.SUBORDINATE, "B", wording)
+            ok, note = history_check(r, emp, period)
+            if not ok:
+                rules.log(period, "rater_left_off", user, f"A direct report was left off the subordinate list: {note}")
+                continue
+            a = _add(period, r, A.SUBORDINATE, "B", wording)
+            A.objects.filter(pk=a.pk).update(history_note=note[:255])
     for a in period.raters.filter(status=A.ASSIGNED).exclude(rater=emp).select_related("rater"):
         notify(a.rater, f"Rating task: {period.employee.full_name} ({period.get_period_type_display()}), due "
                         f"{a.due_on:%b %d, %Y}.", TASKS_URL)
@@ -257,11 +356,16 @@ def asks_conflict(a):
     return a.group != A.SELF
 
 
+def share_words(period):
+    share = rules.num("contact_share", period)
+    return "half" if share == rules.Decimal("0.5") else f"{round(share * 100)}%"
+
+
 def contact_question(a):
-    name = a.period.employee.full_name
+    name, share = a.period.employee.full_name, share_words(a.period)
     if a.group == A.SUBORDINATE:
-        return f"In this period, did you report to {name} for at least half of the time?"
-    return f"In this period, did you work directly with {name} for at least half of the time, at least weekly?"
+        return f"In this period, did you report to {name} for at least {share} of the time?"
+    return f"In this period, did you work directly with {name} for at least {share} of the time, at least weekly?"
 
 
 def needs_orientation(a):
@@ -301,6 +405,9 @@ def answer_conflict(a, applies, user):
         raise ValidationError("This form is closed.")
     if applies:
         _closed_uncounted(a, A.CONFLICT, user, "a conflict was declared")
+    else:
+        a.conflict_cleared = True
+        a.save(update_fields=["conflict_cleared"])
 
 
 def items_for(a):
@@ -371,3 +478,44 @@ def tasks_for(acting):
     return (A.objects.filter(rater=acting, status__in=A.LIVE)
             .exclude(period__status__in=[P.CANCELLED, P.PLANNED])
             .select_related("period__employee", "period__window").order_by("due_on"))
+
+
+# -- pooling help (decision 2, 2026-11-26, Option A: HR adds pooled peers by hand) --------------
+
+def short_of_peers(period):
+    """How many more valid peers a semestral period needs (0 when it has enough)."""
+    if period.period_type != P.SEMESTRAL or period.status in (P.PLANNED, P.CANCELLED):
+        return 0
+    need = int(rules.num("peers_per_ratee", period))
+    return max(0, need - counted_peers(period).count())
+
+
+def pool_candidates(period, limit=8):
+    """Suggested pooled peers from the nearest larger group: the rest of the
+    employee's section (v1.1 §2). Empty for a section with no one free; HR
+    then picks from a section that works with it regularly."""
+    from employees.models import Employee
+
+    taken = set(period.raters.values_list("rater_id", flat=True)) | {period.employee_id}
+    cap = int(rules.num("peer_cap", period))
+    out = []
+    for e in (Employee.objects.filter(is_active=True, archived_at__isnull=True,
+                                      sections__in=period.employee.sections.all())
+              .exclude(pk__in=taken).distinct().order_by("surname", "first_name")):
+        if period.window_id and peer_forms_in_window(e, period.window) >= cap:
+            continue
+        out.append(e)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def needs_pooling(period):
+    """Short of peers after the supervisor picked them (a peer declined or had a
+    conflict), or still short when the window closed."""
+    short = short_of_peers(period)
+    if not short:
+        return 0
+    closed = period.window_id and period.window.status == "CLOSED"
+    picked = period.events.filter(action="peers_finalized").exists()
+    return short if (closed or picked) else 0

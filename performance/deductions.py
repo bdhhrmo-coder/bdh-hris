@@ -89,7 +89,7 @@ def file(acting, user, employee, criterion, incident_date, description, points, 
 
 
 @transaction.atomic
-def validate(acting, user, d, approve, note="", points=None):
+def validate(acting, user, d, approve, note="", points=None, in_attendance=False):
     if d.status != D.FILED:
         raise ValidationError("Not waiting for validation.")
     if not rules.is_hr(acting) or acting.pk in (d.employee_id, d.filed_by_id):
@@ -110,9 +110,13 @@ def validate(acting, user, d, approve, note="", points=None):
         if not (note or "").strip():
             raise ValidationError("Type the reason for changing the points.")
         d.points = points
+    if in_attendance and d.criterion.code == "R7":
+        # v1.1 §5.4: R7 resting on absences already counted under Attendance is shown, not deducted again.
+        d.in_attendance = True
+        note = ((note or "") + " [rests on absences already counted under Attendance]").strip()
     d.status = D.VALIDATED
     d.explanation_due = add_working_days(timezone.localdate(), int(rules.number_for("explanation_days")))
-    d.save(update_fields=["status", "points", "explanation_due"])
+    d.save(update_fields=["status", "points", "explanation_due", "in_attendance"])
     _log(d, "validate", user, note)
     notify(d.employee, f"A performance incident was filed about you ({d.criterion}). You may explain by "
                        f"{d.explanation_due:%b %d, %Y}.", URL)
@@ -225,9 +229,24 @@ def finalize_due(today=None):
     return n
 
 
+def counts_in(d, period):
+    """Decision 3 (owner, 2026-11-26, Option B): a Final deduction counts in one
+    period only, the earliest period covering its date that was not yet released
+    when it was claimed (at compute). Elsewhere it is a note."""
+    if d.period_id:
+        return d.period_id == period.pk
+    covering = P.objects.filter(employee_id=d.employee_id, start_date__lte=d.incident_date,
+                                end_date__gte=d.incident_date).exclude(status=P.CANCELLED).order_by("end_date", "pk")
+    for p in covering:
+        if p.pk == period.pk or p.released_at is None:
+            return p.pk == period.pk
+    return False
+
+
 def period_deductions(period):
-    """(rows, total) of Final deductions dated inside the period. Per-criterion
-    caps first; the period cap is applied by the caller."""
+    """(rows, total) of Final deductions dated inside the period that count in it.
+    Per-criterion caps first; the period cap is applied by the caller. A row with
+    `note` is shown but not deducted (R7 already counted under Attendance)."""
     qs = D.objects.filter(employee=period.employee, status=D.FINAL, incident_date__gte=period.start_date,
                           incident_date__lte=period.end_date).select_related("criterion").order_by("incident_date")
     if period.released_at:
@@ -236,14 +255,34 @@ def period_deductions(period):
     for d in qs:
         if d.criterion.applies_to == DeductionCriterion.SUPERVISOR and period.track != P.SUPERVISOR:
             continue
+        if not counts_in(d, period):
+            continue
+        if d.in_attendance and period.track == P.RANK:
+            rows.append({"d": d, "points": Decimal("0"), "capped": False,
+                         "note": "already counted under Attendance; not deducted again"})
+            continue
         used = per_crit.get(d.criterion_id, Decimal("0"))
         pts = d.points
         capped = False
         if d.criterion.cap is not None and used + pts > d.criterion.cap:
             pts, capped = max(Decimal("0"), d.criterion.cap - used), True
         per_crit[d.criterion_id] = used + pts
-        rows.append({"d": d, "points": pts, "capped": capped})
+        rows.append({"d": d, "points": pts, "capped": capped, "note": ""})
     return rows, sum((r["points"] for r in rows), Decimal("0"))
+
+
+def claim(period):
+    """Called when a period is computed: its counted deductions belong to it."""
+    rows, _ = period_deductions(period)
+    ids = [r["d"].pk for r in rows if r["d"].period_id is None]
+    D.objects.filter(pk__in=ids).update(period=period)
+
+
+def elsewhere_notes(period):
+    """Final deductions dated in this period that count in another period (decision 3)."""
+    qs = D.objects.filter(employee=period.employee, status=D.FINAL, incident_date__gte=period.start_date,
+                          incident_date__lte=period.end_date).select_related("criterion", "period")
+    return [d for d in qs if d.period_id and d.period_id != period.pk]
 
 
 def late_notes(period):
@@ -251,7 +290,8 @@ def late_notes(period):
     if not period.released_at:
         return []
     return list(D.objects.filter(employee=period.employee, status=D.FINAL, incident_date__gte=period.start_date,
-                                 incident_date__lte=period.end_date, final_at__gt=period.released_at))
+                                 incident_date__lte=period.end_date, final_at__gt=period.released_at)
+                .exclude(period__isnull=False))
 
 
 def waiting_for(acting):

@@ -3,22 +3,22 @@
 {% block content %}
 <h1>Holidays</h1>
 <p class="muted">Non-working days for counting working days (Performance Management windows and due dates). Monday to Friday count as working days unless listed here. Leave and CTO do not use this list. A wrong entry is voided with a reason and entered again; nothing is edited or deleted.</p>
-{% if next_year_empty %}<p class="text-warning"><strong>Next year's list is still empty.</strong> Add its holidays before the first rating window opens.</p>{% endif %}
+{% if can_edit and next_year_empty %}<p class="text-warning"><strong>Next year's list is still empty.</strong> Add its holidays before the first rating window opens.</p>{% endif %}
 <form method="get" class="row-actions"><label>Year <select name="year" onchange="this.form.submit()">{% for y in years %}<option {% if y == year %}selected{% endif %}>{{ y }}</option>{% endfor %}</select></label></form>
 <div class="card"><div class="table-scroll"><table>
-  <tr><th>Date</th><th>Holiday</th><th>Kind</th><th>Basis</th><th>Entered by</th><th></th></tr>
+  <tr><th>Date</th><th>Holiday</th><th>Kind</th><th>Basis</th>{% if can_edit %}<th>Entered by</th><th></th>{% endif %}</tr>
   {% for h in rows %}
   <tr{% if h.voided_at %} class="muted"{% endif %}>
     <td>{{ h.date|date:"D, M j, Y" }}</td><td>{{ h.name }}</td><td>{{ h.get_kind_display }}</td><td>{{ h.basis_ref|default:"—" }}</td>
-    <td>{{ h.created_by.employee.full_name|default:h.created_by.username }}</td>
+    {% if can_edit %}<td>{{ h.created_by.employee.full_name|default:h.created_by.username }}</td>
     <td>{% if h.voided_at %}Voided {{ h.voided_at|date:"M j, Y" }}: {{ h.void_reason }}{% else %}
       <form method="post" class="row-actions" x-data="{ r: '' }">{% csrf_token %}<input type="hidden" name="what" value="void"><input type="hidden" name="pk" value="{{ h.pk }}">
         <input type="text" name="reason" x-model="r" placeholder="Reason (required)" aria-label="Reason for voiding">
-        <button type="submit" class="btn-secondary" :disabled="!r.trim()">Void</button></form>{% endif %}</td>
+        <button type="submit" class="btn-secondary" :disabled="!r.trim()">Void</button></form>{% endif %}</td>{% endif %}
   </tr>
   {% empty %}<tr><td colspan="6" class="empty-note">No holidays entered for {{ year }}.</td></tr>{% endfor %}
 </table></div></div>
-<form method="post" class="card">{% csrf_token %}
+{% if can_edit %}<form method="post" class="card">{% csrf_token %}
   <h2 class="mt-0">Add a holiday</h2>
   <div class="grid-2">
     <label>Date <input type="date" name="date" required></label>
@@ -27,5 +27,5 @@
     <label>Basis (proclamation or ordinance no.) <input type="text" name="basis_ref" maxlength="120"></label>
   </div>
   <button type="submit">Add</button>
-</form>
+</form>{% endif %}
 {% endblock %}

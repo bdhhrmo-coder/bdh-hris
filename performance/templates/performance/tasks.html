@@ -4,6 +4,7 @@
 <h1>My Rating Tasks</h1>
 <div class="card">
   <h2 class="mt-0">Forms to fill in</h2>
+  {% if progress %}<p><progress value="{{ progress.done }}" max="{{ progress.total }}" aria-label="Forms done"></progress> {{ progress.done }} of {{ progress.total }} done{% if progress.left %}, about {{ progress.left }} minute{{ progress.left|pluralize }} left{% endif %}. <small class="muted">A form you started opens where you stopped.</small></p>{% endif %}
   <ul>{% for a in tasks %}<li><a href="{% url 'performance:rate' a.pk %}">{% if a.group == "SELF" %}Self-assessment{% else %}{{ a.get_group_display }}: {{ a.period.employee.full_name }}{% endif %}</a> <small class="muted">{{ a.period.get_period_type_display }} · due {{ a.due_on|date:"M j, Y" }} · {{ a.get_status_display }}</small></li>
   {% empty %}<li class="empty-note">Nothing to rate right now.</li>{% endfor %}</ul>
 </div>

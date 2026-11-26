@@ -4,13 +4,13 @@
   <p>COSP Performance Form: {% if cosp_form and cosp_form.submitted_at %}submitted, score {{ cosp_form.score|floatformat:2 }}{% else %}not yet submitted by the supervisor{% endif %} · <a href="{% url 'performance:cosp_form' period.pk %}">open the form</a></p>
   {% else %}
   <p>PHRMO-certified rating: {% if period.certified_rating is not None %}<strong>{{ period.certified_rating }}</strong> ({{ period.certificate_ref }}) — {% if period.certified_verified_by %}verified{% else %}waiting for verification{% endif %}{% else %}not encoded{% endif %}</p>
-  <form method="post" class="row-actions">{% csrf_token %}<input type="hidden" name="what" value="certified"><input type="text" name="rating" placeholder="e.g. 4.40" inputmode="decimal" aria-label="Certified rating" required><input type="text" name="ref" placeholder="Certificate reference" aria-label="Certificate reference" required><button class="btn-secondary">Encode</button></form>
-  {% if is_admin and period.certified_rating is not None and not period.certified_verified_by %}<form method="post">{% csrf_token %}<button name="what" value="verify_certified">Verify certified rating</button></form>{% endif %}
+  {% if editable %}<form method="post" class="row-actions">{% csrf_token %}<input type="hidden" name="what" value="certified"><input type="text" name="rating" placeholder="e.g. 4.40" inputmode="decimal" aria-label="Certified rating" required><input type="text" name="ref" placeholder="Certificate reference" aria-label="Certificate reference" required><button class="btn-secondary">Encode</button></form>{% endif %}
+  {% if editable and is_admin and period.certified_rating is not None and not period.certified_verified_by %}<form method="post">{% csrf_token %}<button name="what" value="verify_certified">Verify certified rating</button></form>{% endif %}
   {% endif %}
   {% if period.track == "RANK" %}
   <p>DTR counts: {% if period.absence_days is not None %}{{ period.absence_days }} unauthorized absence(s), {{ period.tardy_days }} tardy day(s) — {% if period.dtr_verified_by %}verified{% else %}waiting for verification{% endif %}{% else %}not encoded{% endif %} <small class="muted">(undertime never counts)</small></p>
-  <form method="post" class="row-actions">{% csrf_token %}<input type="hidden" name="what" value="dtr"><input type="number" min="0" name="absences" placeholder="Absences" aria-label="Unauthorized absences" required><input type="number" min="0" name="tardy" placeholder="Tardy days" aria-label="Tardy days" required><button class="btn-secondary">Encode</button></form>
-  {% if is_admin and period.absence_days is not None and not period.dtr_verified_by %}<form method="post">{% csrf_token %}<button name="what" value="verify_dtr">Verify DTR counts</button></form>{% endif %}
+  {% if editable %}<form method="post" class="row-actions">{% csrf_token %}<input type="hidden" name="what" value="dtr"><input type="number" min="0" name="absences" placeholder="Absences" aria-label="Unauthorized absences" required><input type="number" min="0" name="tardy" placeholder="Tardy days" aria-label="Tardy days" required><button class="btn-secondary">Encode</button></form>{% endif %}
+  {% if editable and is_admin and period.absence_days is not None and not period.dtr_verified_by %}<form method="post">{% csrf_token %}<button name="what" value="verify_dtr">Verify DTR counts</button></form>{% endif %}
   {% endif %}
   <p class="field-help">Encoded by one HR person, verified by another HR Administrator.</p>
 </div>
@@ -21,7 +21,9 @@
   {% for c in components %}<tr><td>{{ c.label }}</td><td>{{ c.weight_used|floatformat:1 }}</td><td>{% if c.mean is not None %}{{ c.mean|floatformat:2 }}{% else %}—{% endif %}</td><td>{{ c.n }}</td><td>{{ c.points|floatformat:1 }}</td><td>{{ c.note }}</td></tr>{% endfor %}
   <tr><td colspan="4"><strong>TPE total</strong> (after {{ period.deduction_total|default:0 }} deduction points)</td><td><strong>{{ tpe }}</strong></td><td></td></tr></table>
   {% endif %}
-  <form method="post">{% csrf_token %}<button name="what" value="compute">{% if components %}Compute again{% else %}Compute{% endif %}</button></form>
+  {% if editable %}<form method="post">{% csrf_token %}<button name="what" value="compute">{% if components %}Compute again{% else %}Compute{% endif %}</button></form>
+  {% else %}<p class="muted">The result is {{ period.get_status_display|lower }}; it can no longer be recomputed{% if period.status == "PLANNED" %} until the period opens{% endif %}.</p>{% endif %}
+  {% if components %}<p><a href="{% url 'performance:score_sheet' period.pk %}" target="_blank">Print the TPE score sheet</a></p>{% endif %}
 </div>
 {% if is_admin %}
 {% if flagged %}<div class="card"><h2 class="mt-0">Flags to review</h2>
@@ -33,5 +35,6 @@
     <textarea name="text" rows="2" aria-label="Edited text">{{ c.raw_text }}</textarea><input type="text" name="reason" x-model="r" placeholder="Reason (to edit or withhold)" aria-label="Reason">
     <div class="btn-row"><button name="what" value="c_release">Release as written</button><button name="what" value="c_edit" class="btn-secondary" :disabled="!r.trim()">Release edited</button><button name="what" value="c_withhold" class="btn-secondary" :disabled="!r.trim()">Withhold</button></div></form>{% endfor %}</div>{% endif %}
 <div class="card"><h2 class="mt-0">Release</h2>
-  {% if release_problems %}<p class="muted">Not yet: {{ release_problems|join:"; " }}.</p>{% else %}<form method="post">{% csrf_token %}<button name="what" value="release" data-confirm="Release this result to the employee and the supervisor?">Release</button></form>{% endif %}</div>
+  {% if period.released_at %}<p>Released {{ period.released_at|date:"M j, Y g:i A" }}{% if period.released_by %} by {{ period.released_by.employee.full_name|default:period.released_by }}{% endif %}.</p>
+  {% elif release_problems %}<p class="muted">Not yet: {{ release_problems|join:"; " }}.</p>{% else %}<form method="post">{% csrf_token %}<button name="what" value="release" data-confirm="Release this result to the employee and the supervisor?">Release</button></form>{% endif %}</div>
 {% endif %}

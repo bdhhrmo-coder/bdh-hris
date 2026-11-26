@@ -55,10 +55,15 @@ class HolidayTests(TestCase):
         self.assertEqual(Holiday.objects.filter(date=date(2027, 4, 9)).count(), 2)
         self.assertIn("Holiday voided", [r["action"] for r in audit_rows(module="Holidays")])
 
-    def test_page_hr_admin_only(self):
+    def test_everyone_views_only_the_hr_admin_keeps_it(self):
+        # v1.1 §7.1 (gap 11, 2026-11-26): all staff view the list; only the HR Administrator changes it.
         hrp = person("hrp", R.HR_PROCESSOR)
         self.client.force_login(hrp.user)
-        self.assertEqual(self.client.get(reverse("employees:holidays")).status_code, 403)
+        r = self.client.get(reverse("employees:holidays"))
+        self.assertEqual(r.status_code, 200)
+        self.assertNotContains(r, "Add a holiday")
+        self.assertEqual(self.client.post(reverse("employees:holidays"), {"date": "2027-06-12", "name": "x"})
+                         .status_code, 403)
         self.client.force_login(self.hra.user)
         self.client.post(reverse("employees:holidays"), {"date": "2027-06-12", "name": "Independence Day",
                                                          "kind": Holiday.REGULAR})

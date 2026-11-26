@@ -65,7 +65,8 @@ def incident(request, pk):
     if request.method == "POST":
         what, note = request.POST.get("what"), request.POST.get("note", "")
         actions = {
-            "validate": lambda: dd.validate(acting, request.user, d, True, note, request.POST.get("points") or None),
+            "validate": lambda: dd.validate(acting, request.user, d, True, note, request.POST.get("points") or None,
+                                         in_attendance=request.POST.get("in_attendance") == "1"),
             "dismiss_hr": lambda: dd.validate(acting, request.user, d, False, note),
             "explain": lambda: dd.explain(acting, request.user, d, request.POST.get("text")),
             "approve": lambda: dd.decide(acting, request.user, d, True, note),

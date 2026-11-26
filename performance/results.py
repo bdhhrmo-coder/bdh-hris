@@ -178,6 +178,9 @@ def compute(acting, user, period):
     period.attendance_score = att["mean"] if att else None
     period.subtotal, period.deduction_total, period.tpe_total = result["subtotal"], result["deductions"], result["total"]
     period.computed_at = timezone.now()
+    from .deductions import claim
+
+    claim(period)
     period.status = P.UNDER_REVIEW if rules.is_cosp(period.employee) else P.COMPUTED
     period.reviewed_by, period.reviewed_at = None, None
     period.save()
@@ -474,12 +477,30 @@ def report(period):
 
 # -- HR's period page ---------------------------------------------------------------------------------
 
+def _left_off(period):
+    """Current direct reports the assignment history kept off a supervisor's list (N4)."""
+    if period.track != P.SUPERVISOR or period.status == P.PLANNED:
+        return []
+    on_list = set(period.raters.values_list("rater_id", flat=True))
+    out = []
+    for r in raters.direct_reports(period.employee, period.end_date):
+        if r.pk not in on_list:
+            ok, note = raters.history_check(r, period.employee, period)
+            if not ok:
+                out.append((r, note))
+    return out
+
+
 def period_context(acting, period):
     return {"results_template": "performance/_period_results.html",
             "components": period.components.all(), "show": scoring.show, "tpe": scoring.show(period.tpe_total),
             "flagged": period.raters.filter(flag_review="PENDING").select_related("rater"),
             "pending_comments": pending_comments(period).select_related("assignment"),
             "release_problems": release_problems(period), "is_cosp": rules.is_cosp(period.employee),
+            "editable": period.status in (P.OPEN, P.COMPUTED, P.UNDER_REVIEW),
+            "history_left_off": _left_off(period), "history_suggestions": raters.history_suggestions(period),
+            "pool_hint": ({"need": raters.needs_pooling(period), "names": raters.pool_candidates(period)}
+                          if raters.needs_pooling(period) else None),
             "cosp_form": getattr(period, "cosp_form", None)}
 
 

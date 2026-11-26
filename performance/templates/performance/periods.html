@@ -17,9 +17,9 @@
 </div>
 <div class="card">
   <h2 class="mt-0">COSP contracts without periods</h2>
-  <p class="muted">A first contract gets month one, quarterly and pre-expiry periods; a later contract gets pre-expiry only. Periods are planned now and opened on their period page when due.</p>
+  <p class="muted">A first contract gets month one, quarterly and pre-expiry periods; a later contract gets pre-expiry only. The daily job plans them overnight and opens each one a few days before it ends, assigning the raters then. "Plan now" only does it sooner.</p>
   <ul>{% for c in contracts %}<li>{{ c.employee.full_name }}: {{ c.start_date|date:"M j, Y" }} – {{ c.end_date|date:"M j, Y" }}
-    <form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="what" value="plan"><input type="hidden" name="pk" value="{{ c.pk }}"><button type="submit" class="btn-secondary">Plan periods</button></form></li>
+    <form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="what" value="plan"><input type="hidden" name="pk" value="{{ c.pk }}"><button type="submit" class="btn-secondary">Plan now</button></form></li>
   {% empty %}<li class="empty-note">None.</li>{% endfor %}</ul>
 </div>
 <div class="card">

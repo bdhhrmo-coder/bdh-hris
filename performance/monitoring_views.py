@@ -42,7 +42,8 @@ def monitoring(request):
     return render(request, "performance/monitoring.html", {
         "windows": mon.window_choices(), "window": window, "cosp": cosp, "count": len(periods),
         "completion": mon.completion(periods), "load": mon.load(periods), "queues": mon.queues(periods),
-        "averages": mon.unit_averages(periods), "min_n": mon.min_n()})
+        "averages": mon.unit_averages(periods), "min_n": mon.min_n(), "given": mon.ratings_given(periods),
+        "sup_given": mon.supervisor_given(periods), "short": mon.short_of_peers(periods)})
 
 
 @login_required

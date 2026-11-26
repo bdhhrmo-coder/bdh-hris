@@ -1,6 +1,6 @@
 """Performance Setup, Periods and the rating forms (PMS steps 2-3)."""
 
-from datetime import date
+from datetime import date, timedelta
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -58,7 +58,7 @@ def setup(request):
                 acting, request.user, request.POST.get("key"), request.POST.get("value"),
                 _date(request.POST.get("effective_from")), request.POST.get("approval_ref")),
                 "Setting saved. It applies from its effective date.")
-        elif what == "wording" and rules.is_hr_admin(acting):
+        elif what == "wording":  # v1.1 §3.1: the HR Processor assigns the wording (any HR person may)
             emp = get_object_or_404(Employee, pk=request.POST.get("employee"))
             track, reason = request.POST.get("track"), request.POST.get("reason", "").strip()
             if emp.pk == acting.pk:
@@ -141,6 +141,9 @@ def period_detail(request, pk):
         what = request.POST.get("what")
         if what == "open":
             _run(request, lambda: rules.open_planned(acting, request.user, period), "Period opened; raters assigned.")
+        elif what == "cancel":
+            _run(request, lambda: rules.cancel_period(acting, request.user, period, request.POST.get("reason")),
+                 "Period cancelled.")
         elif what == "add":
             emp = get_object_or_404(Employee, pk=request.POST.get("rater"))
             _run(request, lambda: raters.hr_add_rater(acting, request.user, period, emp, request.POST.get("group"),
@@ -160,8 +163,13 @@ def period_detail(request, pk):
            "assignments": period.raters.select_related("rater").order_by("group", "pk"),
            "counts": period.raters.values("group", "status").annotate(n=Count("pk")).order_by("group"),
            "groups": [g for g in A.GROUPS if g[0] != A.SELF],
+           "opens_on": period.end_date - timedelta(days=int(rules.number_for("cosp_open_days_before_end", period.end_date))),
            "employees": Employee.objects.filter(is_active=True, archived_at__isnull=True).exclude(pk=period.employee_id)}
     ctx.update(results.period_context(acting, period))
+    # v1.1 §7.5: viewing raw comments or flagged forms leaves an audit entry (once a day per person).
+    if ctx["names"] and (ctx["flagged"].exists() or ctx["pending_comments"].exists()) and not period.events.filter(
+            action="viewed_raw", user=request.user, at__date=timezone.localdate()).exists():
+        rules.log(period, "viewed_raw", request.user)
     return render(request, "performance/period.html", ctx)
 
 
@@ -188,7 +196,15 @@ def tasks(request):
                             "candidates": Employee.objects.filter(is_active=True, archived_at__isnull=True,
                                                                   sections__in=period.employee.sections.all())
                             .exclude(pk__in=[period.employee_id, acting.pk]).distinct()})
+    from .monitoring import form_minutes
+
+    # Progress (v1.1 §7.4; gap 7): forms of periods still being rated.
+    current = A.objects.filter(rater=acting, status__in=A.LIVE | {A.SUBMITTED},
+                               period__status=P.OPEN).select_related("period")
+    total, done = current.count(), current.filter(status=A.SUBMITTED).count()
+    left = sum(form_minutes(x) for x in current if x.status in A.LIVE)
     return render(request, "performance/tasks.html", {
+        "progress": {"total": total, "done": done, "left": round(left)} if total else None,
         "tasks": raters.tasks_for(acting), "mine": mine, "to_finalize": to_finalize,
         "proposed": mine.raters.filter(status=A.PROPOSED).select_related("rater") if mine else [],
         "colleagues": Employee.objects.filter(is_active=True, archived_at__isnull=True,
@@ -209,8 +225,6 @@ def rate(request, pk):
         elif what == "conflict":
             _run(request, lambda: raters.answer_conflict(a, request.POST.get("answer") == "applies", request.user),
                  None)
-            if request.POST.get("answer") != "applies":
-                request.session[f"pm_conflict_{a.pk}"] = True
         elif what == "orientation":
             raters.acknowledge(a)
         elif what in ("save", "submit"):
@@ -224,7 +238,7 @@ def rate(request, pk):
         step = "closed"
     elif raters.asks_contact(a) and a.contact_ok is None:
         step = "contact"
-    elif raters.asks_conflict(a) and not request.session.get(f"pm_conflict_{a.pk}") and a.status == A.ASSIGNED:
+    elif raters.asks_conflict(a) and not a.conflict_cleared:
         step = "conflict"
     elif raters.needs_orientation(a):
         step = "orientation"
@@ -243,3 +257,20 @@ def rate(request, pk):
         "a": a, "step": step, "groups": groups, "comments": comments,
         "question": raters.contact_question(a) if raters.asks_contact(a) else "",
         "scale": [(5, "Always or almost always"), (4, "Often"), (3, "Sometimes"), (2, "Rarely"), (1, "Never")]})
+
+
+@login_required
+def rate_autosave(request, pk):
+    """Autosave of a rating form on every answer (v1.1 §7.4; gap 6). HTMX only;
+    the form still has its Submit and Save buttons."""
+    from django.http import HttpResponse, HttpResponseNotAllowed
+
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    acting = _acting(request)
+    a = get_object_or_404(A, pk=pk, rater=acting)
+    try:
+        raters.save_answers(a, request.POST, request.user, submit=False)
+    except ValidationError as exc:
+        return HttpResponse(" ".join(exc.messages))
+    return HttpResponse(f"Saved {timezone.localtime():%I:%M %p}.")

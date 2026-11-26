@@ -240,3 +240,72 @@ def send_reminders(today=None):
                                                             f"{k.planned_on:%b %d, %Y}.", f"/performance/plans/{plan.period_id}/")
             n_checks += 1
     return n_forms, n_checks
+
+
+# -- leniency view (v1.1 §4.2; gap 5, 2026-11-26) ---------------------------------------------------
+
+def _given(periods):
+    """[(assignment, rater average)] for counted, scored forms (Form A/B)."""
+    out = []
+    for a in A.objects.filter(period__in=periods, status=A.SUBMITTED).exclude(group=A.SELF).exclude(
+            flag_review="VOIDED").select_related("period__employee", "rater"):
+        avg, _ = scoring.rater_average(a, a.period)
+        if avg is not None:
+            out.append((a, avg))
+    return out
+
+
+def ratings_given(periods):
+    """Average rating given per unit/section of the ratee, per rater group, so
+    supervisors and HR can spot leniency or strictness. Confidential groups
+    under the minimum are hidden."""
+    small, by = min_n(), {}
+    for a, avg in _given(periods):
+        key = "sup" if a.group == A.SUPERVISOR else "peer" if a.group in (A.PEER, A.POOLED, A.SUP_PEER) \
+            else "sub" if a.group == A.SUBORDINATE else "top"
+        by.setdefault(area_of(a.period.employee), {}).setdefault(key, []).append(avg)
+    rows = []
+    for area, groups in sorted(by.items()):
+        row = {"area": area}
+        for key in ("sup", "peer", "sub", "top"):
+            vals = groups.get(key, [])
+            hide = key in ("peer", "sub") and len(vals) < small
+            row[key] = {"n": len(vals), "mean": None if (hide or not vals) else
+                        (sum(vals) / len(vals)).quantize(Decimal("0.01"))}
+        rows.append(row)
+    return rows
+
+
+def supervisor_given(periods):
+    """Each immediate supervisor's average Form A rating given (identified
+    group), next to the peer average of the same staff."""
+    small, by, peers = min_n(), {}, {}
+    for a, avg in _given(periods):
+        if a.group == A.SUPERVISOR:
+            by.setdefault(a.rater, []).append((a.period_id, avg))
+        elif a.group in (A.PEER, A.POOLED):
+            peers.setdefault(a.period_id, []).append(avg)
+    out = []
+    for sup, rows in by.items():
+        ids = {pid for pid, _ in rows}
+        pvals = [v for pid in ids for v in peers.get(pid, [])]
+        out.append({"supervisor": sup, "n": len(rows), "mean": (sum(v for _, v in rows) / len(rows)).quantize(
+            Decimal("0.01")), "peer_n": len(pvals), "peer_mean": (sum(pvals) / len(pvals)).quantize(Decimal("0.01"))
+                    if len(pvals) >= small else None})
+    return sorted(out, key=lambda r: r["supervisor"].surname)
+
+
+def my_given(acting):
+    """For a supervisor's own page: their average given vs their staff's peer average."""
+    periods = [p for p in P.objects.filter(status__in=SHOWN).select_related("employee")
+               if results.is_conference_supervisor(acting, p)]
+    for row in supervisor_given(periods):
+        if row["supervisor"].pk == acting.pk:
+            return row
+    return None
+
+
+def short_of_peers(periods):
+    from . import raters
+
+    return [(p, raters.needs_pooling(p)) for p in periods if p.period_type == P.SEMESTRAL and raters.needs_pooling(p)]

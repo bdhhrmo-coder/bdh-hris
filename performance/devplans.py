@@ -59,9 +59,12 @@ def can_edit(acting, plan):
 
 
 def prefill(period):
+    """Strengths and growth areas from the report, one per line, and the support
+    the employee asked for on Form C (item C4), which v1.1 copies into the plan."""
     rep = results.report(period)
-    return {"strengths": "; ".join(s["text"] for s in rep["strengths"][:2]),
-            "growth_areas": "; ".join(s["text"] for s in rep["growth"][:2])}
+    return {"strengths": "\n".join(s["text"] for s in rep["strengths"][:2]),
+            "growth_areas": "\n".join(s["text"] for s in rep["growth"][:2]),
+            "support": (rep["self_c"].get("C4") or "").strip()}
 
 
 def send_problems(period, data, goals, dates):
