@@ -353,7 +353,20 @@ def remark_suffix(obj):
     """' Remark: "..."' from the latest action of a returned/rejected request
     (owner request 2026-11-03: the filer must see why it was returned)."""
     last = obj.actions.order_by("-acted_at", "-pk").first() if obj.pk else None
-    return f' Remark: "{last.notes}"' if last and last.notes else ""
+    notes = strip_oic_tag(last.notes) if last else ""
+    return f' Remark: "{notes}"' if notes else ""
+
+
+def strip_oic_tag(notes):
+    """The remark as the approver typed it, without the automatic OIC note (Item 5): the note
+    stays on the request and in the Audit Log, but is not quoted in the filer's notice."""
+    import re
+
+    notes = notes or ""
+    if notes.startswith(OIC_REPEAT_TAG):
+        notes = re.sub(r"^" + re.escape(OIC_REPEAT_TAG) + r" Acted as OIC for [^;]*; this person also acted at an "
+                       r"earlier step\.\s*", "", notes)
+    return notes.strip()
 
 
 RETURN_NEEDS_REMARK = "Please type a remark explaining why it is being returned or rejected. Nothing was changed."

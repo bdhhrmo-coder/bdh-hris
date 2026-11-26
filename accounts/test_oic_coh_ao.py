@@ -134,6 +134,9 @@ class OICForCohAoTests(TestCase):
         last = app.actions.order_by("-pk").first()
         self.assertTrue(last.notes.startswith(OIC_REPEAT_TAG + " Acted as OIC for the COH"), last.notes)
         self.assertTrue(last.notes.endswith("Approved"))
+        notice = Notification.objects.filter(recipient=self.nurse).order_by("-pk").first().message
+        self.assertIn('Remark: "Approved"', notice)  # the automatic OIC note is not quoted to the filer
+        self.assertNotIn("OIC", notice)
 
     def test_oic_who_did_not_act_earlier_needs_no_remark(self):
         self.oic_for_ao(self.other_head)
