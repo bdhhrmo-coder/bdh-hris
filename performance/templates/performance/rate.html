@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Rating form — BDH HRIS{% endblock %}
+{% block content %}
+<p><a href="{% url 'performance:tasks' %}">&larr; My Rating Tasks</a></p>
+<h1>{% if a.group == "SELF" %}Self-assessment{% else %}Rating: {{ a.period.employee.full_name }}{% endif %}</h1>
+<p class="muted">{{ a.period.get_period_type_display }} · {{ a.period.start_date|date:"M j" }} – {{ a.period.end_date|date:"M j, Y" }} · due {{ a.due_on|date:"M j, Y" }}</p>
+{% if step == "closed" %}
+<div class="card"><p>This form is {{ a.get_status_display|lower }}. Nothing more to do here.</p></div>
+{% elif step == "contact" %}
+<form method="post" class="card">{% csrf_token %}<input type="hidden" name="what" value="contact">
+  <p><strong>{{ question }}</strong></p>
+  <div class="btn-row"><button name="answer" value="yes">Yes</button><button name="answer" value="no" class="btn-secondary">No</button></div>
+  <p class="field-help">"No" closes this form without counting it, and HR is told so it can check the records.</p>
+</form>
+{% elif step == "conflict" %}
+<form method="post" class="card">{% csrf_token %}<input type="hidden" name="what" value="conflict">
+  <p><strong>Do any of these apply?</strong> Family relationship · an open administrative case between you · a reporting line that makes this rating inappropriate.</p>
+  <div class="btn-row"><button name="answer" value="none">None apply</button><button name="answer" value="applies" class="btn-secondary">Applies</button></div>
+  <p class="field-help">"Applies" closes this form and alerts HR. You are not asked which one.</p>
+</form>
+{% elif step == "orientation" %}
+<form method="post" class="card">{% csrf_token %}<input type="hidden" name="what" value="orientation">
+  <h2 class="mt-0">Before you rate — four things to keep in mind</h2>
+  <ol><li><strong>Rate each item on its own.</strong> Don't let one good or bad trait color every answer.</li>
+    <li><strong>Think about the whole period,</strong> not just the last few weeks.</li>
+    <li><strong>Rate what you saw them do.</strong> Friendship, a grudge, or getting even has no place here.</li>
+    <li><strong>Didn't see it? Choose N/O.</strong> That is an honest answer, not a bad one.</li></ol>
+  <p>Your ratings are <strong>confidential, not anonymous.</strong> HR keeps a record of who rated whom so the process can be checked. Results are shown only as group averages of at least 3 people. Ratings are used for feedback, for awards, and as <em>supplementary</em> input to personnel decisions, never as the only basis for one.</p>
+  <button type="submit">I understand — start rating</button>
+</form>
+{% else %}
+<form method="post">{% csrf_token %}
+  {% for comp, items in groups %}
+  <fieldset class="card"><legend><strong>{{ comp.name }}</strong></legend>
+    {% for ind, text, ans in items %}
+    <div class="pm-item">
+      <p>{{ text }}</p>
+      {% if ind.is_text %}<textarea name="i_{{ ind.code }}" rows="2"{% if ind.required %} required{% endif %}>{{ ans.text }}</textarea>
+      {% else %}<div class="btn-row" role="radiogroup" aria-label="{{ text }}">
+        {% for v, l in scale %}<label><input type="radio" name="i_{{ ind.code }}" value="{{ v }}" {% if ans.value == v %}checked{% endif %}> {{ v }} <small>{{ l }}</small></label>{% endfor %}
+        {% if a.form != "C" %}<label><input type="radio" name="i_{{ ind.code }}" value="NO" {% if ans.not_observed %}checked{% endif %}> N/O <small>Not observed</small></label>{% endif %}
+      </div>{% endif %}
+    </div>
+    {% endfor %}
+  </fieldset>
+  {% endfor %}
+  {% if a.form != "C" %}
+  <fieldset class="card"><legend><strong>Comments (optional)</strong></legend>
+    <label>One strength this colleague consistently shows:<textarea name="c_strength" rows="2">{{ comments.STRENGTH }}</textarea></label>
+    <label>One specific behavior they could improve:<textarea name="c_improve" rows="2">{{ comments.IMPROVE }}</textarea></label>
+    <p class="field-help">Describe what you saw them do. Avoid personal remarks. HR screens comments before release.</p>
+  </fieldset>
+  {% endif %}
+  <div class="btn-row"><button name="what" value="submit" data-confirm="Submit? The form is locked after this.">Submit</button><button name="what" value="save" class="btn-secondary" formnovalidate>Save and finish later</button></div>
+</form>
+{% endif %}
+{% endblock %}

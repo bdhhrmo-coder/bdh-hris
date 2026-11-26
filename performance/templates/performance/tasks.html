@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}My Rating Tasks — BDH HRIS{% endblock %}
+{% block content %}
+<h1>My Rating Tasks</h1>
+<div class="card">
+  <h2 class="mt-0">Forms to fill in</h2>
+  <ul>{% for a in tasks %}<li><a href="{% url 'performance:rate' a.pk %}">{% if a.group == "SELF" %}Self-assessment{% else %}{{ a.get_group_display }}: {{ a.period.employee.full_name }}{% endif %}</a> <small class="muted">{{ a.period.get_period_type_display }} · due {{ a.due_on|date:"M j, Y" }} · {{ a.get_status_display }}</small></li>
+  {% empty %}<li class="empty-note">Nothing to rate right now.</li>{% endfor %}</ul>
+</div>
+{% if mine %}
+<form method="post" class="card">{% csrf_token %}<input type="hidden" name="what" value="propose">
+  <h2 class="mt-0">Propose your peers</h2>
+  <p class="muted">Up to {{ limit }} colleagues who worked directly with you for at least half of the semester, at least weekly. Your supervisor or HR picks the final peers, including at least one you did not propose; you will not see who was picked.</p>
+  <select name="people" multiple size="8" aria-label="Colleagues">{% for c in colleagues %}<option value="{{ c.pk }}" {% for p in proposed %}{% if p.rater_id == c.pk %}selected{% endif %}{% endfor %}>{{ c.full_name }}</option>{% endfor %}</select>
+  <button type="submit" class="btn-secondary">Save proposals</button>
+</form>
+{% endif %}
+{% for f in to_finalize %}
+<form method="post" class="card">{% csrf_token %}<input type="hidden" name="what" value="finalize"><input type="hidden" name="period" value="{{ f.period.pk }}">
+  <h2 class="mt-0">Peers to finalize: {{ f.period.employee.full_name }}</h2>
+  <p class="muted">Pick {{ f.need }}. At least one must be someone the employee did not propose. Proposed: {% for p in f.proposed %}{{ p.rater.full_name }}{% if not forloop.last %}, {% endif %}{% empty %}none{% endfor %}.</p>
+  <select name="people" multiple size="8" aria-label="Peers">{% for c in f.candidates %}<option value="{{ c.pk }}">{{ c.full_name }}</option>{% endfor %}</select>
+  <button type="submit">Pick peers</button>
+</form>
+{% endfor %}
+{% for c in cosp_forms %}<div class="card"><a href="{% url 'performance:cosp_form' c.pk %}">COSP Performance Form: {{ c.employee.full_name }}</a> <small class="muted">{{ c.get_period_type_display }}</small></div>{% endfor %}
+{% endblock %}

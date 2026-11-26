@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     "schedules",
     "datechange",
     "outonpass",
+    "performance",
 ]
 
 # CLAUDE.md §13: RA 10173 personnel-record retention period, in years, for a

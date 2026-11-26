@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Performance Setup — BDH HRIS{% endblock %}
+{% block content %}
+<h1>Performance Setup</h1>
+{% include "performance/_setup_tabs.html" %}
+<p class="muted">Every number here is a setting the PMT and the COH approved. A change is a new dated line with its approval reference; it applies from its effective date (today or later) and nothing earlier is changed. Results are always worked out with the settings in force on the period's last day.</p>
+<div class="card"><div class="table-scroll"><table>
+  <tr><th>Setting</th><th>Value now</th><th>Since</th><th>Approval</th><th>Coming</th></tr>
+  {% for r in rows %}<tr><td>{{ r.label }}</td><td><strong>{{ r.current.value }}</strong></td><td>{{ r.current.effective_from|date:"M j, Y" }}</td><td><small>{{ r.current.approval_ref }}</small></td>
+    <td>{% for f in r.future %}{{ f.value }} from {{ f.effective_from|date:"M j, Y" }}<br>{% empty %}—{% endfor %}</td></tr>{% endfor %}
+</table></div></div>
+{% if is_admin %}
+<form method="post" class="card">{% csrf_token %}<input type="hidden" name="what" value="setting">
+  <h2 class="mt-0">Change a setting</h2>
+  <div class="grid-2">
+    <label>Setting <select name="key" required>{% for r in rows %}<option value="{{ r.key }}">{{ r.label }}</option>{% endfor %}</select></label>
+    <label>New value <input type="text" name="value" required inputmode="decimal"></label>
+    <label>Effective from <input type="date" name="effective_from" min="{{ today|date:'Y-m-d' }}" value="{{ today|date:'Y-m-d' }}" required></label>
+    <label>PMT/COH approval reference <input type="text" name="approval_ref" maxlength="120" required></label>
+  </div>
+  <button type="submit" data-confirm="Save this change? It cannot be edited afterwards; a further change is a new line.">Save</button>
+</form>
+{% endif %}
+<div class="card">
+  <h2 class="mt-0">Form A wording</h2>
+  <p class="muted">Staff of these sections get the clinical wording by default: {% for c in clinical %}{{ c.section }}{% if not forloop.last %}, {% endif %}{% endfor %}. Everyone else gets the non-clinical wording. Exceptions:</p>
+  <ul>{% for o in overrides %}<li>{{ o.employee.full_name }}: {{ o.get_track_display }} — {{ o.reason }}</li>{% empty %}<li class="empty-note">None.</li>{% endfor %}</ul>
+  {% if is_admin %}<form method="post" class="row-actions">{% csrf_token %}<input type="hidden" name="what" value="wording">
+    <select name="employee" aria-label="Employee">{% for e in employees %}<option value="{{ e.pk }}">{{ e.full_name }}</option>{% endfor %}</select>
+    <select name="track" aria-label="Wording"><option value="1">Clinical</option><option value="2">Non-clinical</option><option value="">Section default</option></select>
+    <input type="text" name="reason" placeholder="Reason" aria-label="Reason"><button type="submit" class="btn-secondary">Set</button></form>{% endif %}
+</div>
+{% endblock %}
