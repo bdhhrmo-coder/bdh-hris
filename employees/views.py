@@ -255,7 +255,13 @@ def my_profile_edit_request(request):
     return render(
         request,
         "employees/my_profile_edit_request.html",
-        {"form": form, "pending": pending, "recent": recent},
+        {
+            "form": form,
+            "pending": pending,
+            "recent": recent,
+            # Pilot Item 3: the employee sees their own salary (read-only).
+            "monthly_salary": acting_employee.monthly_salary,
+        },
     )
 
 

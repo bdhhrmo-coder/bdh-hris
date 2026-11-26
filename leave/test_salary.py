@@ -56,3 +56,36 @@ class SalaryTests(TestCase):
         a = self.recorded()
         self.assertIsNone(a.salary_at_recording)
         self.assertIn(fill_csc_form6(a, show_salary=True)["blank"]["AA12"].value, ("", None))
+
+
+class SalaryPrivacyOnScreenTests(TestCase):
+    """F1 (audit 2026-11-26): hidden from System Administration; the employee sees their own."""
+
+    def setUp(self):
+        lt.RoutingTests.setUp(self)
+        self.employee.monthly_salary = FAKE
+        self.employee.save()
+
+    def test_system_administration_pages_never_show_the_salary(self):
+        from django.contrib import admin
+        from employees.models import Employee
+
+        emp_admin = admin.site._registry[Employee]
+        leave_admin = admin.site._registry[LeaveApplication]
+        rf = __import__("django.test", fromlist=["RequestFactory"]).RequestFactory().get("/")
+        rf.user = self.employee.user
+        self.assertNotIn("monthly_salary", emp_admin.get_form(rf, self.employee).base_fields)
+        self.assertNotIn("salary_at_recording", leave_admin.get_form(rf).base_fields)
+
+    def test_employee_sees_own_salary_on_my_profile(self):
+        self.client.force_login(self.employee.user)
+        page = self.client.get("/employees/me/edit-request/").content.decode()
+        self.assertIn("Monthly salary on record", page)
+        self.assertIn("12,345.67", page)
+
+    def test_no_salary_says_not_on_record(self):
+        self.employee.monthly_salary = None
+        self.employee.save()
+        self.client.force_login(self.employee.user)
+        page = self.client.get("/employees/me/edit-request/").content.decode()
+        self.assertIn("Not on record yet.", page)

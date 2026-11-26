@@ -32,6 +32,7 @@ class LeaveApplicationAdmin(admin.ModelAdmin):
     list_filter = ("status", "leave_type")
     search_fields = ("employee__surname", "employee__employee_id")
     inlines = [LeaveApplicationActionInline, UploadedDocumentInline]
+    exclude = ("salary_at_recording",)  # Pilot Item 3: never shown in System Administration
 
 
 @admin.register(LeaveCreditTransaction)

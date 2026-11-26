@@ -16,6 +16,12 @@
 </div>
 {% endif %}
 
+<div class="card">
+  <h2 class="mt-0">Monthly salary on record</h2>
+  <p class="mb-0">{% if monthly_salary is not None %}<strong>&#8369; {{ monthly_salary|floatformat:"2g" }}</strong>{% else %}Not on record yet.{% endif %}</p>
+  <p class="muted mb-0">Kept by the HR Administrator and printed on your CSC Form No. 6. Only you and the HR Administrator see it. If it is wrong, tell HR.</p>
+</div>
+
 <div class="card form-card">
   <form method="post" class="form-2col">
     {% csrf_token %}
