@@ -2,6 +2,7 @@
 {% block title %}CTO carry-over {{ year }} — BDH HRIS{% endblock %}
 {% block content %}
 <h1>CTO year-end carry-over {{ year }}</h1>
+{% include "components/oic_queue_label.html" %}
 <p class="muted">CTO still unused after Dec 15 is forfeited on Dec 17 unless a written reason is submitted by {{ reason_deadline }} and the Chief of Hospital approves it. Credit from work after Nov 30, or that took effect after Dec 15, carries over without a reason and is not listed here.</p>
 
 {% if pending %}

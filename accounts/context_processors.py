@@ -19,4 +19,10 @@ def oic_banner(request):
         by = f" ({ra.delegated_by.full_name})" if ra.delegated_by_id else ""
         items.append(f"OIC for {who}{by}{until}")
     waits = any(ra.role in labels for ra in lines)
-    return {"oic_banner": items, "oic_banner_waits": waits}
+    # Audit fix F3: approval queues say which OIC role brings items into them.
+    acting_as = []
+    for ra in lines:
+        label = f"OIC for {labels.get(ra.role) or (ra.unit or ra.section)}"
+        if label not in acting_as:
+            acting_as.append(label)
+    return {"oic_banner": items, "oic_banner_waits": waits, "oic_queue_label": " and ".join(acting_as)}

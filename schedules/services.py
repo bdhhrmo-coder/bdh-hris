@@ -142,8 +142,23 @@ def _check_exchanges_before_submit(schedule, user):
         apply_all_to_new_draft(schedule, user)  # put back anything missing (e.g. a re-added row)
 
 
+def _oic_repeat(schedule, user, action, notes):
+    """Item 5 / audit fix F3: an OIC for the AO or COH who already acted on this schedule in this
+    cycle must type a remark to act again (owner Decision 1, 2026-11-26)."""
+    from leave.permissions import oic_repeat_guard
+
+    who = rules.STEPS.get(schedule.status, (None, None, None, None))[3]
+    step_role = {"Administrative Officer": RoleAssignment.ADMINISTRATIVE_OFFICER,
+                 "Chief of Hospital": RoleAssignment.CHIEF_OF_HOSPITAL}.get(who)
+    error, notes = oic_repeat_guard(getattr(user, "employee", None), schedule, step_role, notes, action=action)
+    if error:
+        raise ValidationError(error)
+    return notes
+
+
 @transaction.atomic
 def act(schedule, user, action, notes=""):
+    notes = _oic_repeat(schedule, user, action, notes)
     if action == "return":
         if not notes.strip():
             raise ValidationError("Type the reason for returning it, so the preparer knows what to fix.")

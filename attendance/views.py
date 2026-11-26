@@ -264,7 +264,7 @@ def correction_action(request, pk):
     R = AttendanceCorrectionRequest
     ao_step = correction.correction_type == R.FORMAL and correction.status in (R.VALIDATED, R.PROCESSED_BY_HR)
     oic_error, notes = oic_repeat_guard(acting_employee, correction, RA.ADMINISTRATIVE_OFFICER if ao_step else None,
-                                        form.cleaned_data["notes"])
+                                        form.cleaned_data["notes"], action=action)
     if oic_error:  # Item 5
         messages.error(request, oic_error)
         return redirect("attendance:correction_detail", pk=pk)

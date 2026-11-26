@@ -1094,3 +1094,5 @@ button.btn-tap[disabled] { opacity: 0.5; cursor: not-allowed; }
 /* Pilot Item 5: OIC banner on every page */
 .oic-banner { background: #fff7e0; border-left: 4px solid #E5B83F; color: #173D72; padding: .5rem .8rem; margin: 0 0 .8rem; border-radius: 4px; font-size: .9rem; }
 @media print { .oic-banner { display: none; } }
+.oic-queue-label { background: #fff7e0; border-left: 4px solid #E5B83F; color: #173D72; padding: .4rem .7rem; margin: 0 0 .8rem; border-radius: 4px; font-size: .88rem; }
+@media print { .oic-queue-label { display: none; } }
