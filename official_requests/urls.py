@@ -9,6 +9,7 @@ urlpatterns = [
     path("mine/", views.my_requests, name="my_requests"),
     path("queue/", views.request_queue, name="request_queue"),
     path("<int:pk>/action/", views.request_action, name="request_action"),
+    path("<int:pk>/", views.request_detail, name="request_detail"),
     path("<int:pk>/print/travel-order/", views.print_travel_order, name="print_travel_order"),
     path("<int:pk>/print/f59/", views.print_f59, name="print_f59"),
     path("batch/<int:pk>/print/f59/", batch_views.print_batch_f59, name="print_batch_f59"),

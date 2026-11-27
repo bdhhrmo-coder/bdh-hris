@@ -223,3 +223,23 @@ def print_f59(request, pk):
     return _f59_response(request, data_for_request(official_request),
                          f"F59_{official_request.employee.surname}_{official_request.pk}.pdf",
                          "official_requests:my_requests")
+
+
+@login_required
+def request_detail(request, pk):
+    """Part A, decision 2 (2026-11-27): a view-only page for a single Official
+    Business / Local Official Errand / OT request and who processed each step.
+    Same access as its printout (can_view_request). A line of a group request
+    opens the group request instead."""
+    from .permissions import can_view_request
+
+    acting_employee = get_acting_employee(request.user)
+    official_request = get_object_or_404(OfficialRequest.objects.select_related("employee"), pk=pk)
+    if not can_view_request(acting_employee, official_request):
+        raise PermissionDenied("You are not authorized to view this request.")
+    if official_request.batch_id:
+        return redirect("official_requests:batch_detail", pk=official_request.batch_id)
+    return render(request, "official_requests/request_detail.html", {
+        "r": official_request,
+        "history": official_request.actions.select_related("acted_by__employee").order_by("acted_at", "pk"),
+    })

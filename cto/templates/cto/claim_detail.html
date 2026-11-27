@@ -110,7 +110,7 @@
   <h2 class="mt-0">History</h2>
   <table>
     {% for a in actions %}
-    <tr><td>{{ a.acted_at|date:"Y-m-d H:i" }}</td><td>{{ a.action }}</td><td>{{ a.step }}</td><td>{{ a.acted_by|default:"System" }}</td><td>{{ a.notes }}</td></tr>
+    <tr><td>{{ a.acted_at|date:"Y-m-d H:i" }}</td><td>{{ a.action }}</td><td>{{ a.step }}</td><td>{% processed_by a %}</td><td>{{ a.notes }}</td></tr>
     {% endfor %}
   </table>
 </div>

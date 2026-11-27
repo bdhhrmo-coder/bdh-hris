@@ -42,6 +42,7 @@ from .models import (
     DAY_TYPE_CHOICES,
     CTOCarryOverReason,
     CTOClaim,
+    CTOClaimAction,
     CTOClaimLine,
     CTOCreditAllocation,
     CTOUsageApplication,
@@ -264,6 +265,9 @@ def opening_balances(request):
         "employees": Employee.objects.filter(is_active=True),
         "target": target,
         "lines": lines,
+        # Part A, "Recorded by" (2026-11-27): who added or voided each line.
+        "opening_history": (CTOClaimAction.objects.filter(claim__employee=target, claim__is_opening=True)
+                            .select_related("acted_by__employee").order_by("acted_at", "pk") if target else []),
         "form": form,
         "entry_open": entry_is_open(today),
         "lock_date": settings.CTO_OPENING_BALANCE_DATE,
@@ -336,8 +340,21 @@ def separation(request):
             return redirect("cto:separation")
     return render(request, "cto/separation.html", {
         "form": form,
-        "separating": Employee.objects.exclude(separation_status="").order_by("last_day_of_service"),
+        "separating": _with_recorder(Employee.objects.exclude(separation_status="").order_by("last_day_of_service")),
     })
+
+
+def _with_recorder(employees):
+    """Part A, "Recorded by" (2026-11-27): the HR person who last set each
+    separation status, from the employee's edit history (nothing guessed)."""
+    from employees.models import EmployeeEditHistory
+
+    rows = list(employees)
+    for e in rows:
+        h = (EmployeeEditHistory.objects.filter(employee=e, field_name="separation_status")
+             .select_related("changed_by").order_by("-edited_at").first())
+        e.separation_recorded_by = h.changed_by if h else None
+    return rows
 
 
 # --- CTO usage -----------------------------------------------------------

@@ -1,11 +1,12 @@
 {% extends "base.html" %}
+{% load ui %}
 {% block title %}Edit returned correction — BDH HRIS{% endblock %}
 {% block content %}
 <h1>Edit and resubmit</h1>
 <p class="muted">{{ correction.get_correction_type_display }} correction for {{ correction.employee.full_name }}. After you resubmit, it starts again from the first approval step.</p>
 {% if latest_return %}
 <div class="msg warning" role="status">
-  <strong>Returned by {{ latest_return.acted_by.employee.full_name|default:latest_return.acted_by.username }}</strong>
+  <strong>{% processed_by latest_return as who %}Returned{% if who %} by {{ who }}{% endif %}</strong>
   on {{ latest_return.acted_at|date:"M d, Y h:i A" }}:<br>{{ latest_return.notes }}
 </div>
 {% endif %}

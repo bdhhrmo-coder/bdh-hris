@@ -33,7 +33,7 @@
     <td>{{ s.month_label }}</td>
     <td><a href="{% url 'schedules:detail' s.pk %}">{{ s.area_full_name }}</a></td>
     <td>{% include "schedules/_status_badge.html" %}</td>
-    <td>{{ s.prepared_by.employee.full_name|default:s.prepared_by.username }} <small>({{ s.get_preparer_role_display }})</small></td>
+    <td>{{ s.prepared_by|short_name }} <small>({{ s.get_preparer_role_display }})</small></td>
     <td>{% schedule_submitted s %}</td>
     <td><a href="{% url 'schedules:print' s.pk %}" target="_blank" rel="noopener">Print</a></td>
   </tr>

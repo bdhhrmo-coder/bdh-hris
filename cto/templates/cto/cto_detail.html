@@ -38,7 +38,7 @@
   <tr><th>When</th><th>Action</th><th>By</th><th>Remarks</th></tr>
   {% for h in history %}
   <tr><td>{{ h.acted_at|date:"M d, Y g:i A" }}</td><td>{{ h.action|capfirst }}</td>
-      <td>{{ h.acted_by.employee.full_name|default:h.acted_by.username }}</td><td>{{ h.notes|default:"—" }}</td></tr>
+      <td>{% processed_by h %}</td><td>{{ h.notes|default:"—" }}</td></tr>
   {% endfor %}
 </table>
 </div></div>

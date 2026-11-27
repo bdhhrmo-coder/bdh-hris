@@ -13,7 +13,7 @@
     <td><a href="{% url 'leave:leave_detail' a.pk %}">{{ a.leave_type.name }}</a></td>
     <td>{{ a.dates_label }}</td>
     <td>{{ a.number_of_days }}</td>
-    <td>{% status_badge a.status a.status_label %}</td>
+    <td>{% status_badge a.status a.status_label %}{% last_action a as la %}{% if la %}<br><small class="muted">{{ la }}</small>{% endif %}</td>
     <td>{% filed a short=1 %}</td>
     <td>
       {% print_wait a as wait %}

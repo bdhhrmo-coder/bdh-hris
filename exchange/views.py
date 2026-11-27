@@ -301,3 +301,17 @@ def approved_exchanges(request):
     prev = date(first.year - (first.month == 1), (first.month - 2) % 12 + 1, 1)
     return render(request, "exchange/approved_exchanges.html", {
         "exchanges": qs, "first": first, "prev": prev, "next": last})
+
+
+@login_required
+def exchange_detail(request, pk):
+    """Part A, decision 2 (2026-11-27): a view-only page with the request and
+    who processed each step. Open to the same people who may print it today
+    (can_view_exchange_request); nothing new is shown to anyone else."""
+    acting_employee = get_acting_employee(request.user)
+    req = get_object_or_404(DutyExchangeRequest.objects.select_related("employee_a", "employee_b"), pk=pk)
+    if not can_view_exchange_request(acting_employee, req):
+        raise PermissionDenied("You are not authorized to view this exchange request.")
+    return render(request, "exchange/exchange_detail.html", {
+        "r": req, "history": req.actions.select_related("acted_by__employee").order_by("acted_at", "pk"),
+    })

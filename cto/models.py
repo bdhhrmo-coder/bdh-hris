@@ -274,6 +274,11 @@ class CTOClaimAction(models.Model):
     acted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
     )
+    # Part A (2026-11-27): in what capacity the actor acted (display only;
+    # accounts/processors.py). Blank on rows saved before this change.
+    acting_capacity = models.CharField(max_length=10, blank=True, default="")
+    acting_for = models.ForeignKey("employees.Employee", null=True, blank=True, on_delete=models.SET_NULL,
+                                   related_name="+")
     acted_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -379,6 +384,11 @@ class CTOUsageApplicationAction(models.Model):
     resulting_status = models.CharField(max_length=25, choices=CTOUsageApplication.STATUS_CHOICES)
     notes = models.CharField(max_length=255, blank=True)
     acted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    # Part A (2026-11-27): in what capacity the actor acted (display only;
+    # accounts/processors.py). Blank on rows saved before this change.
+    acting_capacity = models.CharField(max_length=10, blank=True, default="")
+    acting_for = models.ForeignKey("employees.Employee", null=True, blank=True, on_delete=models.SET_NULL,
+                                   related_name="+")
     acted_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

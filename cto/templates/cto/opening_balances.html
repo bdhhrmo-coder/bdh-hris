@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ui %}
 {% block title %}Opening CTO balances — BDH HRIS{% endblock %}
 {% block content %}
 <h1>Opening CTO balances</h1>
@@ -40,6 +41,13 @@
     <tr><td colspan="6" class="empty-note">No opening lines.</td></tr>
     {% endfor %}
   </table>
+  {% if opening_history %}
+  <h3>History</h3>
+  <table>
+    <tr><th>When</th><th>Action</th><th>By</th><th>Notes</th></tr>
+    {% for h in opening_history %}<tr><td>{{ h.acted_at|date:"M d, Y g:i A" }}</td><td>{% if h.action == "opening_line_added" %}Line added{% elif h.action == "opening_line_voided" %}Line voided{% else %}{{ h.action }}{% endif %}</td><td>{% processed_by h %}</td><td>{{ h.notes }}</td></tr>{% endfor %}
+  </table>
+  {% endif %}
   {% if entry_open and may_enter_for_target %}
   <form method="post">
     {% csrf_token %}

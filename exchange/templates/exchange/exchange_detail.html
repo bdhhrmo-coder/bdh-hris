@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% load ui badges %}
+{% block title %}Exchange of Duty{% endblock %}
+{% block content %}
+<h1>Exchange of Duty</h1>
+<div class="card">
+  <table>
+    <tr><th>Employee A</th><td>{{ r.employee_a.full_name }} &middot; {{ r.date_a|date:"D, M d, Y" }}</td></tr>
+    <tr><th>Employee B</th><td>{{ r.employee_b.full_name }} &middot; {{ r.date_b|date:"D, M d, Y" }}</td></tr>
+    <tr><th>Kind</th><td>{{ r.get_kind_display }}{% if r.shifts_label %} &middot; {{ r.shifts_label }}{% endif %}</td></tr>
+    {% if r.reason %}<tr><th>Reason</th><td>{{ r.reason }}</td></tr>{% endif %}
+    <tr><th>Status</th><td>{% status_badge r.status r.get_status_display %}</td></tr>
+    <tr><th>Filed</th><td>{% filed r %}</td></tr>
+  </table>
+  <p class="row-actions"><a class="btn btn-secondary" href="{% url 'exchange:print_exchange_form' r.pk %}" target="_blank">Print</a></p>
+</div>
+<h2>History</h2>
+<div class="card"><div class="table-scroll">
+<table>
+  <tr><th>When</th><th>Step</th><th>By</th><th>Remarks</th></tr>
+  {% for h in history %}
+  <tr><td>{{ h.acted_at|date:"M d, Y g:i A" }}</td><td>{{ h.action|capfirst }} &rarr; {{ h.get_resulting_status_display }}</td>
+      <td>{% processed_by h %}</td><td>{{ h.notes|default:"—" }}</td></tr>
+  {% empty %}<tr><td colspan="4" class="empty-note">No steps recorded.</td></tr>
+  {% endfor %}
+</table>
+</div></div>
+{% endblock %}

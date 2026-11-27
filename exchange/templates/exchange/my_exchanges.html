@@ -36,12 +36,12 @@
     <tr><th>Employee A</th><th>Date A</th><th>Employee B</th><th>Date B</th><th>Type</th><th>Status</th><th>Filed</th><th>Documents</th><th>Form</th></tr>
     {% for r in requests %}
     <tr>
-      <td>{{ r.employee_a.full_name }}</td>
+      <td><a href="{% url 'exchange:exchange_detail' r.pk %}">{{ r.employee_a.full_name }}</a></td>
       <td>{{ r.date_a }}</td>
       <td>{{ r.employee_b.full_name }}</td>
       <td>{{ r.date_b }}</td>
       <td>{{ r.get_kind_display }}{% if r.shifts_label %}<br><small>{{ r.shifts_label }}</small>{% endif %}</td>
-      <td>{% status_badge r.status r.get_status_display %}</td>
+      <td>{% status_badge r.status r.get_status_display %}{% last_action r as la %}{% if la %}<br><small class="muted">{{ la }}</small>{% endif %}</td>
       <td>{% filed r short=1 %}</td>
       <td><a href="{% documents_url r %}">Documents</a></td>
       <td><a href="{% url 'exchange:print_exchange_form' r.pk %}" target="_blank">Print</a></td>
