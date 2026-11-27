@@ -129,7 +129,10 @@ def office_for(row):
         return _CLAIM_STEP_OFFICE.get(step, ANY)
     if action in STOP_ACTIONS:
         return _NEXT_AFTER.get(_prev_status(row) or "", ANY)
-    return _FORWARD.get(getattr(row, "resulting_status", ""), ANY)
+    status = getattr(row, "resulting_status", "")
+    if status in ("APPROVED", "APPLIED") and _prev_status(row) in ("RECOMMENDED_BY_AO", "RECOMMENDED"):
+        return COH  # the step after the AO's recommendation is the COH's
+    return _FORWARD.get(status, ANY)
 
 
 # --- the person's lines on the day they acted --------------------------------
@@ -167,18 +170,25 @@ def capacity(row, actor=None, when=None):
     oic_coh = [ln for ln in oic if ln.role == R.CHIEF_OF_HOSPITAL]
 
     if office in (AO, COH, AO_COH):
-        if own & {R.ADMINISTRATIVE_OFFICER, R.CHIEF_OF_HOSPITAL}:
-            return HIDDEN, None  # the AO or COH personally
-        first, second = (oic_coh, oic_ao) if office == COH else (oic_ao, oic_coh)
-        if not oic_ao and not oic_coh:
-            return SELF, None  # acted in another capacity (e.g. HR Administrator approving a minor correction)
+        own_ao, own_coh = R.ADMINISTRATIVE_OFFICER in own, R.CHIEF_OF_HOSPITAL in own
+        # The office of this step first: the COH step is the COH's, or an OIC's for the COH
+        # (the AO may be OIC for the COH, so holding the AO role says nothing there).
+        order = ((own_coh, oic_coh, OIC_COH), (own_ao, oic_ao, OIC_AO)) if office == COH else \
+                ((own_ao, oic_ao, OIC_AO), (own_coh, oic_coh, OIC_COH))
         if office == AO_COH:
+            if own_ao or own_coh:
+                return HIDDEN, None  # the AO or COH personally
+            if not oic_ao and not oic_coh:
+                return SELF, None  # another capacity (e.g. HR Administrator approving a minor correction)
             if bool(oic_ao) != bool(oic_coh):
                 return (OIC_AO, oic_ao[0].delegated_by) if oic_ao else (OIC_COH, oic_coh[0].delegated_by)
             return HIDDEN, None  # OIC for both: not clear which office, so no name (A12)
-        if first:
-            return (OIC_AO if first is oic_ao else OIC_COH), first[0].delegated_by
-        return (OIC_AO if second is oic_ao else OIC_COH), second[0].delegated_by
+        for holds_own, oic_lines, label in order:
+            if holds_own:
+                return HIDDEN, None  # the AO or COH personally
+            if oic_lines:
+                return label, oic_lines[0].delegated_by
+        return SELF, None  # another capacity (e.g. HR)
 
     # Supervisor step (or not clear): the AO / COH personally first.
     if own & {R.ADMINISTRATIVE_OFFICER, R.CHIEF_OF_HOSPITAL}:

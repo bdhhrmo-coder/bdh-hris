@@ -114,6 +114,20 @@ class ProcessorNameTests(TestCase):
         self.assertEqual(row.acting_capacity, OIC_COH)
         self.assertEqual(describe(row), "D. Santos - acting as OIC for COH")
 
+    def test_ao_as_oic_for_coh_on_cosp_leave(self):
+        today = date.today()
+        R.objects.create(employee=self.ao, role=R.CHIEF_OF_HOSPITAL, is_oic=True, delegated_by=self.coh,
+                         start_date=today - timedelta(days=1), end_date=today + timedelta(days=3))
+        cosp = person("p_cosp", "EMP-A13", "Celia", "Ramos")
+        a = A.objects.create(employee=cosp, leave_type=LeaveType.objects.get(code="COSP_LEAVE"),
+                             start_date=date(2026, 12, 7), end_date=date(2026, 12, 7), number_of_days=Decimal("1"))
+        rec = LeaveApplicationAction.objects.create(application=a, action="recommend", acted_by=self.ao.user,
+                                                    resulting_status=A.RECOMMENDED_BY_AO)
+        appr = LeaveApplicationAction.objects.create(application=a, action="approve", acted_by=self.ao.user,
+                                                     resulting_status=A.APPROVED)
+        self.assertEqual(describe(rec), "")                                   # the AO personally
+        self.assertEqual(describe(appr), "M. Bautista - acting as OIC for COH")  # the COH step, as OIC
+
     def test_oic_at_unit_head_step(self):
         self.oic_line(R.SUPERVISOR, self.uh, unit=self.er)
         a = self.app()
