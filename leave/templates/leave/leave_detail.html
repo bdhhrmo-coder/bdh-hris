@@ -25,8 +25,9 @@
     <tr><th>Approval</th><td>{{ a.get_route_display }}</td></tr>
   </table>
   <p class="row-actions">
-    {% print_wait a as wait %}
-    {% if wait %}
+    {% print_wait a as wait %}{% csc6_hidden a as no_print %}
+    {% if no_print %}
+    {% elif wait %}
       <button type="button" class="btn btn-secondary" disabled title="{{ wait }}">{% if a.is_cosp_route %}Print COSP Leave Form{% else %}Print CSC Form 6{% endif %}</button>
       <span class="print-wait">{{ wait }}</span>
     {% elif a.is_cosp_route %}

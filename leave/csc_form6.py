@@ -197,13 +197,14 @@ def render_pdf(application, show_salary=False) -> bytes:
 
 
 def may_see_salary(acting, application):
-    """Item 3: the employee, HR (Processor or Administrator), the AO and the COH
-    see the salary on the printed form; anyone else (a Supervisor) gets it blank."""
+    """Item 3 as changed by Part B (2026-11-27): only the people who may print
+    the form get the salary on it, i.e. the employee (their own) and HR
+    (Processor or Administrator). The AO and COH no longer print another
+    employee's CSC Form No. 6, so they no longer get the salary either."""
     from accounts.models import RoleAssignment as R
 
     if acting is None:
         return False
     if acting.pk == application.employee_id:
         return True
-    return any(acting.has_role(r, viewing=True) for r in (R.HR_PROCESSOR, R.HR_ADMINISTRATOR,
-                                                           R.ADMINISTRATIVE_OFFICER, R.CHIEF_OF_HOSPITAL))
+    return any(acting.has_role(r, viewing=True) for r in (R.HR_PROCESSOR, R.HR_ADMINISTRATOR))

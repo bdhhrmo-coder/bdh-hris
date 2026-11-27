@@ -476,6 +476,27 @@ def print_wait_reason(acting_employee, application):
     return PRINT_WAIT_MESSAGE
 
 
+CSC6_HR_ONLY_MESSAGE = ("Only HR can print another employee's CSC Form No. 6. "
+                        "You can print your own once it is For Capitol approval.")
+
+
+def may_print_csc6(acting_employee, application):
+    """Part B (owner decision 2026-11-27): who may print CSC Form No. 6 of a
+    regular employee's leave. HR (HR Processor or HR Administrator) at any
+    stage; the filer only their own, and only once print_wait_reason allows
+    it (For Capitol approval, or the older Recorded). Nobody else: not the
+    Chief Nurse, a Unit Head or Supervisor, the AO, the COH, an OIC or the
+    System Administrator. Rights follow the person's relationship to the
+    form: an HR person's own form follows the filer rule (decision 3, A)."""
+    from accounts.models import RoleAssignment as R
+
+    if acting_employee is None:
+        return False
+    if acting_employee.pk == application.employee_id:
+        return print_wait_reason(acting_employee, application) is None
+    return any(acting_employee.has_role(r, viewing=True) for r in (R.HR_PROCESSOR, R.HR_ADMINISTRATOR))
+
+
 def coh_filed_regular(application):
     """The COH's own regular leave has no level above for the Supervisor,
     AO and COH steps: HR records and verifies it and it goes straight to

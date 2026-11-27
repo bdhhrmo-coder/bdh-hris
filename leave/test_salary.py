@@ -46,9 +46,10 @@ class SalaryTests(TestCase):
         a.refresh_from_db()
         self.assertEqual(fill_csc_form6(a, show_salary=True)["blank"]["AA12"].value, "12,345.67")
         self.assertIn(fill_csc_form6(a, show_salary=False)["blank"]["AA12"].value, ("", None))
-        for who in (self.employee, self.hr, self.hrp, self.ao, self.coh):
+        for who in (self.employee, self.hr, self.hrp):
             self.assertTrue(may_see_salary(who, a), who)
-        self.assertFalse(may_see_salary(self.supervisor, a))
+        for who in (self.supervisor, self.ao, self.coh):  # Part B: AO and COH no longer print it
+            self.assertFalse(may_see_salary(who, a), who)
 
     def test_no_salary_on_record_prints_blank(self):
         self.employee.monthly_salary = None

@@ -442,6 +442,11 @@ def print_csc_form6(request, pk):
     if wait:
         messages.error(request, wait)
         return redirect("leave:leave_detail", pk=application.pk)
+    from .permissions import CSC6_HR_ONLY_MESSAGE, may_print_csc6
+
+    if not may_print_csc6(acting_employee, application):  # Part B: a pasted link is refused too
+        return render(request, "leave/print_refused.html",
+                      {"message": CSC6_HR_ONLY_MESSAGE, "application": application}, status=403)
 
     try:
         from .csc_form6 import may_see_salary
