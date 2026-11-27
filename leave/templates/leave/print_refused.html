@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Cannot print{% endblock %}
+{% block content %}
+<h1>Cannot print this form</h1>
+<div class="card"><p>{{ message }}</p>
+<p><a class="btn btn-secondary" href="{% url 'leave:leave_detail' application.pk %}">Back to the application</a></p></div>
+{% endblock %}

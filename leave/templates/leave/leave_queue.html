@@ -17,8 +17,9 @@
     <td>{{ a.number_of_days }}{% if a.cto_days_charged %} <span class="muted">({{ a.cto_days_charged|floatformat:"-2" }} charged to CTO)</span>{% endif %}</td>
     <td>{% status_badge a.status a.status_label %}</td>
     <td>
-      {% print_wait a as wait %}
-      {% if wait %}
+      {% print_wait a as wait %}{% csc6_hidden a as no_print %}
+      {% if no_print %}
+      {% elif wait %}
         <span class="print-wait">{{ wait }}</span>
       {% elif a.is_cosp_route %}
         <a href="{% url 'leave:print_cosp_leave_form' a.pk %}" target="_blank">Print COSP Leave Form</a>
@@ -76,7 +77,7 @@
   <tr>
     <td><a href="{% url 'leave:leave_detail' a.pk %}">{{ a.employee.full_name }}</a></td>
     <td>{{ a.leave_type.name }}</td><td>{{ a.dates_label }}</td><td>{{ a.number_of_days }}</td>
-    <td><a href="{% url 'leave:print_csc_form6' a.pk %}" target="_blank">Print CSC Form 6</a></td>
+    <td>{% csc6_hidden a as no_print %}{% if not no_print %}<a href="{% url 'leave:print_csc_form6' a.pk %}" target="_blank">Print CSC Form 6</a>{% endif %}</td>
   </tr>
   {% endfor %}
 </table>
