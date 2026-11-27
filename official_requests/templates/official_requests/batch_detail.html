@@ -29,18 +29,19 @@
   {% if batch.request_type == "OFFICIAL_BUSINESS" %}
   <p><strong>Expenses authorized:</strong> {{ batch.get_expenses_authorized_display|default:"—" }} &middot;
      <strong>Transportation allowed:</strong> {{ batch.transportation_allowed|default:"—" }}</p>
-  {% if batch.status == "FORWARDED_TO_CAPITOL" or batch.status == "APPROVED" %}
+  {% if full_view and batch.status == "FORWARDED_TO_CAPITOL" or full_view and batch.status == "APPROVED" %}
   <p><a class="btn" href="{% url 'official_requests:print_batch_travel_order' batch.pk %}" target="_blank">Print Travel Order</a></p>
   {% endif %}
   {% endif %}
   {% if batch.request_type == "TRAVEL" %}
   <p><strong>Type of transport:</strong> {{ batch.transportation_allowed|default:"None requested" }}</p>
-  {% if batch.status == "APPROVED" %}
+  {% if full_view and batch.status == "APPROVED" %}
   <p><a class="btn" href="{% url 'official_requests:print_batch_f59' batch.pk %}" target="_blank">Print F59 (Travel Authorization)</a></p>
   {% endif %}
   {% endif %}
   {% if batch.past_date_reason %}<p><strong>Reason for filing late:</strong> {{ batch.past_date_reason|linebreaksbr }}</p>{% endif %}
   <h2>Lines ({{ lines|length }})</h2>
+  {% if hidden_lines %}<p class="field-help">+{{ hidden_lines }} line{{ hidden_lines|pluralize }} for employees outside your unit or section (not shown).</p>{% endif %}
   <div class="table-scroll">
   <table>
     <tr><th>Employee</th><th>Date</th><th>Time</th>{% if batch.request_type == "OT_RESTDAY_HOLIDAY" %}<th>Hours</th>{% endif %}<th>Note</th></tr>

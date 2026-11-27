@@ -176,16 +176,55 @@ def can_view_batch(acting_employee, user, batch):
     return any(is_supervisor_of(acting_employee, line.employee, viewing=True) for line in lines)
 
 
+def batch_full_view(acting_employee, user, batch):
+    """Part C (owner decision 4, Option A, 2026-11-27): who sees every line of a
+    group request. The filer, HR, the AO and the COH, anyone on a line, anyone
+    who can act on it now, and a Supervisor covering every line. A Supervisor
+    who covers only some lines (e.g. one unit of a multi-unit OT request)
+    sees only those lines and cannot print the group form, which lists
+    everyone. Never widens can_view_batch."""
+    if acting_employee is None:
+        return False
+    if batch.filed_by_id == user.pk or is_hr(acting_employee, True) or is_administrative_officer(acting_employee, True) \
+            or is_chief_of_hospital(acting_employee, True):
+        return True
+    lines = list(batch.lines.select_related("employee"))
+    if any(line.employee_id == acting_employee.pk for line in lines):
+        return True
+    if rules.available_actions(acting_employee, user, batch):
+        return True
+    return all(is_supervisor_of(acting_employee, line.employee, viewing=True) for line in lines)
+
+
+def lines_visible_to(acting_employee, user, batch, qs):
+    """The lines of `qs` this person may see (all of them with a full view)."""
+    if batch_full_view(acting_employee, user, batch):
+        return list(qs), 0
+    rows = list(qs)
+    shown = [line for line in rows if is_supervisor_of(acting_employee, line.employee, viewing=True)]
+    return shown, len(rows) - len(shown)
+
+
+GROUP_PRINT_REFUSED = ("This group request includes employees outside your unit or section, "
+                       "so its printed form is not available to you. HR, the AO or the COH can print it.")
+
+
 @login_required
 def batch_detail(request, pk):
     acting_employee = get_acting_employee(request.user)
     batch = get_object_or_404(OfficialRequestBatch, pk=pk)
     if not can_view_batch(acting_employee, request.user, batch):
         raise PermissionDenied("You are not authorized to view this group request.")
+    lines, hidden = lines_visible_to(acting_employee, request.user, batch, batch.active_lines())
+    removed, hidden_removed = lines_visible_to(
+        acting_employee, request.user, batch,
+        batch.lines.filter(status=OfficialRequest.CANCELLED).select_related("employee"))
     return render(request, "official_requests/batch_detail.html", {
         "batch": batch,
-        "lines": batch.active_lines(),
-        "removed": batch.lines.filter(status=OfficialRequest.CANCELLED).select_related("employee"),
+        "lines": lines,
+        "hidden_lines": hidden,
+        "full_view": not (hidden or hidden_removed) and batch_full_view(acting_employee, request.user, batch),
+        "removed": removed,
         "history": batch.actions.select_related("acted_by__employee"),
         "actions": rules.available_actions(acting_employee, request.user, batch),
         "route": rules.route_labels(batch),
@@ -239,6 +278,8 @@ def print_batch_travel_order(request, pk):
     batch = get_object_or_404(OfficialRequestBatch, pk=pk)
     if not can_view_batch(acting_employee, request.user, batch):
         raise PermissionDenied("You are not authorized to view this group request.")
+    if not batch_full_view(acting_employee, request.user, batch):  # Part C
+        raise PermissionDenied(GROUP_PRINT_REFUSED)
     if batch.request_type != R.OFFICIAL_BUSINESS:
         raise PermissionDenied("Only Official Business (Travel Order) requests print a Travel Order.")
     if not printable(batch.status):
@@ -259,6 +300,8 @@ def print_batch_f59(request, pk):
     batch = get_object_or_404(OfficialRequestBatch, pk=pk)
     if not can_view_batch(acting_employee, request.user, batch):
         raise PermissionDenied("You are not authorized to view this group request.")
+    if not batch_full_view(acting_employee, request.user, batch):  # Part C
+        raise PermissionDenied(GROUP_PRINT_REFUSED)
     if batch.request_type != R.TRAVEL:
         raise PermissionDenied("Only a Local Official Errand prints on F59.")
     if not printable(batch.status):
