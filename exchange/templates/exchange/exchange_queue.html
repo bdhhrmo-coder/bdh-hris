@@ -11,7 +11,7 @@
   {% for r in requests %}
   <tr>
     <td>{% filed r short=1 %}</td>
-    <td>{{ r.employee_a.full_name }}</td>
+    <td><a href="{% url 'exchange:exchange_detail' r.pk %}">{{ r.employee_a.full_name }}</a></td>
     <td>{{ r.date_a }}</td>
     <td>{{ r.employee_b.full_name }}</td>
     <td>{{ r.date_b }}</td>

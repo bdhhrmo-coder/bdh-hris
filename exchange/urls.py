@@ -14,4 +14,5 @@ urlpatterns = [
     path("positions/", settings_views.positions, name="positions"),
     path("rules/", settings_views.rules_settings, name="rules"),
     path("<int:pk>/print/", views.print_exchange_form, name="print_exchange_form"),
+    path("<int:pk>/", views.exchange_detail, name="exchange_detail"),
 ]

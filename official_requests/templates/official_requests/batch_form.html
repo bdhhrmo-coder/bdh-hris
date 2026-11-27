@@ -7,7 +7,7 @@
 
 {% if latest_return %}
 <div class="msg warning" role="status">
-  <strong>Returned by {{ latest_return.acted_by.employee.full_name|default:latest_return.acted_by.username }}</strong>
+  <strong>{% processed_by latest_return as who %}Returned{% if who %} by {{ who }}{% endif %}</strong>
   on {{ latest_return.acted_at|date:"M d, Y h:i A" }}:<br>{{ latest_return.notes }}
 </div>
 {% endif %}

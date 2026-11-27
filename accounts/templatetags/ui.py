@@ -63,3 +63,46 @@ def schedule_submitted(schedule):
     if first is None:
         return format_html('<span class="muted">Not yet submitted</span>')
     return format_html("Submitted: {}", filed(schedule, short=True))
+
+
+# --- Part A (2026-11-27): who processed each step, in short form ------------
+
+@register.simple_tag
+def processed_by(row):
+    """'' (AO / COH personally), 'J. Dela Cruz', 'J. Dela Cruz - acting as OIC
+    for AO', or 'Recorded by J. Dela Cruz' (accounts/processors.py)."""
+    from accounts.processors import describe
+
+    return describe(row) if row is not None else ""
+
+
+@register.filter
+def short_name(person):
+    """A user or an employee as 'J. Dela Cruz'."""
+    from accounts.processors import short_name as sn, user_short_name
+
+    if person is None:
+        return ""
+    if hasattr(person, "surname"):
+        return sn(person)
+    return user_short_name(person)
+
+
+@register.simple_tag
+def last_action(obj):
+    """Part A list line: 'Last action: J. Dela Cruz · Nov 20, 10:15 AM', or only
+    the date when the AO / COH acted personally. Nothing while only the
+    filer has acted."""
+    from django.utils import timezone
+
+    from accounts.processors import FILER_ACTIONS, describe
+
+    actions = getattr(obj, "actions", None)
+    if actions is None:
+        return ""
+    row = actions.select_related("acted_by__employee").order_by("-acted_at", "-pk").first()
+    if row is None or row.action in FILER_ACTIONS:
+        return ""
+    who = describe(row)
+    when = timezone.localtime(row.acted_at).strftime("%b %d, %I:%M %p")
+    return f"Last action: {who} · {when}" if who else f"Last action: {when}"

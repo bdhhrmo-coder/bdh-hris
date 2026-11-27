@@ -21,7 +21,7 @@
     <td>{{ p.get_kind_display }}</td>
     <td>{{ p.pass_date|date:"M d, Y" }}<br><small>{{ p.time_out|time:"h:i A" }} – {{ p.time_in|time:"h:i A" }}</small></td>
     <td>{{ p.get_reason_type_display }}</td>
-    <td>{% status_badge p.status p.get_status_display %}</td>
+    <td>{% status_badge p.status p.get_status_display %}{% last_action p as la %}{% if la %}<br><small class="muted">{{ la }}</small>{% endif %}</td>
   </tr>
   {% empty %}
   <tr><td colspan="6" class="empty-note">No passes yet.</td></tr>

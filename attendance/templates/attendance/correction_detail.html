@@ -67,7 +67,7 @@
     <tr{% if a.action == "return" %} class="history-return"{% endif %}>
       <td>{{ a.acted_at|date:"M d, Y h:i A" }}</td>
       <td>{{ a.action|capfirst }}</td>
-      <td>{{ a.acted_by.employee.full_name|default:a.acted_by.username }}</td>
+      <td>{% processed_by a %}</td>
       <td>{{ a.notes|default:"—" }}</td>
     </tr>
     {% endfor %}
