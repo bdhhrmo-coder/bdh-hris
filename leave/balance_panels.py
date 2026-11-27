@@ -201,7 +201,7 @@ def cto_panel(employee, today=None):
         },
         "cards": [
             {"label": "Total earned credits", "value": days(credited + earned_later), "tone": "navy",
-             "note": (f"{days(earned_later)} {usable_from.replace("Usable", "usable", 1)}" if earned_later else "Credited and in effect")},
+             "note": (f"{days(earned_later)} {usable_from.replace('Usable', 'usable', 1)}" if earned_later else "Credited and in effect")},
             {"label": "Utilized", "value": days(used), "tone": "neutral", "note": "Approved CTO taken"},
             {"label": "Pending applications", "value": days(pending), "tone": "amber",
              "note": "Held until decided"},
